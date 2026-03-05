@@ -53,13 +53,90 @@ implementation
 
 uses
   Process, jsonparser, DataPaths, Forms, Controls, StdCtrls, ExtCtrls,
-  Dialogs, LCLType;
+  Dialogs, LCLType, ComCtrls;
 
 const
   NON_GL_RESOURCE_ID = 'reg';
   NON_GL_RESOURCE_NAME = 'Regular';
   PROJECT_TYPE_ID = 'text';
   PROJECT_TYPE_NAME = 'Text';
+
+type
+  TCanonicalBook = record
+    Code: string;
+    Name: string;
+    IsOT: Boolean;
+  end;
+
+const
+  CANON_BOOKS: array[0..65] of TCanonicalBook = (
+    (Code: 'gen'; Name: 'Genesis'; IsOT: True),
+    (Code: 'exo'; Name: 'Exodus'; IsOT: True),
+    (Code: 'lev'; Name: 'Leviticus'; IsOT: True),
+    (Code: 'num'; Name: 'Numbers'; IsOT: True),
+    (Code: 'deu'; Name: 'Deuteronomy'; IsOT: True),
+    (Code: 'jos'; Name: 'Joshua'; IsOT: True),
+    (Code: 'jdg'; Name: 'Judges'; IsOT: True),
+    (Code: 'rut'; Name: 'Ruth'; IsOT: True),
+    (Code: '1sa'; Name: '1 Samuel'; IsOT: True),
+    (Code: '2sa'; Name: '2 Samuel'; IsOT: True),
+    (Code: '1ki'; Name: '1 Kings'; IsOT: True),
+    (Code: '2ki'; Name: '2 Kings'; IsOT: True),
+    (Code: '1ch'; Name: '1 Chronicles'; IsOT: True),
+    (Code: '2ch'; Name: '2 Chronicles'; IsOT: True),
+    (Code: 'ezr'; Name: 'Ezra'; IsOT: True),
+    (Code: 'neh'; Name: 'Nehemiah'; IsOT: True),
+    (Code: 'est'; Name: 'Esther'; IsOT: True),
+    (Code: 'job'; Name: 'Job'; IsOT: True),
+    (Code: 'psa'; Name: 'Psalms'; IsOT: True),
+    (Code: 'pro'; Name: 'Proverbs'; IsOT: True),
+    (Code: 'ecc'; Name: 'Ecclesiastes'; IsOT: True),
+    (Code: 'sng'; Name: 'Song of Solomon'; IsOT: True),
+    (Code: 'isa'; Name: 'Isaiah'; IsOT: True),
+    (Code: 'jer'; Name: 'Jeremiah'; IsOT: True),
+    (Code: 'lam'; Name: 'Lamentations'; IsOT: True),
+    (Code: 'ezk'; Name: 'Ezekiel'; IsOT: True),
+    (Code: 'dan'; Name: 'Daniel'; IsOT: True),
+    (Code: 'hos'; Name: 'Hosea'; IsOT: True),
+    (Code: 'jol'; Name: 'Joel'; IsOT: True),
+    (Code: 'amo'; Name: 'Amos'; IsOT: True),
+    (Code: 'oba'; Name: 'Obadiah'; IsOT: True),
+    (Code: 'jon'; Name: 'Jonah'; IsOT: True),
+    (Code: 'mic'; Name: 'Micah'; IsOT: True),
+    (Code: 'nam'; Name: 'Nahum'; IsOT: True),
+    (Code: 'hab'; Name: 'Habakkuk'; IsOT: True),
+    (Code: 'zep'; Name: 'Zephaniah'; IsOT: True),
+    (Code: 'hag'; Name: 'Haggai'; IsOT: True),
+    (Code: 'zec'; Name: 'Zechariah'; IsOT: True),
+    (Code: 'mal'; Name: 'Malachi'; IsOT: True),
+    (Code: 'mat'; Name: 'Matthew'; IsOT: False),
+    (Code: 'mrk'; Name: 'Mark'; IsOT: False),
+    (Code: 'luk'; Name: 'Luke'; IsOT: False),
+    (Code: 'jhn'; Name: 'John'; IsOT: False),
+    (Code: 'act'; Name: 'Acts'; IsOT: False),
+    (Code: 'rom'; Name: 'Romans'; IsOT: False),
+    (Code: '1co'; Name: '1 Corinthians'; IsOT: False),
+    (Code: '2co'; Name: '2 Corinthians'; IsOT: False),
+    (Code: 'gal'; Name: 'Galatians'; IsOT: False),
+    (Code: 'eph'; Name: 'Ephesians'; IsOT: False),
+    (Code: 'php'; Name: 'Philippians'; IsOT: False),
+    (Code: 'col'; Name: 'Colossians'; IsOT: False),
+    (Code: '1th'; Name: '1 Thessalonians'; IsOT: False),
+    (Code: '2th'; Name: '2 Thessalonians'; IsOT: False),
+    (Code: '1ti'; Name: '1 Timothy'; IsOT: False),
+    (Code: '2ti'; Name: '2 Timothy'; IsOT: False),
+    (Code: 'tit'; Name: 'Titus'; IsOT: False),
+    (Code: 'phm'; Name: 'Philemon'; IsOT: False),
+    (Code: 'heb'; Name: 'Hebrews'; IsOT: False),
+    (Code: 'jas'; Name: 'James'; IsOT: False),
+    (Code: '1pe'; Name: '1 Peter'; IsOT: False),
+    (Code: '2pe'; Name: '2 Peter'; IsOT: False),
+    (Code: '1jn'; Name: '1 John'; IsOT: False),
+    (Code: '2jn'; Name: '2 John'; IsOT: False),
+    (Code: '3jn'; Name: '3 John'; IsOT: False),
+    (Code: 'jud'; Name: 'Jude'; IsOT: False),
+    (Code: 'rev'; Name: 'Revelation'; IsOT: False)
+  );
 
 type
   TLanguagePickerForm = class(TForm)
@@ -88,7 +165,13 @@ type
   TBookPickerForm = class(TForm)
   private
     FAll: TBookOptionList;
-    lst: TListBox;
+    FOTVisible: array of Integer;
+    FNTVisible: array of Integer;
+    pages: TPageControl;
+    tabOT: TTabSheet;
+    tabNT: TTabSheet;
+    lstOT: TListBox;
+    lstNT: TListBox;
     btnOK: TButton;
     btnCancel: TButton;
     procedure btnOKClick(Sender: TObject);
@@ -286,6 +369,22 @@ begin
   Result := IncludeTrailingPathDelimiter(GetDataPath) + 'library' + DirectorySeparator + 'index.sqlite';
 end;
 
+function CanonicalBookIsOT(const BookCode: string; out IsOT: Boolean): Boolean;
+var
+  I: Integer;
+  Code: string;
+begin
+  Result := False;
+  IsOT := False;
+  Code := LowerCase(Trim(BookCode));
+  for I := 0 to High(CANON_BOOKS) do
+    if Code = CANON_BOOKS[I].Code then
+    begin
+      IsOT := CANON_BOOKS[I].IsOT;
+      Exit(True);
+    end;
+end;
+
 function ListTargetLanguagesFromIndex: TTargetLanguageOptionList;
 var
   OutText, ErrText, Line: string;
@@ -328,10 +427,10 @@ end;
 
 function ListBooksFromIndex: TBookOptionList;
 var
-  OutText, ErrText, Line: string;
-  ExitCode, Count, P, TabPos: Integer;
+  OutText, ErrText, Code: string;
+  ExitCode, Count, I, P: Integer;
+  Available: array[0..65] of Boolean;
   Lines: TStringList;
-  Opt: TBookOption;
 begin
   SetLength(Result, 0);
   if not FileExists(GetIndexSQLitePath) then
@@ -344,32 +443,49 @@ begin
      'JOIN resource r ON r.project_id = p.id ' +
      'WHERE r.type = ''book'' ' +
      'AND lower(r.slug) NOT IN (''tn'', ''tq'') ' +
-     'GROUP BY p.slug, p.name ' +
+     'GROUP BY p.slug ' +
      'ORDER BY p.slug;'],
     '', OutText, ErrText, ExitCode) then
     Exit;
   if ExitCode <> 0 then
     Exit;
 
+  for I := 0 to High(Available) do
+    Available[I] := False;
+
   Lines := TStringList.Create;
   try
     Lines.Text := StringReplace(OutText, #13, '', [rfReplaceAll]);
-    Count := 0;
     for P := 0 to Lines.Count - 1 do
     begin
-      Line := Trim(Lines[P]);
-      if Line = '' then
+      Code := LowerCase(Trim(Lines[P]));
+      if Code = '' then
         Continue;
-      TabPos := Pos(#9, Line);
-      if TabPos <= 0 then
-        Continue;
-      Opt.Code := Copy(Line, 1, TabPos - 1);
-      Opt.Name := Copy(Line, TabPos + 1, MaxInt);
-      if (Opt.Code = '') or (Opt.Name = '') then
-        Continue;
-      Inc(Count);
-      SetLength(Result, Count);
-      Result[Count - 1] := Opt;
+      for I := 0 to High(CANON_BOOKS) do
+        if Code = CANON_BOOKS[I].Code then
+        begin
+          Available[I] := True;
+          Break;
+        end;
+    end;
+
+    Count := 0;
+    for I := 0 to High(CANON_BOOKS) do
+      if Available[I] then
+      begin
+        Inc(Count);
+        SetLength(Result, Count);
+        Result[Count - 1].Code := CANON_BOOKS[I].Code;
+        Result[Count - 1].Name := CANON_BOOKS[I].Name;
+      end;
+    if Count = 0 then
+    begin
+      SetLength(Result, Length(CANON_BOOKS));
+      for I := 0 to High(CANON_BOOKS) do
+      begin
+        Result[I].Code := CANON_BOOKS[I].Code;
+        Result[I].Name := CANON_BOOKS[I].Name;
+      end;
     end;
   finally
     Lines.Free;
@@ -379,9 +495,8 @@ end;
 function ListSourceTextOptionsForBookFromIndex(const BookCode: string): TSourceTextOptionList;
 var
   OutText, ErrText, Line, QBook: string;
-  ExitCode, I, J, Count: Integer;
+  ExitCode, I, Count: Integer;
   Lines, Parts: TStringList;
-  Installed: TSourceTextOptionList;
   Opt: TSourceTextOption;
 begin
   SetLength(Result, 0);
@@ -407,8 +522,6 @@ begin
   if ExitCode <> 0 then
     Exit;
 
-  Installed := ListSourceTextOptions;
-
   Lines := TStringList.Create;
   Parts := TStringList.Create;
   try
@@ -432,18 +545,6 @@ begin
       Opt.ResourceID := Parts[4];
       Opt.ResourceName := Parts[5];
       Opt.SourceDir := '';
-
-      { Keep only source texts that are installed locally. }
-      for J := 0 to Length(Installed) - 1 do
-        if (CompareText(Installed[J].SourceLangCode, Opt.SourceLangCode) = 0) and
-           (CompareText(Installed[J].BookCode, Opt.BookCode) = 0) and
-           (CompareText(Installed[J].ResourceID, Opt.ResourceID) = 0) then
-        begin
-          Opt.SourceDir := Installed[J].SourceDir;
-          Break;
-        end;
-      if Opt.SourceDir = '' then
-        Continue;
 
       Inc(Count);
       SetLength(Result, Count);
@@ -685,7 +786,8 @@ end;
 constructor TBookPickerForm.CreatePicker(AOwner: TComponent;
   const AAll: TBookOptionList);
 var
-  I: Integer;
+  I, Count: Integer;
+  IsOT: Boolean;
 begin
   inherited Create(AOwner);
   Position := poScreenCenter;
@@ -695,20 +797,55 @@ begin
   Caption := 'Select Book';
 
   FAll := AAll;
+  SetLength(FOTVisible, 0);
+  SetLength(FNTVisible, 0);
 
-  lst := TListBox.Create(Self);
-  lst.Parent := Self;
-  lst.Left := 12;
-  lst.Top := 12;
-  lst.Width := 596;
-  lst.Height := 400;
-  lst.Anchors := [akTop, akLeft, akRight, akBottom];
-  lst.OnDblClick := @lstDblClick;
+  pages := TPageControl.Create(Self);
+  pages.Parent := Self;
+  pages.Left := 12;
+  pages.Top := 12;
+  pages.Width := 596;
+  pages.Height := 400;
+  pages.Anchors := [akTop, akLeft, akRight, akBottom];
+
+  tabOT := TTabSheet.Create(pages);
+  tabOT.PageControl := pages;
+  tabOT.Caption := 'Old Testament';
+
+  tabNT := TTabSheet.Create(pages);
+  tabNT.PageControl := pages;
+  tabNT.Caption := 'New Testament';
+
+  lstOT := TListBox.Create(Self);
+  lstOT.Parent := tabOT;
+  lstOT.Align := alClient;
+  lstOT.OnDblClick := @lstDblClick;
+
+  lstNT := TListBox.Create(Self);
+  lstNT.Parent := tabNT;
+  lstNT.Align := alClient;
+  lstNT.OnDblClick := @lstDblClick;
 
   for I := 0 to Length(FAll) - 1 do
-    lst.Items.Add(FAll[I].Code + '  -  ' + FAll[I].Name);
-  if lst.Items.Count > 0 then
-    lst.ItemIndex := 0;
+    if CanonicalBookIsOT(FAll[I].Code, IsOT) and IsOT then
+    begin
+      Count := Length(FOTVisible);
+      SetLength(FOTVisible, Count + 1);
+      FOTVisible[Count] := I;
+      lstOT.Items.Add(FAll[I].Code + '  -  ' + FAll[I].Name);
+    end
+    else
+    begin
+      Count := Length(FNTVisible);
+      SetLength(FNTVisible, Count + 1);
+      FNTVisible[Count] := I;
+      lstNT.Items.Add(FAll[I].Code + '  -  ' + FAll[I].Name);
+    end;
+  if lstOT.Items.Count > 0 then
+    lstOT.ItemIndex := 0;
+  if lstNT.Items.Count > 0 then
+    lstNT.ItemIndex := 0;
+  pages.ActivePage := tabOT;
 
   btnOK := TButton.Create(Self);
   btnOK.Parent := Self;
@@ -732,7 +869,14 @@ end;
 
 procedure TBookPickerForm.btnOKClick(Sender: TObject);
 begin
-  if (lst.ItemIndex < 0) or (lst.ItemIndex >= Length(FAll)) then
+  if (pages.ActivePage = tabOT) and
+     ((lstOT.ItemIndex < 0) or (lstOT.ItemIndex >= Length(FOTVisible))) then
+  begin
+    MessageDlg('Please select a book.', mtWarning, [mbOK], 0);
+    Exit;
+  end;
+  if (pages.ActivePage = tabNT) and
+     ((lstNT.ItemIndex < 0) or (lstNT.ItemIndex >= Length(FNTVisible))) then
   begin
     MessageDlg('Please select a book.', mtWarning, [mbOK], 0);
     Exit;
@@ -746,14 +890,26 @@ begin
 end;
 
 function TBookPickerForm.SelectedBook(out BookCode, BookName: string): Boolean;
+var
+  Idx: Integer;
 begin
   Result := False;
   BookCode := '';
   BookName := '';
-  if (lst.ItemIndex < 0) or (lst.ItemIndex >= Length(FAll)) then
+  if pages.ActivePage = tabOT then
+  begin
+    Idx := lstOT.ItemIndex;
+    if (Idx < 0) or (Idx >= Length(FOTVisible)) then
+      Exit;
+    BookCode := FAll[FOTVisible[Idx]].Code;
+    BookName := FAll[FOTVisible[Idx]].Name;
+    Exit(True);
+  end;
+  Idx := lstNT.ItemIndex;
+  if (Idx < 0) or (Idx >= Length(FNTVisible)) then
     Exit;
-  BookCode := FAll[lst.ItemIndex].Code;
-  BookName := FAll[lst.ItemIndex].Name;
+  BookCode := FAll[FNTVisible[Idx]].Code;
+  BookName := FAll[FNTVisible[Idx]].Name;
   Result := True;
 end;
 
