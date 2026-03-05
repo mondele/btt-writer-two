@@ -29,7 +29,9 @@ type
 
 function ListSourceTextOptions: TSourceTextOptionList;
 function ListTargetLanguagesFromIndex: TTargetLanguageOptionList;
+function ListSourceTextOptionsForBookFromIndex(const BookCode: string): TSourceTextOptionList;
 function PromptForTargetLanguage(out LangCode, LangName: string): Boolean;
+function PromptForSourceText(const BookCode: string; out Opt: TSourceTextOption): Boolean;
 function FindSourceTextOption(const SourceLangCode, BookCode, ResourceID: string;
   out Opt: TSourceTextOption): Boolean;
 function CreateProjectFromSource(const TargetLangCode, TargetLangName: string;
@@ -72,6 +74,19 @@ type
     procedure btnOKClick(Sender: TObject);
   public
     constructor CreatePicker(AOwner: TComponent; const AAll: TTargetLanguageOptionList);
+  end;
+
+  TSourcePickerForm = class(TForm)
+  private
+    FAll: TSourceTextOptionList;
+    lst: TListBox;
+    btnOK: TButton;
+    btnCancel: TButton;
+    procedure btnOKClick(Sender: TObject);
+    procedure lstDblClick(Sender: TObject);
+  public
+    constructor CreatePicker(AOwner: TComponent; const AAll: TSourceTextOptionList);
+    function SelectedOption(out Opt: TSourceTextOption): Boolean;
   end;
 
 function LoadJSONFile(const APath: string): TJSONObject;
@@ -285,6 +300,85 @@ begin
       Result[Count - 1] := Opt;
     end;
   finally
+    Lines.Free;
+  end;
+end;
+
+function ListSourceTextOptionsForBookFromIndex(const BookCode: string): TSourceTextOptionList;
+var
+  OutText, ErrText, Line, QBook: string;
+  ExitCode, I, J, Count: Integer;
+  Lines, Parts: TStringList;
+  Installed: TSourceTextOptionList;
+  Opt: TSourceTextOption;
+begin
+  SetLength(Result, 0);
+  if not FileExists(GetIndexSQLitePath) then
+    Exit;
+
+  QBook := StringReplace(LowerCase(Trim(BookCode)), '''', '''''', [rfReplaceAll]);
+  if QBook = '' then
+    Exit;
+
+  if not RunCommandCapture('sqlite3',
+    [GetIndexSQLitePath,
+     'SELECT sl.slug || char(9) || sl.name || char(9) || p.slug || char(9) || p.name || char(9) || r.slug || char(9) || r.name ' +
+     'FROM resource r ' +
+     'JOIN project p ON p.id = r.project_id ' +
+     'JOIN source_language sl ON sl.id = p.source_language_id ' +
+     'WHERE lower(p.slug) = ''' + QBook + ''' ' +
+     'AND r.type = ''book'' ' +
+     'AND lower(r.slug) NOT IN (''tn'', ''tq'') ' +
+     'ORDER BY sl.slug, r.slug;'],
+    '', OutText, ErrText, ExitCode) then
+    Exit;
+  if ExitCode <> 0 then
+    Exit;
+
+  Installed := ListSourceTextOptions;
+
+  Lines := TStringList.Create;
+  Parts := TStringList.Create;
+  try
+    Parts.StrictDelimiter := True;
+    Parts.Delimiter := #9;
+    Lines.Text := StringReplace(OutText, #13, '', [rfReplaceAll]);
+    Count := 0;
+    for I := 0 to Lines.Count - 1 do
+    begin
+      Line := Trim(Lines[I]);
+      if Line = '' then
+        Continue;
+      Parts.DelimitedText := Line;
+      if Parts.Count < 6 then
+        Continue;
+
+      Opt.SourceLangCode := Parts[0];
+      Opt.SourceLangName := Parts[1];
+      Opt.BookCode := Parts[2];
+      Opt.BookName := Parts[3];
+      Opt.ResourceID := Parts[4];
+      Opt.ResourceName := Parts[5];
+      Opt.SourceDir := '';
+
+      { Keep only source texts that are installed locally. }
+      for J := 0 to Length(Installed) - 1 do
+        if (CompareText(Installed[J].SourceLangCode, Opt.SourceLangCode) = 0) and
+           (CompareText(Installed[J].BookCode, Opt.BookCode) = 0) and
+           (CompareText(Installed[J].ResourceID, Opt.ResourceID) = 0) then
+        begin
+          Opt.SourceDir := Installed[J].SourceDir;
+          Break;
+        end;
+      if Opt.SourceDir = '' then
+        Continue;
+
+      Inc(Count);
+      SetLength(Result, Count);
+      Result[Count - 1] := Opt;
+    end;
+  finally
+    Parts.Free;
     Lines.Free;
   end;
 end;
@@ -511,6 +605,122 @@ begin
     LangCode := Trim(F.edtCode.Text);
     LangName := Trim(F.edtName.Text);
     Result := (LangCode <> '') and (LangName <> '');
+  finally
+    F.Free;
+  end;
+end;
+
+constructor TSourcePickerForm.CreatePicker(AOwner: TComponent;
+  const AAll: TSourceTextOptionList);
+var
+  I, PrefIdx: Integer;
+begin
+  inherited Create(AOwner);
+  Position := poScreenCenter;
+  Width := 760;
+  Height := 480;
+  BorderIcons := [biSystemMenu];
+  Caption := 'Select Source Text';
+
+  FAll := AAll;
+
+  lst := TListBox.Create(Self);
+  lst.Parent := Self;
+  lst.Left := 12;
+  lst.Top := 12;
+  lst.Width := 736;
+  lst.Height := 400;
+  lst.Anchors := [akTop, akLeft, akRight, akBottom];
+  lst.OnDblClick := @lstDblClick;
+
+  PrefIdx := -1;
+  for I := 0 to Length(FAll) - 1 do
+  begin
+    lst.Items.Add(
+      FAll[I].SourceLangCode + '  -  ' + FAll[I].SourceLangName +
+      '    |    ' + FAll[I].ResourceID + '  -  ' + FAll[I].ResourceName
+    );
+    if (PrefIdx < 0) and (CompareText(FAll[I].SourceLangCode, 'en') = 0) and
+       (CompareText(FAll[I].ResourceID, 'ulb') = 0) then
+      PrefIdx := I;
+  end;
+  if lst.Items.Count > 0 then
+    if PrefIdx >= 0 then
+      lst.ItemIndex := PrefIdx
+    else
+      lst.ItemIndex := 0;
+
+  btnOK := TButton.Create(Self);
+  btnOK.Parent := Self;
+  btnOK.Left := 576;
+  btnOK.Top := 420;
+  btnOK.Width := 80;
+  btnOK.Caption := 'OK';
+  btnOK.ModalResult := mrNone;
+  btnOK.Anchors := [akRight, akBottom];
+  btnOK.OnClick := @btnOKClick;
+
+  btnCancel := TButton.Create(Self);
+  btnCancel.Parent := Self;
+  btnCancel.Left := 668;
+  btnCancel.Top := 420;
+  btnCancel.Width := 80;
+  btnCancel.Caption := 'Cancel';
+  btnCancel.ModalResult := mrCancel;
+  btnCancel.Anchors := [akRight, akBottom];
+end;
+
+procedure TSourcePickerForm.btnOKClick(Sender: TObject);
+begin
+  if (lst.ItemIndex < 0) or (lst.ItemIndex >= Length(FAll)) then
+  begin
+    MessageDlg('Please select a source text.', mtWarning, [mbOK], 0);
+    Exit;
+  end;
+  ModalResult := mrOK;
+end;
+
+procedure TSourcePickerForm.lstDblClick(Sender: TObject);
+begin
+  btnOKClick(Sender);
+end;
+
+function TSourcePickerForm.SelectedOption(out Opt: TSourceTextOption): Boolean;
+begin
+  Result := False;
+  if (lst.ItemIndex < 0) or (lst.ItemIndex >= Length(FAll)) then
+    Exit;
+  Opt := FAll[lst.ItemIndex];
+  Result := True;
+end;
+
+function PromptForSourceText(const BookCode: string; out Opt: TSourceTextOption): Boolean;
+var
+  L: TSourceTextOptionList;
+  F: TSourcePickerForm;
+begin
+  Result := False;
+  Opt.SourceDir := '';
+  Opt.SourceLangCode := '';
+  Opt.SourceLangName := '';
+  Opt.BookCode := '';
+  Opt.BookName := '';
+  Opt.ResourceID := '';
+  Opt.ResourceName := '';
+
+  L := ListSourceTextOptionsForBookFromIndex(BookCode);
+  if Length(L) = 0 then
+  begin
+    MessageDlg('No installed source texts found for book "' + Trim(BookCode) +
+      '". (Excluded: tn, tq)', mtError, [mbOK], 0);
+    Exit;
+  end;
+
+  F := TSourcePickerForm.CreatePicker(nil, L);
+  try
+    if F.ShowModal <> mrOK then
+      Exit;
+    Result := F.SelectedOption(Opt);
   finally
     F.Free;
   end;
