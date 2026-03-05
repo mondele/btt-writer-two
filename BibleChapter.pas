@@ -91,8 +91,14 @@ begin
   begin
     if not TryStrToInt(ChunkMap[I], VerseNum) then
     begin
-      { Handle non-numeric chunk names (e.g., 'title') }
+      { Non-numeric chunk (e.g., 'title'): extract text before first
+        USFM marker. This captures title text that precedes \d, \v, etc. }
+      EndPos := 1;
+      while (EndPos <= Length(MergedText)) and (MergedText[EndPos] <> '\') do
+        Inc(EndPos);
+      ChunkContent := Trim(Copy(MergedText, 1, EndPos - 1));
       Chunk := TChunk.Create(ChunkMap[I]);
+      Chunk.Content := ChunkContent;
       Result.Add(Chunk);
       Continue;
     end;
@@ -104,6 +110,17 @@ begin
       Chunk := TChunk.Create(ChunkMap[I]);
       Result.Add(Chunk);
       Continue;
+    end;
+
+    { For verse 1, include any preceding USFM content (like \d)
+      that comes after the title text }
+    if (VerseNum = 1) and (StartPos > 1) then
+    begin
+      EndPos := 1;
+      while (EndPos < StartPos) and (MergedText[EndPos] <> '\') do
+        Inc(EndPos);
+      if EndPos < StartPos then
+        StartPos := EndPos;
     end;
 
     { Find end position: start of next chunk's first verse, or end of text }

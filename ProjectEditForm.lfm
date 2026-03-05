@@ -133,21 +133,22 @@ object ProjectEditWindow: TProjectEditWindow
       TabOrder = 0
       object lblSourceHeader: TLabel
         Left = 8
-        Height = 20
-        Top = 4
+        Height = 26
+        Top = 0
         Width = 200
         Caption = 'Source Text'
+        Align = alTop
         Font.Height = -13
         Font.Style = [fsBold]
         ParentFont = False
+        Layout = tlCenter
       end
       object SourceScrollBox: TScrollBox
         Left = 0
         Height = 604
         Top = 26
         Width = 450
-        Align = alBottom
-        Anchors = [akTop, akLeft, akRight, akBottom]
+        Align = alClient
         BorderStyle = bsNone
         TabOrder = 0
       end
@@ -162,21 +163,22 @@ object ProjectEditWindow: TProjectEditWindow
       TabOrder = 1
       object lblTransHeader: TLabel
         Left = 8
-        Height = 20
-        Top = 4
+        Height = 26
+        Top = 0
         Width = 200
         Caption = 'Translation'
+        Align = alTop
         Font.Height = -13
         Font.Style = [fsBold]
         ParentFont = False
+        Layout = tlCenter
       end
       object TransScrollBox: TScrollBox
         Left = 0
         Height = 604
         Top = 26
         Width = 645
-        Align = alBottom
-        Anchors = [akTop, akLeft, akRight, akBottom]
+        Align = alClient
         BorderStyle = bsNone
         TabOrder = 0
       end

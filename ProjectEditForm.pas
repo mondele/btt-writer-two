@@ -11,9 +11,16 @@ uses
   BibleBook, BibleChapter, BibleChunk, USFMUtils, DataPaths;
 
 type
-  { Segment of parsed verse text: either a verse badge or plain text }
+  TSegmentKind = (
+    skText,       { plain text }
+    skVerse,      { \v N — verse number badge }
+    skFootnote,   { \f ... \f* — footnote indicator }
+    skHeading,    { \s — section heading (bold, larger) }
+    skDescription { \d — descriptive title (italic) }
+  );
+
   TTextSegment = record
-    IsVerse: Boolean;
+    Kind: TSegmentKind;
     Text: string;
   end;
   TTextSegmentArray = array of TTextSegment;
@@ -27,7 +34,11 @@ type
     FSegments: TTextSegmentArray;
     procedure SetText(const AText: string);
     procedure ParseSegments;
+    procedure AddSegment(AKind: TSegmentKind; const AText: string);
+    function MatchMarker(const S: string; P: Integer; const Marker: string): Boolean;
     function DoLayout(ACanvas: TCanvas; AWidth: Integer; ADraw: Boolean): Integer;
+    procedure DrawWordWrapped(ACanvas: TCanvas; const AText: string;
+      var X, Y: Integer; MaxW, LineH, SpaceW: Integer; ADraw: Boolean);
   protected
     procedure Paint; override;
   public
@@ -104,7 +115,7 @@ type
     constructor Create(AOwnerForm: TProjectEditWindow;
       ASourceParent, ATransParent: TScrollBox;
       const ASourceText, ATransText, AChapterID, AChunkName, AVerseLabel: string;
-      AFinished: Boolean; AProject: TProject; ATopPos: Integer);
+      AFinished: Boolean; AProject: TProject);
     destructor Destroy; override;
     procedure SetEditing(AEdit: Boolean);
     procedure SaveContent;
@@ -119,6 +130,23 @@ var
 implementation
 
 {$R *.lfm}
+
+{ Delete all files with the given extension from a directory }
+procedure CleanChapterDir(const Dir, Ext: string);
+var
+  SR: TSearchRec;
+  FullDir: string;
+begin
+  FullDir := IncludeTrailingPathDelimiter(Dir);
+  if FindFirst(FullDir + '*' + Ext, faAnyFile, SR) = 0 then
+  begin
+    repeat
+      if (SR.Attr and faDirectory) = 0 then
+        DeleteFile(FullDir + SR.Name);
+    until FindNext(SR) <> 0;
+    FindClose(SR);
+  end;
+end;
 
 { ---- TVerseDisplay ---- }
 
@@ -139,61 +167,152 @@ begin
   Invalidate;
 end;
 
+procedure TVerseDisplay.AddSegment(AKind: TSegmentKind; const AText: string);
+begin
+  SetLength(FSegments, Length(FSegments) + 1);
+  FSegments[High(FSegments)].Kind := AKind;
+  FSegments[High(FSegments)].Text := AText;
+end;
+
+function TVerseDisplay.MatchMarker(const S: string; P: Integer;
+  const Marker: string): Boolean;
+{ Check if S at position P starts with backslash + Marker + space/newline/end }
+var
+  MLen: Integer;
+begin
+  Result := False;
+  MLen := Length(Marker);
+  if P + MLen > Length(S) then
+    Exit;
+  if S[P] <> '\' then
+    Exit;
+  if Copy(S, P + 1, MLen) <> Marker then
+    Exit;
+  { Must be followed by space, newline, or end of string }
+  if P + MLen + 1 > Length(S) then
+    Result := True
+  else
+    Result := S[P + MLen + 1] in [' ', #10, #13];
+end;
+
 procedure TVerseDisplay.ParseSegments;
 var
   S: string;
-  P, NumStart, NumEnd: Integer;
-  Count: Integer;
+  P, Start, EndP: Integer;
   SegText: string;
 begin
   SetLength(FSegments, 0);
-  Count := 0;
   S := FText;
-
   if S = '' then
     Exit;
 
   P := 1;
   while P <= Length(S) do
   begin
-    { Look for \v marker }
-    if (S[P] = '\') and (P + 2 <= Length(S)) and (S[P + 1] = 'v') and (S[P + 2] = ' ') then
+    if S[P] <> '\' then
     begin
-      { Extract verse number }
-      NumStart := P + 3;
-      NumEnd := NumStart;
-      while (NumEnd <= Length(S)) and (S[NumEnd] in ['0'..'9', '-']) do
-        Inc(NumEnd);
-
-      { Add verse segment }
-      Inc(Count);
-      SetLength(FSegments, Count);
-      FSegments[Count - 1].IsVerse := True;
-      FSegments[Count - 1].Text := Copy(S, NumStart, NumEnd - NumStart);
-
-      { Skip optional space after verse number }
-      if (NumEnd <= Length(S)) and (S[NumEnd] = ' ') then
-        Inc(NumEnd);
-      P := NumEnd;
+      { Collect plain text until next backslash or end }
+      Start := P;
+      while (P <= Length(S)) and (S[P] <> '\') do
+        Inc(P);
+      SegText := Copy(S, Start, P - Start);
+      if Trim(SegText) <> '' then
+        AddSegment(skText, SegText);
+    end
+    else if MatchMarker(S, P, 'v') then
+    begin
+      { \v N — verse marker }
+      P := P + 3; { skip \v and space }
+      Start := P;
+      while (P <= Length(S)) and (S[P] in ['0'..'9', '-']) do
+        Inc(P);
+      AddSegment(skVerse, Copy(S, Start, P - Start));
+      { Skip optional trailing space }
+      if (P <= Length(S)) and (S[P] = ' ') then
+        Inc(P);
+    end
+    else if MatchMarker(S, P, 'f') then
+    begin
+      { \f ... \f* — footnote: skip to closing marker, emit indicator }
+      Start := P;
+      EndP := Pos('\f*', S, P);
+      if EndP > 0 then
+        P := EndP + 3
+      else
+        P := Length(S) + 1;
+      AddSegment(skFootnote, '');
+    end
+    else if MatchMarker(S, P, 'd') then
+    begin
+      { \d Text — descriptive title, runs to end of line }
+      P := P + 2; { skip \d }
+      if (P <= Length(S)) and (S[P] = ' ') then
+        Inc(P);
+      Start := P;
+      while (P <= Length(S)) and not (S[P] in [#10, #13]) do
+        Inc(P);
+      SegText := Trim(Copy(S, Start, P - Start));
+      if SegText <> '' then
+        AddSegment(skDescription, SegText);
+      { Skip newline }
+      if (P <= Length(S)) and (S[P] = #13) then Inc(P);
+      if (P <= Length(S)) and (S[P] = #10) then Inc(P);
+    end
+    else if MatchMarker(S, P, 's') then
+    begin
+      { \s or \s1...\s5 — section heading, runs to end of line }
+      P := P + 2; { skip \s }
+      { Skip optional digit }
+      if (P <= Length(S)) and (S[P] in ['1'..'5']) then
+        Inc(P);
+      if (P <= Length(S)) and (S[P] = ' ') then
+        Inc(P);
+      Start := P;
+      while (P <= Length(S)) and not (S[P] in [#10, #13]) do
+        Inc(P);
+      SegText := Trim(Copy(S, Start, P - Start));
+      if SegText <> '' then
+        AddSegment(skHeading, SegText);
+      if (P <= Length(S)) and (S[P] = #13) then Inc(P);
+      if (P <= Length(S)) and (S[P] = #10) then Inc(P);
+    end
+    else if MatchMarker(S, P, 'q') or MatchMarker(S, P, 'q2') then
+    begin
+      { \q / \q2 — poetry markers, treat as line break }
+      P := P + 2; { skip \q }
+      if (P <= Length(S)) and (S[P] in ['1'..'4']) then
+        Inc(P);
+      if (P <= Length(S)) and (S[P] = ' ') then
+        Inc(P);
+    end
+    else if MatchMarker(S, P, 'p') then
+    begin
+      { \p — paragraph marker, treat as line break }
+      P := P + 2;
+      if (P <= Length(S)) and (S[P] = ' ') then
+        Inc(P);
+    end
+    else if MatchMarker(S, P, 'c') then
+    begin
+      { \c N — chapter marker, skip }
+      P := P + 2;
+      if (P <= Length(S)) and (S[P] = ' ') then
+        Inc(P);
+      while (P <= Length(S)) and (S[P] in ['0'..'9']) do
+        Inc(P);
+      if (P <= Length(S)) and (S[P] = ' ') then
+        Inc(P);
     end
     else
     begin
-      { Collect plain text until next \v or end }
-      NumStart := P;
-      while P <= Length(S) do
-      begin
-        if (S[P] = '\') and (P + 2 <= Length(S)) and (S[P + 1] = 'v') and (S[P + 2] = ' ') then
-          Break;
+      { Unknown marker — skip the backslash and emit as text }
+      Start := P;
+      Inc(P);
+      while (P <= Length(S)) and (S[P] <> '\') and not (S[P] in [#10, #13]) do
         Inc(P);
-      end;
-      SegText := Copy(S, NumStart, P - NumStart);
-      if SegText <> '' then
-      begin
-        Inc(Count);
-        SetLength(FSegments, Count);
-        FSegments[Count - 1].IsVerse := False;
-        FSegments[Count - 1].Text := SegText;
-      end;
+      SegText := Copy(S, Start, P - Start);
+      if Trim(SegText) <> '' then
+        AddSegment(skText, SegText);
     end;
   end;
 end;
@@ -212,15 +331,70 @@ begin
   end;
 end;
 
+procedure TVerseDisplay.DrawWordWrapped(ACanvas: TCanvas; const AText: string;
+  var X, Y: Integer; MaxW, LineH, SpaceW: Integer; ADraw: Boolean);
+var
+  Lines: TStringList;
+  Words: TStringList;
+  Word: string;
+  J, WordW: Integer;
+begin
+  Lines := TStringList.Create;
+  try
+    Lines.Text := AText;
+    for J := 0 to Lines.Count - 1 do
+    begin
+      if J > 0 then
+      begin
+        X := 4;
+        Y := Y + LineH;
+      end;
+
+      Words := TStringList.Create;
+      try
+        Words.Delimiter := ' ';
+        Words.StrictDelimiter := True;
+        Words.DelimitedText := Lines[J];
+
+        while Words.Count > 0 do
+        begin
+          Word := Words[0];
+          Words.Delete(0);
+          if Word = '' then
+            Continue;
+
+          WordW := ACanvas.TextWidth(Word);
+          if (X > 4) and (X + WordW > MaxW) then
+          begin
+            X := 4;
+            Y := Y + LineH;
+          end;
+          if ADraw then
+          begin
+            ACanvas.Brush.Color := Self.Color;
+            ACanvas.TextOut(X, Y + 1, Word);
+          end;
+          X := X + WordW + SpaceW;
+        end;
+      finally
+        Words.Free;
+      end;
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
+
 function TVerseDisplay.DoLayout(ACanvas: TCanvas; AWidth: Integer;
   ADraw: Boolean): Integer;
 var
-  X, Y, MaxW, LineH, BadgeW, BadgeH, BadgePad: Integer;
-  WordW, SpaceW: Integer;
-  I, J: Integer;
-  Lines: TStringList;
-  Words: TStringList;
-  Word, Line: string;
+  X, Y, MaxW, LineH, BadgeW, BadgeH, BadgePad, SpaceW: Integer;
+  I: Integer;
+  SavedStyle: TFontStyles;
+  SavedHeight: Integer;
+  SavedColor: TColor;
+const
+  FootnoteChar = #$E2#$80#$A0; { dagger character U+2020 }
 begin
   ACanvas.Font.Assign(Font);
   LineH := ACanvas.TextHeight('Ag') + 4;
@@ -234,78 +408,102 @@ begin
 
   for I := 0 to Length(FSegments) - 1 do
   begin
-    if FSegments[I].IsVerse then
-    begin
-      { Draw verse badge }
-      BadgeW := ACanvas.TextWidth(FSegments[I].Text) + BadgePad * 2 + 2;
-      if (X > 4) and (X + BadgeW > MaxW) then
+    case FSegments[I].Kind of
+      skVerse:
       begin
+        { Verse number badge }
+        BadgeW := ACanvas.TextWidth(FSegments[I].Text) + BadgePad * 2 + 2;
+        if (X > 4) and (X + BadgeW > MaxW) then
+        begin
+          X := 4;
+          Y := Y + LineH;
+        end;
+        if ADraw then
+        begin
+          ACanvas.Brush.Color := FBadgeColor;
+          ACanvas.Pen.Color := FBadgeColor;
+          ACanvas.RoundRect(X, Y, X + BadgeW, Y + BadgeH, 8, 8);
+          ACanvas.Font.Color := clWhite;
+          ACanvas.Font.Style := [fsBold];
+          ACanvas.Brush.Style := bsClear;
+          ACanvas.TextOut(X + BadgePad + 1, Y + 1, FSegments[I].Text);
+          ACanvas.Brush.Style := bsSolid;
+          ACanvas.Font.Color := Self.Font.Color;
+          ACanvas.Font.Style := Self.Font.Style;
+        end;
+        X := X + BadgeW + 4;
+      end;
+
+      skFootnote:
+      begin
+        { Small footnote indicator badge }
+        BadgeW := ACanvas.TextWidth(FootnoteChar) + 6;
+        if (X > 4) and (X + BadgeW > MaxW) then
+        begin
+          X := 4;
+          Y := Y + LineH;
+        end;
+        if ADraw then
+        begin
+          ACanvas.Brush.Color := $4080FF;  { orange-red }
+          ACanvas.Pen.Color := $4080FF;
+          ACanvas.RoundRect(X, Y + 2, X + BadgeW, Y + BadgeH - 2, 6, 6);
+          ACanvas.Font.Color := clWhite;
+          ACanvas.Font.Style := [fsBold];
+          ACanvas.Brush.Style := bsClear;
+          ACanvas.TextOut(X + 3, Y + 2, FootnoteChar);
+          ACanvas.Brush.Style := bsSolid;
+          ACanvas.Font.Color := Self.Font.Color;
+          ACanvas.Font.Style := Self.Font.Style;
+        end;
+        X := X + BadgeW + 3;
+      end;
+
+      skHeading:
+      begin
+        { Section heading: new line, bold, slightly larger }
+        if X > 4 then
+        begin
+          X := 4;
+          Y := Y + LineH;
+        end;
+        SavedStyle := ACanvas.Font.Style;
+        SavedHeight := ACanvas.Font.Height;
+        ACanvas.Font.Style := [fsBold];
+        ACanvas.Font.Height := ACanvas.Font.Height - 2;
+        DrawWordWrapped(ACanvas, FSegments[I].Text, X, Y, MaxW, LineH + 2, SpaceW, ADraw);
+        ACanvas.Font.Style := SavedStyle;
+        ACanvas.Font.Height := SavedHeight;
+        { Force new line after heading }
         X := 4;
         Y := Y + LineH;
       end;
-      if ADraw then
+
+      skDescription:
       begin
-        ACanvas.Brush.Color := FBadgeColor;
-        ACanvas.Pen.Color := FBadgeColor;
-        ACanvas.RoundRect(X, Y, X + BadgeW, Y + BadgeH, 8, 8);
-        ACanvas.Font.Color := clWhite;
-        ACanvas.Font.Style := [fsBold];
-        ACanvas.Brush.Style := bsClear;
-        ACanvas.TextOut(X + BadgePad + 1, Y + 1, FSegments[I].Text);
-        ACanvas.Brush.Style := bsSolid;
-        ACanvas.Font.Color := Self.Font.Color;
-        ACanvas.Font.Style := Self.Font.Style;
-      end;
-      X := X + BadgeW + 4;
-    end
-    else
-    begin
-      { Draw text with word wrapping, handling embedded newlines }
-      Lines := TStringList.Create;
-      try
-        Lines.Text := FSegments[I].Text;
-        for J := 0 to Lines.Count - 1 do
+        { Descriptive title: new line, italic }
+        if X > 4 then
         begin
-          Line := Lines[J];
-          if (J > 0) then
-          begin
-            { Newline forces a line break }
-            X := 4;
-            Y := Y + LineH;
-          end;
-
-          Words := TStringList.Create;
-          try
-            Words.Delimiter := ' ';
-            Words.StrictDelimiter := True;
-            Words.DelimitedText := Line;
-
-            while Words.Count > 0 do
-            begin
-              Word := Words[0];
-              Words.Delete(0);
-              if Word = '' then
-                Continue;
-
-              WordW := ACanvas.TextWidth(Word);
-              if (X > 4) and (X + WordW > MaxW) then
-              begin
-                X := 4;
-                Y := Y + LineH;
-              end;
-              if ADraw then
-              begin
-                ACanvas.Brush.Color := Self.Color;
-                ACanvas.TextOut(X, Y + 1, Word);
-              end;
-              X := X + WordW + SpaceW;
-            end;
-          finally
-            Words.Free;
-          end;
+          X := 4;
+          Y := Y + LineH;
         end;
-      finally
-        Lines.Free;
+        SavedStyle := ACanvas.Font.Style;
+        SavedColor := ACanvas.Font.Color;
+        ACanvas.Font.Style := [fsItalic];
+        ACanvas.Font.Color := $606060;
+        DrawWordWrapped(ACanvas, FSegments[I].Text, X, Y, MaxW, LineH, SpaceW, ADraw);
+        ACanvas.Font.Style := SavedStyle;
+        ACanvas.Font.Color := SavedColor;
+        { Force new line after description }
+        X := 4;
+        Y := Y + LineH;
+      end;
+
+      skText:
+      begin
+        ACanvas.Font.Style := Self.Font.Style;
+        ACanvas.Font.Color := Self.Font.Color;
+        DrawWordWrapped(ACanvas, FSegments[I].Text, X, Y, MaxW, LineH, SpaceW, ADraw);
       end;
     end;
   end;
@@ -346,15 +544,25 @@ end;
 
 procedure TProjectEditWindow.btnPrevChapterClick(Sender: TObject);
 begin
-  if FCurrentChapterIndex > 0 then
-    LoadChapter(FCurrentChapterIndex - 1);
+  try
+    if FCurrentChapterIndex > 0 then
+      LoadChapter(FCurrentChapterIndex - 1);
+  except
+    on E: Exception do
+      ShowMessage('Error navigating: ' + E.ClassName + ': ' + E.Message);
+  end;
 end;
 
 procedure TProjectEditWindow.btnNextChapterClick(Sender: TObject);
 begin
-  if (FSourceRC <> nil) and
-     (FCurrentChapterIndex < FSourceRC.Book.Chapters.Count - 1) then
-    LoadChapter(FCurrentChapterIndex + 1);
+  try
+    if (FSourceRC <> nil) and
+       (FCurrentChapterIndex < FSourceRC.Book.Chapters.Count - 1) then
+      LoadChapter(FCurrentChapterIndex + 1);
+  except
+    on E: Exception do
+      ShowMessage('Error navigating: ' + E.ClassName + ': ' + E.Message);
+  end;
 end;
 
 procedure TProjectEditWindow.AutoSaveTimerFire(Sender: TObject);
@@ -414,9 +622,28 @@ procedure TProjectEditWindow.ClearChunkPanels;
 var
   I: Integer;
 begin
-  for I := 0 to Length(FChunkPanels) - 1 do
-    FChunkPanels[I].Free;
-  SetLength(FChunkPanels, 0);
+  { Disable layout during bulk removal to prevent intermediate overflow }
+  SourceScrollBox.DisableAutoSizing;
+  TransScrollBox.DisableAutoSizing;
+  try
+    for I := 0 to Length(FChunkPanels) - 1 do
+      FChunkPanels[I].Free;
+    SetLength(FChunkPanels, 0);
+
+    { Safety: remove any orphaned controls }
+    while SourceScrollBox.ControlCount > 0 do
+      SourceScrollBox.Controls[0].Free;
+    while TransScrollBox.ControlCount > 0 do
+      TransScrollBox.Controls[0].Free;
+
+  finally
+    SourceScrollBox.EnableAutoSizing;
+    TransScrollBox.EnableAutoSizing;
+  end;
+
+  { Reset scroll position }
+  SourceScrollBox.VertScrollBar.Position := 0;
+  TransScrollBox.VertScrollBar.Position := 0;
 end;
 
 procedure TProjectEditWindow.LoadChapter(AIndex: Integer);
@@ -428,7 +655,6 @@ var
   MergedText: string;
   DisplayChunks: TChunkList;
   ChunkMap: TStringList;
-  TopPos: Integer;
   IsFinished: Boolean;
   NextChunkStart: Integer;
 begin
@@ -470,48 +696,51 @@ begin
     FreeAndNil(ChunkMap);
   end;
 
-  { Build UI panels }
+  { Build UI panels — disable layout during bulk creation }
   SetLength(FChunkPanels, SourceChapter.Chunks.Count);
-  TopPos := 4;
-
-  for I := 0 to SourceChapter.Chunks.Count - 1 do
-  begin
-    SourceChunk := SourceChapter.Chunks[I];
-
-    { Convert USX source to plain text }
-    SourceText := UsxToPlainText(SourceChunk.Content);
-
-    { Build verse label }
-    if SourceChunk.Name = 'title' then
-      ChunkLabel := 'Title'
-    else
-      ChunkLabel := 'v' + SourceChunk.Name;
-    { Determine verse range }
-    if I < SourceChapter.Chunks.Count - 1 then
+  SourceScrollBox.DisableAutoSizing;
+  TransScrollBox.DisableAutoSizing;
+  try
+    for I := 0 to SourceChapter.Chunks.Count - 1 do
     begin
-      NextChunkStart := StrToIntDef(SourceChapter.Chunks[I + 1].Name, 0);
-      if (NextChunkStart > 0) and (StrToIntDef(SourceChunk.Name, 0) > 0) then
+      SourceChunk := SourceChapter.Chunks[I];
+
+      { Convert USX source to plain text }
+      SourceText := UsxToPlainText(SourceChunk.Content);
+
+      { Build verse label }
+      if SourceChunk.Name = 'title' then
+        ChunkLabel := 'Title'
+      else
+        ChunkLabel := 'v' + SourceChunk.Name;
+      { Determine verse range }
+      if I < SourceChapter.Chunks.Count - 1 then
       begin
-        if NextChunkStart - StrToIntDef(SourceChunk.Name, 0) > 1 then
-          ChunkLabel := 'v' + SourceChunk.Name + '-' +
-            IntToStr(NextChunkStart - 1);
+        NextChunkStart := StrToIntDef(SourceChapter.Chunks[I + 1].Name, 0);
+        if (NextChunkStart > 0) and (StrToIntDef(SourceChunk.Name, 0) > 0) then
+        begin
+          if NextChunkStart - StrToIntDef(SourceChunk.Name, 0) > 1 then
+            ChunkLabel := 'v' + SourceChunk.Name + '-' +
+              IntToStr(NextChunkStart - 1);
+        end;
       end;
+
+      { Get translated text for this chunk }
+      TransText := '';
+      if (DisplayChunks <> nil) and (I < DisplayChunks.Count) then
+        TransText := DisplayChunks[I].Content;
+
+      { Check if chunk is finished }
+      IsFinished := FProject.IsFinished(SourceChapter.ID, SourceChunk.Name);
+
+      FChunkPanels[I] := TChunkPanel.Create(Self,
+        SourceScrollBox, TransScrollBox,
+        SourceText, TransText, SourceChapter.ID, SourceChunk.Name,
+        ChunkLabel, IsFinished, FProject);
     end;
-
-    { Get translated text for this chunk }
-    TransText := '';
-    if (DisplayChunks <> nil) and (I < DisplayChunks.Count) then
-      TransText := DisplayChunks[I].Content;
-
-    { Check if chunk is finished }
-    IsFinished := FProject.IsFinished(SourceChapter.ID, SourceChunk.Name);
-
-    FChunkPanels[I] := TChunkPanel.Create(Self,
-      SourceScrollBox, TransScrollBox,
-      SourceText, TransText, SourceChapter.ID, SourceChunk.Name,
-      ChunkLabel, IsFinished, FProject, TopPos);
-
-    TopPos := TopPos + FChunkPanels[I].GetHeight + 4;
+  finally
+    SourceScrollBox.EnableAutoSizing;
+    TransScrollBox.EnableAutoSizing;
   end;
 
   if DisplayChunks <> nil then
@@ -585,6 +814,11 @@ begin
     SaveChunks := SourceChapter.SplitByChunkMap(MergedText, SaveChunkMap);
     try
       SaveContentDir := FProject.ProjectDir;
+
+      { Delete old chunk files before writing new ones to prevent
+        stale files when save chunking differs from load chunking }
+      CleanChapterDir(SaveContentDir + SourceChapter.ID, '.txt');
+
       SaveChapter := TChapter.Create(SourceChapter.ID);
       try
         for I := 0 to SaveChunks.Count - 1 do
@@ -694,7 +928,7 @@ end;
 constructor TChunkPanel.Create(AOwnerForm: TProjectEditWindow;
   ASourceParent, ATransParent: TScrollBox;
   const ASourceText, ATransText, AChapterID, AChunkName, AVerseLabel: string;
-  AFinished: Boolean; AProject: TProject; ATopPos: Integer);
+  AFinished: Boolean; AProject: TProject);
 var
   PanelHeight, SourceH, TransH: Integer;
   HeaderLabel: TLabel;
@@ -707,13 +941,12 @@ begin
   FEditing := False;
   FTransText := ATransText;
 
-  { Source panel }
+  { Source panel — alTop stacks by Top value, so set high to append at bottom }
   FSourcePanel := TPanel.Create(ASourceParent);
   FSourcePanel.Parent := ASourceParent;
-  FSourcePanel.Left := 4;
-  FSourcePanel.Top := ATopPos;
-  FSourcePanel.Width := ASourceParent.Width - 24;
-  FSourcePanel.Anchors := [akTop, akLeft, akRight];
+  FSourcePanel.Top := ASourceParent.ControlCount * 100;
+  FSourcePanel.Align := alTop;
+  FSourcePanel.BorderSpacing.Bottom := 4;
   FSourcePanel.BevelOuter := bvNone;
   FSourcePanel.Color := $F5F5F0;
 
@@ -732,27 +965,26 @@ begin
   FSourceDisplay.Parent := FSourcePanel;
   FSourceDisplay.Left := 0;
   FSourceDisplay.Top := 18;
-  FSourceDisplay.Width := FSourcePanel.Width;
+  FSourceDisplay.Width := ASourceParent.ClientWidth - 24;
   FSourceDisplay.Anchors := [akTop, akLeft, akRight];
   FSourceDisplay.Color := FSourcePanel.Color;
   FSourceDisplay.Font.Height := -13;
   FSourceDisplay.BadgeColor := $D9904A;  { steel blue }
   FSourceDisplay.Text := ASourceText;
 
-  { Calculate source height }
-  SourceH := FSourceDisplay.CalcNeededHeight(FSourcePanel.Width) + 20;
+  { Calculate source height — use parent width since Align hasn't been applied yet }
+  SourceH := FSourceDisplay.CalcNeededHeight(ASourceParent.ClientWidth - 24) + 20;
   if SourceH < 50 then
     SourceH := 50;
   FSourceDisplay.Height := SourceH - 20;
   FSourcePanel.Height := SourceH;
 
-  { Translation panel }
+  { Translation panel — alTop stacks by Top value, so set high to append at bottom }
   FTransPanel := TPanel.Create(ATransParent);
   FTransPanel.Parent := ATransParent;
-  FTransPanel.Left := 4;
-  FTransPanel.Top := ATopPos;
-  FTransPanel.Width := ATransParent.Width - 24;
-  FTransPanel.Anchors := [akTop, akLeft, akRight];
+  FTransPanel.Top := ATransParent.ControlCount * 100;
+  FTransPanel.Align := alTop;
+  FTransPanel.BorderSpacing.Bottom := 4;
   FTransPanel.BevelOuter := bvNone;
   FTransPanel.Color := clWhite;
 
@@ -761,7 +993,7 @@ begin
   FTransDisplay.Parent := FTransPanel;
   FTransDisplay.Left := 0;
   FTransDisplay.Top := 0;
-  FTransDisplay.Width := FTransPanel.Width - 80;
+  FTransDisplay.Width := ATransParent.ClientWidth - 104;
   FTransDisplay.Anchors := [akTop, akLeft, akRight];
   FTransDisplay.Color := clWhite;
   FTransDisplay.Font.Height := -13;
@@ -774,9 +1006,9 @@ begin
     FTransDisplay.Font.Color := clGray;
   end;
 
-  { Calculate translation height }
+  { Calculate translation height — use parent width since Align hasn't been applied yet }
   if ATransText <> '' then
-    TransH := FTransDisplay.CalcNeededHeight(FTransPanel.Width - 80)
+    TransH := FTransDisplay.CalcNeededHeight(ATransParent.ClientWidth - 104)
   else
     TransH := 30;
   if TransH < 30 then
