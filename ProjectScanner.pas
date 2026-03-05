@@ -106,6 +106,13 @@ begin
   S := S + Msg;
 end;
 
+function IsSupportedProject(const Summary: TProjectSummary): Boolean;
+begin
+  if LowerCase(Trim(Summary.ResourceType)) = 'tw' then
+    Exit(True);
+  Result := (Summary.BookCode <> '') and IsCanonicalBibleBookCode(Summary.BookCode);
+end;
+
 function CountChunkFiles(const ProjectDir: string): Integer;
 var
   SearchRec: TSearchRec;
@@ -248,8 +255,7 @@ begin
         Summary.GitValid := IsGitRepoValid(BasePath + SearchRec.Name);
 
         ReadManifestSummary(BasePath + SearchRec.Name, Summary);
-        Summary.CanonicalBook := (Summary.BookCode <> '') and
-          IsCanonicalBibleBookCode(Summary.BookCode);
+        Summary.CanonicalBook := IsSupportedProject(Summary);
 
         Summary.IssueSummary := '';
         if not Summary.ManifestPresent then
