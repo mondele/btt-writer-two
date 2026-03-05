@@ -7,7 +7,9 @@ interface
 uses
   Classes, SysUtils, Forms, Controls, Graphics, Dialogs, Math,
   ExtCtrls, StdCtrls, Buttons, ComCtrls, LCLType,
-  Globals, ProjectScanner, ProjectEditForm, ProjectCreator, ProjectManager;
+  fpjson, jsonparser,
+  Globals, ProjectScanner, ProjectEditForm, ProjectCreator, ProjectManager,
+  TStudioPackage;
 
 type
   TMainWindow = class(TForm)
@@ -45,7 +47,14 @@ type
     procedure UpdateLayout;
     procedure EnsureSourcesForProjects;
     procedure ScanAndDisplayProjects;
+    procedure OpenProjectAtIndex(Idx: Integer);
+    function IsInfoIconHit(Index, X, Y: Integer): Boolean;
+    procedure ShowProjectDetails(Idx: Integer);
     procedure ProjectListBoxClick(Sender: TObject);
+    procedure ProjectListBoxMouseDown(Sender: TObject; Button: TMouseButton;
+      Shift: TShiftState; X, Y: Integer);
+    procedure ProjectListBoxMouseMove(Sender: TObject; Shift: TShiftState;
+      X, Y: Integer);
     procedure ProjectListBoxDrawItem(Control: TWinControl; Index: Integer;
       ARect: TRect; State: TOwnerDrawState);
     procedure StartNewProjectFlow;
@@ -58,6 +67,166 @@ var
 implementation
 
 {$R *.lfm}
+
+type
+  TProjectDetailsWindow = class(TForm)
+  private
+    FSummary: TProjectSummary;
+    lblTitle: TLabel;
+    lblInfo: TLabel;
+    memTranslators: TMemo;
+    btnDismiss: TButton;
+    btnExport: TButton;
+    function LoadTranslatorsText: string;
+    procedure btnDismissClick(Sender: TObject);
+    procedure btnExportClick(Sender: TObject);
+  public
+    constructor CreateDetails(AOwner: TComponent; const ASummary: TProjectSummary);
+  end;
+
+constructor TProjectDetailsWindow.CreateDetails(AOwner: TComponent;
+  const ASummary: TProjectSummary);
+var
+  ProgressPct: Integer;
+begin
+  inherited Create(AOwner);
+  FSummary := ASummary;
+  Position := poScreenCenter;
+  Width := 520;
+  Height := 430;
+  BorderIcons := [biSystemMenu];
+  Caption := 'Project Details';
+  Color := clWhite;
+
+  lblTitle := TLabel.Create(Self);
+  lblTitle.Parent := Self;
+  lblTitle.Left := 24;
+  lblTitle.Top := 20;
+  lblTitle.Font.Style := [fsBold];
+  lblTitle.Font.Height := -24;
+  lblTitle.Caption := FSummary.BookName + ' - ' + FSummary.TargetLangName;
+
+  lblInfo := TLabel.Create(Self);
+  lblInfo.Parent := Self;
+  lblInfo.Left := 24;
+  lblInfo.Top := 68;
+  lblInfo.Font.Height := -16;
+  if FSummary.TotalChunks > 0 then
+    ProgressPct := (FSummary.FinishedChunks * 100) div FSummary.TotalChunks
+  else
+    ProgressPct := 0;
+  lblInfo.Caption :=
+    'Project: ' + FSummary.DirName + LineEnding +
+    'Target Language: ' + FSummary.TargetLangCode + ' - ' + FSummary.TargetLangName + LineEnding +
+    'Resource type: ' + FSummary.ResourceType + LineEnding +
+    'Progress: ' + IntToStr(ProgressPct) + '%' + LineEnding +
+    'Issues: ' + LineEnding +
+    'Translators:';
+  if FSummary.HasIssues then
+    lblInfo.Caption := StringReplace(lblInfo.Caption, 'Issues: ' + LineEnding,
+      'Issues: ' + FSummary.IssueSummary + LineEnding, [])
+  else
+    lblInfo.Caption := StringReplace(lblInfo.Caption, 'Issues: ' + LineEnding,
+      'Issues: none' + LineEnding, []);
+
+  memTranslators := TMemo.Create(Self);
+  memTranslators.Parent := Self;
+  memTranslators.Left := 24;
+  memTranslators.Top := 182;
+  memTranslators.Width := 464;
+  memTranslators.Height := 164;
+  memTranslators.ReadOnly := True;
+  memTranslators.ScrollBars := ssVertical;
+  memTranslators.Lines.Text := LoadTranslatorsText;
+
+  btnDismiss := TButton.Create(Self);
+  btnDismiss.Parent := Self;
+  btnDismiss.Left := 212;
+  btnDismiss.Top := 360;
+  btnDismiss.Width := 96;
+  btnDismiss.Caption := 'Dismiss';
+  btnDismiss.OnClick := @btnDismissClick;
+
+  btnExport := TButton.Create(Self);
+  btnExport.Parent := Self;
+  btnExport.Left := 384;
+  btnExport.Top := 360;
+  btnExport.Width := 104;
+  btnExport.Caption := '↑ Export';
+  btnExport.OnClick := @btnExportClick;
+end;
+
+function TProjectDetailsWindow.LoadTranslatorsText: string;
+var
+  SL: TStringList;
+  Data: TJSONData;
+  Obj: TJSONObject;
+  Node: TJSONData;
+  Arr: TJSONArray;
+  I: Integer;
+begin
+  Result := '';
+  if not FileExists(IncludeTrailingPathDelimiter(FSummary.FullPath) + 'manifest.json') then
+    Exit('(none)');
+
+  SL := TStringList.Create;
+  try
+    SL.LoadFromFile(IncludeTrailingPathDelimiter(FSummary.FullPath) + 'manifest.json');
+    Data := GetJSON(SL.Text);
+    if not (Data is TJSONObject) then
+    begin
+      Data.Free;
+      Exit('(none)');
+    end;
+    Obj := TJSONObject(Data);
+    try
+      Node := Obj.Find('translators');
+      if not (Node is TJSONArray) then
+        Exit('(none)');
+      Arr := TJSONArray(Node);
+      if Arr.Count = 0 then
+        Exit('(none)');
+      for I := 0 to Arr.Count - 1 do
+      begin
+        if Result <> '' then
+          Result := Result + LineEnding;
+        Result := Result + Arr.Strings[I];
+      end;
+    finally
+      Obj.Free;
+    end;
+  finally
+    SL.Free;
+  end;
+end;
+
+procedure TProjectDetailsWindow.btnDismissClick(Sender: TObject);
+begin
+  Close;
+end;
+
+procedure TProjectDetailsWindow.btnExportClick(Sender: TObject);
+var
+  SaveDlg: TSaveDialog;
+  Err: string;
+begin
+  SaveDlg := TSaveDialog.Create(Self);
+  try
+    SaveDlg.Filter := 'Translation Studio Package (*.tstudio)|*.tstudio|All files|*.*';
+    SaveDlg.DefaultExt := 'tstudio';
+    SaveDlg.FileName := FSummary.DirName + '.tstudio';
+    if not SaveDlg.Execute then
+      Exit;
+    if not CreateTStudioPackage(FSummary.FullPath, SaveDlg.FileName, Err) then
+    begin
+      ShowMessage('Export failed: ' + Err);
+      Exit;
+    end;
+    ShowMessage('Exported: ' + SaveDlg.FileName);
+  finally
+    SaveDlg.Free;
+  end;
+end;
 
 procedure TMainWindow.UpdateLayout;
 var
@@ -136,10 +305,12 @@ begin
   ProjectListBox.Anchors := [akTop, akLeft, akRight, akBottom];
   ProjectListBox.Style := lbOwnerDrawFixed;
   ProjectListBox.ItemHeight := 62;
-  ProjectListBox.OnClick := @ProjectListBoxClick;
+  ProjectListBox.OnMouseDown := @ProjectListBoxMouseDown;
+  ProjectListBox.OnMouseMove := @ProjectListBoxMouseMove;
   ProjectListBox.OnDrawItem := @ProjectListBoxDrawItem;
   ProjectListBox.BorderStyle := bsNone;
   ProjectListBox.Color := clWhite;
+  ProjectListBox.ShowHint := True;
   ProjectListBox.Visible := False;
   btnAddProject.OnClick := @btnAddProjectClick;
   btnStartProject.OnClick := @btnStartProjectClick;
@@ -255,12 +426,15 @@ begin
 end;
 
 procedure TMainWindow.ProjectListBoxClick(Sender: TObject);
+begin
+  OpenProjectAtIndex(ProjectListBox.ItemIndex);
+end;
+
+procedure TMainWindow.OpenProjectAtIndex(Idx: Integer);
 var
-  Idx: Integer;
   EditForm: TProjectEditWindow;
   ShownModal: Boolean;
 begin
-  Idx := ProjectListBox.ItemIndex;
   if (Idx < 0) or (Idx >= Length(FProjects)) then
     Exit;
   if FProjects[Idx].HasIssues then
@@ -289,6 +463,68 @@ begin
 
   { Refresh project list after returning }
   ScanAndDisplayProjects;
+end;
+
+function TMainWindow.IsInfoIconHit(Index, X, Y: Integer): Boolean;
+var
+  RowTop, IconX, IconY, DX, DY: Integer;
+begin
+  Result := False;
+  if (Index < 0) or (Index >= ProjectListBox.Items.Count) then
+    Exit;
+  RowTop := (Index - ProjectListBox.TopIndex) * ProjectListBox.ItemHeight;
+  IconX := ProjectListBox.ClientWidth - 30;
+  IconY := RowTop + (ProjectListBox.ItemHeight div 2);
+  DX := X - IconX;
+  DY := Y - IconY;
+  Result := (DX * DX + DY * DY) <= (10 * 10);
+end;
+
+procedure TMainWindow.ShowProjectDetails(Idx: Integer);
+var
+  D: TProjectDetailsWindow;
+begin
+  if (Idx < 0) or (Idx >= Length(FProjects)) then
+    Exit;
+  D := TProjectDetailsWindow.CreateDetails(nil, FProjects[Idx]);
+  try
+    D.ShowModal;
+  finally
+    D.Free;
+  end;
+  ScanAndDisplayProjects;
+end;
+
+procedure TMainWindow.ProjectListBoxMouseDown(Sender: TObject;
+  Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+var
+  Idx: Integer;
+begin
+  if Button <> mbLeft then
+    Exit;
+  Idx := ProjectListBox.ItemAtPos(Point(X, Y), True);
+  if (Idx < 0) or (Idx >= Length(FProjects)) then
+    Exit;
+  ProjectListBox.ItemIndex := Idx;
+  if IsInfoIconHit(Idx, X, Y) then
+    ShowProjectDetails(Idx)
+  else
+    OpenProjectAtIndex(Idx);
+end;
+
+procedure TMainWindow.ProjectListBoxMouseMove(Sender: TObject;
+  Shift: TShiftState; X, Y: Integer);
+var
+  Idx: Integer;
+  NewHint: string;
+begin
+  Idx := ProjectListBox.ItemAtPos(Point(X, Y), True);
+  if (Idx >= 0) and IsInfoIconHit(Idx, X, Y) then
+    NewHint := 'details'
+  else
+    NewHint := '';
+  if ProjectListBox.Hint <> NewHint then
+    ProjectListBox.Hint := NewHint;
 end;
 
 procedure TMainWindow.StartNewProjectFlow;
