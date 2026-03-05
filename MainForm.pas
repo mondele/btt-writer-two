@@ -255,7 +255,7 @@ begin
   if Trim(SourceLangCode) = '' then
     SourceLangCode := 'en';
 
-  if not InputQuery('Source Text', 'Source resource id (ulb/udb):', ResourceID) then
+  if not InputQuery('Source Text', 'Source text resource id (ulb/udb):', ResourceID) then
     Exit;
   if Trim(ResourceID) = '' then
     ResourceID := 'ulb';

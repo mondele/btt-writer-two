@@ -44,6 +44,12 @@ uses
   Process, jsonparser, DataPaths, Forms, Controls, StdCtrls, ExtCtrls,
   Dialogs, LCLType;
 
+const
+  NON_GL_RESOURCE_ID = 'reg';
+  NON_GL_RESOURCE_NAME = 'Regular';
+  PROJECT_TYPE_ID = 'text';
+  PROJECT_TYPE_NAME = 'Text';
+
 type
   TLanguagePickerForm = class(TForm)
   private
@@ -660,13 +666,13 @@ begin
   Result.Add('project', ProjectObj);
 
   TypeObj := TJSONObject.Create;
-  TypeObj.Add('id', 'text');
-  TypeObj.Add('name', 'Text');
+  TypeObj.Add('id', PROJECT_TYPE_ID);
+  TypeObj.Add('name', PROJECT_TYPE_NAME);
   Result.Add('type', TypeObj);
 
   ResourceObj := TJSONObject.Create;
-  ResourceObj.Add('id', 'reg');
-  ResourceObj.Add('name', 'Regular');
+  ResourceObj.Add('id', NON_GL_RESOURCE_ID);
+  ResourceObj.Add('name', NON_GL_RESOURCE_NAME);
   Result.Add('resource', ResourceObj);
 
   SourcesArr := TJSONArray.Create;
@@ -700,7 +706,8 @@ begin
   ErrorMsg := '';
   ProjectDir := '';
 
-  DirName := TargetLangCode + '_' + SourceOpt.BookCode + '_text_reg';
+  DirName := TargetLangCode + '_' + SourceOpt.BookCode + '_' +
+    PROJECT_TYPE_ID + '_' + NON_GL_RESOURCE_ID;
   FullDir := IncludeTrailingPathDelimiter(GetTargetTranslationsPath) + DirName;
   if DirectoryExists(FullDir) then
   begin
