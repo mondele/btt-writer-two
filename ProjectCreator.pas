@@ -60,7 +60,6 @@ const
   NON_GL_RESOURCE_NAME = 'Regular';
   PROJECT_TYPE_ID = 'text';
   PROJECT_TYPE_NAME = 'Text';
-  LINUX_BUNDLED_CONTAINERS_ZIP = '/opt/BTT-Writer/resources/app/resource_containers.zip';
 
 type
   TCanonicalBook = record
@@ -404,11 +403,7 @@ begin
   if SourceDir <> '' then
     Exit(True);
 
-  {$IFDEF LINUX}
-  ZipPath := LINUX_BUNDLED_CONTAINERS_ZIP;
-  {$ELSE}
-  ZipPath := '';
-  {$ENDIF}
+  ZipPath := GetBundledResourceContainersZipPath;
 
   if (ZipPath = '') or (not FileExists(ZipPath)) then
   begin

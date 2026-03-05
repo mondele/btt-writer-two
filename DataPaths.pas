@@ -11,6 +11,7 @@ function GetDataPath: string;
 function GetLibraryPath: string;
 function GetTargetTranslationsPath: string;
 function GetIndexPath: string;
+function GetBundledResourceContainersZipPath: string;
 
 implementation
 
@@ -46,6 +47,23 @@ function GetIndexPath: string;
 begin
   Result := GetDataPath + 'index' + DirectorySeparator
             + 'resource_containers' + DirectorySeparator;
+end;
+
+function GetBundledResourceContainersZipPath: string;
+const
+  {$IFDEF LINUX}
+  DEFAULT_APP_INSTALL_ROOT = '/opt/BTT-Writer';
+  {$ENDIF}
+  {$IFDEF DARWIN}
+  DEFAULT_APP_INSTALL_ROOT = '/Applications/BTT-Writer.app/Contents';
+  {$ENDIF}
+  {$IFDEF WINDOWS}
+  DEFAULT_APP_INSTALL_ROOT = 'C:\Program Files\BTT-Writer';
+  {$ENDIF}
+begin
+  Result := IncludeTrailingPathDelimiter(DEFAULT_APP_INSTALL_ROOT) +
+    'resources' + DirectorySeparator + 'app' + DirectorySeparator +
+    'resource_containers.zip';
 end;
 
 end.
