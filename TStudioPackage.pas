@@ -315,7 +315,8 @@ end;
 function CreateTStudioPackage(const ProjectDir, PackagePath: string;
   out ErrorMsg: string): Boolean;
 var
-  ProjectName, CanonicalName, TempRoot, StageDir, ManifestPath, OutText, ErrText, Direction: string;
+  ProjectName, CanonicalName, TempRoot, StageDir, ManifestPath, OutText, ErrText,
+  Direction, StagedInnerManifestJSON, StagedManifestPath: string;
   ExitCode: Integer;
   InnerManifest, OuterManifest, GenObj, EntryObj, CommitObj: TJSONObject;
   Arr: TJSONArray;
@@ -371,6 +372,13 @@ begin
         Trim(ProjNode.AsString) + '_' +
         Trim(TypeNode.AsString) + '_' +
         Trim(ResNode.AsString);
+
+    { v1 desktop migrator requires package_version=7 for project manifests.
+      Keep local project manifest untouched; normalize only in staged export. }
+    if InnerManifest.IndexOfName('package_version') >= 0 then
+      InnerManifest.Delete('package_version');
+    InnerManifest.Add('package_version', 7);
+    StagedInnerManifestJSON := InnerManifest.FormatJSON;
   finally
     InnerManifest.Free;
   end;
@@ -440,6 +448,16 @@ begin
     begin
       ErrorMsg := 'Failed staging project files: ' + Trim(ErrText);
       Exit(False);
+    end;
+
+    StagedManifestPath := IncludeTrailingPathDelimiter(StageDir) + CanonicalName +
+      DirectorySeparator + 'manifest.json';
+    SL := TStringList.Create;
+    try
+      SL.Text := StagedInnerManifestJSON;
+      SL.SaveToFile(StagedManifestPath);
+    finally
+      SL.Free;
     end;
 
     if not RunCommandCapture('bash',

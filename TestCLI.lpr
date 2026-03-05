@@ -3,7 +3,7 @@ program TestCLI;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes,
+  SysUtils, Classes, fpjson, jsonparser,
   Globals, DataPaths, USFMUtils, BibleChunk, BibleChapter, BibleBook,
   ResourceContainer, ProjectManager, TStudioPackage;
 
@@ -21,6 +21,8 @@ var
   SR: TSearchRec;
   Proj: TProject;
   PkgInfo: TTStudioPackageInfo;
+  ExtractedManifestData: TJSONData;
+  ExtractedManifestText: string;
   FailCount: Integer;
 
 procedure AssertTrue(const Msg: string; Cond: Boolean);
@@ -321,6 +323,23 @@ begin
   AssertTrue('Extracted project directory exists', DirectoryExists(Extracted));
   AssertTrue('Extracted project manifest exists',
     FileExists(IncludeTrailingPathDelimiter(Extracted) + 'manifest.json'));
+
+  ExtractedManifestText := '';
+  with TStringList.Create do
+  try
+    LoadFromFile(IncludeTrailingPathDelimiter(Extracted) + 'manifest.json');
+    ExtractedManifestText := Text;
+  finally
+    Free;
+  end;
+  ExtractedManifestData := GetJSON(ExtractedManifestText);
+  try
+    AssertTrue('Exported project manifest package_version is v1-compatible',
+      (ExtractedManifestData is TJSONObject) and
+      (TJSONObject(ExtractedManifestData).Get('package_version', 0) = 7));
+  finally
+    ExtractedManifestData.Free;
+  end;
 
   WriteLn;
   if FailCount = 0 then
