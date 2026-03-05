@@ -614,6 +614,7 @@ begin
   btnOK.Width := 80;
   btnOK.Caption := 'OK';
   btnOK.ModalResult := mrNone;
+  btnOK.Default := True;
   btnOK.Anchors := [akRight, akBottom];
   btnOK.OnClick := @btnOKClick;
 
@@ -740,9 +741,18 @@ end;
 
 procedure TLanguagePickerForm.btnOKClick(Sender: TObject);
 var
-  I: Integer;
+  I, Idx: Integer;
   Code: string;
 begin
+  Idx := lst.ItemIndex;
+  if (Idx >= 0) and (Idx < Length(FVisible)) then
+  begin
+    edtCode.Text := FAll[FVisible[Idx]].Code;
+    edtName.Text := FAll[FVisible[Idx]].Name;
+    ModalResult := mrOK;
+    Exit;
+  end;
+
   Code := Trim(edtCode.Text);
   for I := 0 to Length(FAll) - 1 do
     if SameText(FAll[I].Code, Code) then
