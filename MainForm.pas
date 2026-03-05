@@ -235,27 +235,12 @@ var
   SourceOpt: TSourceTextOption;
   NewProjectDir, Err: string;
 begin
-  TargetLangCode := '';
-  TargetLangName := '';
   SourceLangCode := 'en';
   BookCode := '';
   ResourceID := 'ulb';
 
-  if not InputQuery('New Project', 'Target language code (e.g. bzc-x-antemoro):', TargetLangCode) then
+  if not PromptForTargetLanguage(TargetLangCode, TargetLangName) then
     Exit;
-  if Trim(TargetLangCode) = '' then
-  begin
-    ShowMessage('Target language code is required.');
-    Exit;
-  end;
-
-  if not InputQuery('New Project', 'Target language name:', TargetLangName) then
-    Exit;
-  if Trim(TargetLangName) = '' then
-  begin
-    ShowMessage('Target language name is required.');
-    Exit;
-  end;
 
   if not InputQuery('Source Text', 'Book code (e.g. 1co, mat, psa):', BookCode) then
     Exit;

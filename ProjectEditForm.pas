@@ -8,7 +8,7 @@ uses
   Classes, SysUtils, Forms, Controls, Graphics, Dialogs,
   ExtCtrls, StdCtrls, Buttons,
   ProjectManager, ResourceContainer, ProjectScanner,
-  BibleBook, BibleChapter, BibleChunk, USFMUtils, DataPaths;
+  BibleBook, BibleChapter, BibleChunk, USFMUtils, DataPaths, ProjectCreator;
 
 type
   TResourceTab = (rtNotes, rtWords, rtQuestions);
@@ -979,6 +979,7 @@ var
   SaveChapter: TChapter;
   EnglishBook: TBook;
   EnglishChapter: TChapter;
+  GitErr: string;
 begin
   if FProject = nil then
     Exit;
@@ -1000,7 +1001,13 @@ begin
     MergedText := MergedText + FChunkPanels[I].FTransText;
 
   if MergedText = '' then
+  begin
+    SaveContentDir := FProject.ProjectDir;
+    CleanChapterDir(SaveContentDir + SourceChapter.ID, '.txt');
+    CommitProjectChanges(FProject.ProjectDir,
+      'Update chapter ' + SourceChapter.ID, GitErr);
     Exit;
+  end;
 
   { Determine save chunking: prefer English ULB, fallback to display source }
   SaveChunkMap := TStringList.Create;
@@ -1041,8 +1048,10 @@ begin
       try
         for I := 0 to SaveChunks.Count - 1 do
         begin
+          if Trim(SaveChunks[I].Content) = '' then
+            Continue;
           SaveChapter.AddChunk(TChunk.Create(SaveChunks[I].Name));
-          SaveChapter.Chunks[I].Content := SaveChunks[I].Content;
+          SaveChapter.Chunks[SaveChapter.Chunks.Count - 1].Content := SaveChunks[I].Content;
         end;
         SaveChapter.SaveDirtyChunks(SaveContentDir, '.txt');
       finally
@@ -1054,6 +1063,9 @@ begin
   finally
     FreeAndNil(SaveChunkMap);
   end;
+
+  CommitProjectChanges(FProject.ProjectDir,
+    'Update chapter ' + SourceChapter.ID, GitErr);
 end;
 
 procedure TProjectEditWindow.UpdateStatus;
