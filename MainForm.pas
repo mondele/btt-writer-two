@@ -231,13 +231,12 @@ end;
 procedure TMainWindow.StartNewProjectFlow;
 var
   TargetLangCode, TargetLangName: string;
-  SourceLangCode, BookCode, ResourceID: string;
+  SourceLangCode, BookCode: string;
   SourceOpt: TSourceTextOption;
   NewProjectDir, Err: string;
 begin
   SourceLangCode := 'en';
   BookCode := '';
-  ResourceID := 'ulb';
 
   if not PromptForTargetLanguage(TargetLangCode, TargetLangName) then
     Exit;
@@ -255,15 +254,12 @@ begin
   if Trim(SourceLangCode) = '' then
     SourceLangCode := 'en';
 
-  if not InputQuery('Source Text', 'Source text resource id (ulb/udb):', ResourceID) then
-    Exit;
-  if Trim(ResourceID) = '' then
-    ResourceID := 'ulb';
-
-  if not FindSourceTextOption(Trim(SourceLangCode), Trim(BookCode), Trim(ResourceID), SourceOpt) then
+  { Non-GL mode: source resource is selected automatically. Prefer ULB, then UDB. }
+  if not FindSourceTextOption(Trim(SourceLangCode), Trim(BookCode), 'ulb', SourceOpt) then
+    if not FindSourceTextOption(Trim(SourceLangCode), Trim(BookCode), 'udb', SourceOpt) then
   begin
-    ShowMessage('Could not find installed source text: ' +
-      Trim(SourceLangCode) + '_' + Trim(BookCode) + '_' + Trim(ResourceID) +
+    ShowMessage('Could not find installed source text for ' +
+      Trim(SourceLangCode) + '_' + Trim(BookCode) + ' (checked ulb, udb).' +
       LineEnding + 'Install/download that source text first.');
     Exit;
   end;
