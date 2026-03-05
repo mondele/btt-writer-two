@@ -315,11 +315,11 @@ end;
 function CreateTStudioPackage(const ProjectDir, PackagePath: string;
   out ErrorMsg: string): Boolean;
 var
-  ProjectName, TempRoot, StageDir, ManifestPath, OutText, ErrText, Direction: string;
+  ProjectName, CanonicalName, TempRoot, StageDir, ManifestPath, OutText, ErrText, Direction: string;
   ExitCode: Integer;
   InnerManifest, OuterManifest, GenObj, EntryObj, CommitObj: TJSONObject;
   Arr: TJSONArray;
-  DirNode: TJSONData;
+  DirNode, LangNode, ProjNode, TypeNode, ResNode: TJSONData;
   SL: TStringList;
   CommitErr: string;
 begin
@@ -354,10 +354,23 @@ begin
     Exit(False);
   end;
   try
+    CanonicalName := ProjectName;
     Direction := 'ltr';
     DirNode := InnerManifest.FindPath('target_language.direction');
+    LangNode := InnerManifest.FindPath('target_language.id');
+    ProjNode := InnerManifest.FindPath('project.id');
+    TypeNode := InnerManifest.FindPath('type.id');
+    ResNode := InnerManifest.FindPath('resource.id');
     if DirNode <> nil then
       Direction := DirNode.AsString;
+    if (LangNode <> nil) and (ProjNode <> nil) and (TypeNode <> nil) and (ResNode <> nil) and
+       (Trim(LangNode.AsString) <> '') and (Trim(ProjNode.AsString) <> '') and
+       (Trim(TypeNode.AsString) <> '') and (Trim(ResNode.AsString) <> '') then
+      CanonicalName :=
+        Trim(LangNode.AsString) + '_' +
+        Trim(ProjNode.AsString) + '_' +
+        Trim(TypeNode.AsString) + '_' +
+        Trim(ResNode.AsString);
   finally
     InnerManifest.Free;
   end;
@@ -384,8 +397,8 @@ begin
 
     Arr := TJSONArray.Create;
     EntryObj := TJSONObject.Create;
-    EntryObj.Add('path', ProjectName);
-    EntryObj.Add('id', ProjectName);
+    EntryObj.Add('path', CanonicalName);
+    EntryObj.Add('id', CanonicalName);
     CommitObj := TJSONObject.Create;
     CommitObj.Add('stdout', OutText);
     CommitObj.Add('stderr', ErrText);
@@ -417,7 +430,7 @@ begin
 
     if not RunCommandCapture('bash',
       ['-lc', 'cp -a ' + ShellQuote(ExcludeTrailingPathDelimiter(ProjectDir)) + ' ' +
-       ShellQuote(StageDir + DirectorySeparator + ProjectName)],
+       ShellQuote(StageDir + DirectorySeparator + CanonicalName)],
       '', OutText, ErrText, ExitCode) then
     begin
       ErrorMsg := 'Failed staging project files.';
@@ -431,7 +444,7 @@ begin
 
     if not RunCommandCapture('bash',
       ['-lc', 'cd ' + ShellQuote(StageDir) + ' && zip -rq ' +
-       ShellQuote(PackagePath) + ' manifest.json ' + ShellQuote(ProjectName)],
+       ShellQuote(PackagePath) + ' manifest.json ' + ShellQuote(CanonicalName)],
       '', OutText, ErrText, ExitCode) then
     begin
       ErrorMsg := 'Failed creating package zip.';
