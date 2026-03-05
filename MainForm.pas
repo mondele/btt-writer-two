@@ -7,7 +7,7 @@ interface
 uses
   Classes, SysUtils, Forms, Controls, Graphics, Dialogs, Math,
   ExtCtrls, StdCtrls, Buttons, ComCtrls, LCLType,
-  Globals, ProjectScanner, ProjectEditForm, ProjectCreator;
+  Globals, ProjectScanner, ProjectEditForm, ProjectCreator, ProjectManager;
 
 type
   TMainWindow = class(TForm)
@@ -43,6 +43,7 @@ type
     ProjectListBox: TListBox;
     FProjects: TProjectSummaryList;
     procedure UpdateLayout;
+    procedure EnsureSourcesForProjects;
     procedure ScanAndDisplayProjects;
     procedure ProjectListBoxClick(Sender: TObject);
     procedure ProjectListBoxDrawItem(Control: TWinControl; Index: Integer;
@@ -162,11 +163,57 @@ begin
   UpdateLayout;
 end;
 
+procedure TMainWindow.EnsureSourcesForProjects;
+var
+  I, FailCount: Integer;
+  P: TProject;
+  SourceOpt: TSourceTextOption;
+  SourceDir, Err, FailMsg: string;
+begin
+  FailCount := 0;
+  FailMsg := '';
+
+  for I := 0 to Length(FProjects) - 1 do
+  begin
+    P := TProject.Create(FProjects[I].FullPath);
+    try
+      SourceOpt.SourceDir := '';
+      SourceOpt.SourceLangCode := P.GetSourceLanguageCode;
+      if SourceOpt.SourceLangCode = '' then
+        SourceOpt.SourceLangCode := 'en';
+      SourceOpt.SourceLangName := '';
+      SourceOpt.BookCode := P.BookCode;
+      SourceOpt.BookName := FProjects[I].BookName;
+      SourceOpt.ResourceID := P.GetSourceResourceType;
+      if SourceOpt.ResourceID = '' then
+        SourceOpt.ResourceID := 'ulb';
+      SourceOpt.ResourceName := '';
+
+      if (SourceOpt.BookCode = '') then
+        Continue;
+
+      if not EnsureSourceTextPresent(SourceOpt, SourceDir, Err) then
+      begin
+        Inc(FailCount);
+        if FailMsg = '' then
+          FailMsg := FProjects[I].BookCode + ': ' + Err;
+      end;
+    finally
+      P.Free;
+    end;
+  end;
+
+  if FailCount > 0 then
+    ShowMessage('Some project sources could not be prepared (' +
+      IntToStr(FailCount) + '). First error: ' + FailMsg);
+end;
+
 procedure TMainWindow.ScanAndDisplayProjects;
 var
   I: Integer;
 begin
   FProjects := ScanProjects;
+  EnsureSourcesForProjects;
 
   if Length(FProjects) = 0 then
   begin
