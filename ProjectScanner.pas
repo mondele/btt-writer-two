@@ -5,7 +5,7 @@ unit ProjectScanner;
 interface
 
 uses
-  SysUtils, Classes, fpjson, jsonparser, DataPaths;
+  SysUtils, Classes, fpjson, jsonparser, DataPaths, ProjectCreator;
 
 type
   TProjectSummary = record
@@ -132,7 +132,8 @@ begin
       { Estimate total chunks by counting .txt files in chapter dirs }
       Summary.TotalChunks := CountChunkFiles(ProjectDir);
 
-      Result := (Summary.BookCode <> '') and (Summary.TargetLangCode <> '');
+      Result := (Summary.BookCode <> '') and (Summary.TargetLangCode <> '') and
+        IsCanonicalBibleBookCode(Summary.BookCode);
     finally
       Manifest.Free;
     end;

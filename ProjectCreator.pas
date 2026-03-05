@@ -43,6 +43,7 @@ function PromptForBook(out BookCode, BookName: string): Boolean;
 function PromptForSourceText(const BookCode: string; out Opt: TSourceTextOption): Boolean;
 function EnsureSourceTextPresent(const SourceOpt: TSourceTextOption;
   out SourceDir, ErrorMsg: string): Boolean;
+function IsCanonicalBibleBookCode(const BookCode: string): Boolean;
 function FindSourceTextOption(const SourceLangCode, BookCode, ResourceID: string;
   out Opt: TSourceTextOption): Boolean;
 function CreateProjectFromSource(const TargetLangCode, TargetLangName: string;
@@ -394,7 +395,7 @@ end;
 function EnsureSourceTextPresent(const SourceOpt: TSourceTextOption;
   out SourceDir, ErrorMsg: string): Boolean;
 var
-  ZipPath, RelEntry, EntryName, DestRoot, DestDir, Cmd, OutText, ErrText: string;
+  ZipPath, RelEntry, EntryName, DestRoot, DestDir, Cmd, OutText, ErrText, Detail: string;
   ExitCode: Integer;
 begin
   Result := False;
@@ -421,6 +422,18 @@ begin
   EntryName := ExtractFileName(DestDir) + '.tsrc';
   RelEntry := 'resource_containers/' + EntryName;
 
+  if not RunCommandCapture('unzip', ['-Z1', ZipPath, RelEntry], '',
+    OutText, ErrText, ExitCode) then
+  begin
+    ErrorMsg := 'Could not inspect bundled source archive.';
+    Exit(False);
+  end;
+  if (ExitCode <> 0) or (Trim(OutText) = '') then
+  begin
+    ErrorMsg := 'Bundled source text not found: ' + EntryName;
+    Exit(False);
+  end;
+
   if not ForceDirectories(DestDir) then
   begin
     ErrorMsg := 'Could not create source container directory: ' + DestDir;
@@ -437,8 +450,12 @@ begin
   end;
   if ExitCode <> 0 then
   begin
-    ErrorMsg := 'Failed to extract bundled source text ' + EntryName + ': ' +
-      Trim(ErrText + ' ' + OutText);
+    Detail := Trim(ErrText);
+    if Detail = '' then
+      Detail := Trim(OutText);
+    ErrorMsg := 'Failed to extract bundled source text ' + EntryName + '.';
+    if Detail <> '' then
+      ErrorMsg := ErrorMsg + ' ' + Detail;
     Exit(False);
   end;
 
@@ -466,6 +483,13 @@ begin
       IsOT := CANON_BOOKS[I].IsOT;
       Exit(True);
     end;
+end;
+
+function IsCanonicalBibleBookCode(const BookCode: string): Boolean;
+var
+  Dummy: Boolean;
+begin
+  Result := CanonicalBookIsOT(BookCode, Dummy);
 end;
 
 function ListTargetLanguagesFromIndex: TTargetLanguageOptionList;
