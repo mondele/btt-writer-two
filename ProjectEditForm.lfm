@@ -1,0 +1,190 @@
+object ProjectEditWindow: TProjectEditWindow
+  Left = 100
+  Height = 700
+  Top = 50
+  Width = 1100
+  Caption = 'Project Editor'
+  Color = clWhite
+  OnClose = FormClose
+  OnCreate = FormCreate
+  Position = poScreenCenter
+  LCLVersion = '4.0.0.0'
+  object TopPanel: TPanel
+    Left = 0
+    Height = 45
+    Top = 0
+    Width = 1100
+    Align = alTop
+    BevelOuter = bvNone
+    Color = 7879740
+    ParentColor = False
+    TabOrder = 0
+    object btnBack: TButton
+      Left = 8
+      Height = 30
+      Top = 8
+      Width = 70
+      Caption = '<- Back'
+      Font.Color = clWhite
+      OnClick = btnBackClick
+      TabOrder = 0
+    end
+    object lblProjectTitle: TLabel
+      Left = 90
+      Height = 20
+      Top = 12
+      Width = 400
+      Caption = 'Project'
+      Font.Color = clWhite
+      Font.Height = -15
+      Font.Style = [fsBold]
+      ParentColor = False
+      ParentFont = False
+    end
+    object lblChapterNav: TLabel
+      Left = 750
+      Height = 20
+      Top = 12
+      Width = 80
+      Caption = 'Chapter'
+      Font.Color = clWhite
+      Font.Height = -14
+      ParentColor = False
+      ParentFont = False
+      Alignment = taRightJustify
+      Anchors = [akTop, akRight]
+    end
+    object btnPrevChapter: TButton
+      Left = 840
+      Height = 30
+      Top = 8
+      Width = 30
+      Caption = '<'
+      OnClick = btnPrevChapterClick
+      TabOrder = 1
+      Anchors = [akTop, akRight]
+    end
+    object lblChapterNum: TLabel
+      Left = 880
+      Height = 20
+      Top = 12
+      Width = 40
+      Caption = '01'
+      Font.Color = clWhite
+      Font.Height = -15
+      Font.Style = [fsBold]
+      ParentColor = False
+      ParentFont = False
+      Alignment = taCenter
+      Anchors = [akTop, akRight]
+    end
+    object btnNextChapter: TButton
+      Left = 930
+      Height = 30
+      Top = 8
+      Width = 30
+      Caption = '>'
+      OnClick = btnNextChapterClick
+      TabOrder = 2
+      Anchors = [akTop, akRight]
+    end
+  end
+  object StatusPanel: TPanel
+    Left = 0
+    Height = 25
+    Top = 675
+    Width = 1100
+    Align = alBottom
+    BevelOuter = bvNone
+    Color = 15790320
+    ParentColor = False
+    TabOrder = 1
+    object lblStatus: TLabel
+      Left = 16
+      Height = 15
+      Top = 5
+      Width = 600
+      Caption = 'Ready'
+      Font.Height = -12
+      ParentFont = False
+    end
+  end
+  object SplitPanel: TPanel
+    Left = 0
+    Height = 630
+    Top = 45
+    Width = 1100
+    Align = alClient
+    BevelOuter = bvNone
+    TabOrder = 2
+    object Splitter1: TSplitter
+      Left = 450
+      Height = 630
+      Top = 0
+      Width = 5
+    end
+    object SourcePanel: TPanel
+      Left = 0
+      Height = 630
+      Top = 0
+      Width = 450
+      Align = alLeft
+      BevelOuter = bvNone
+      TabOrder = 0
+      object lblSourceHeader: TLabel
+        Left = 8
+        Height = 20
+        Top = 4
+        Width = 200
+        Caption = 'Source Text'
+        Font.Height = -13
+        Font.Style = [fsBold]
+        ParentFont = False
+      end
+      object SourceScrollBox: TScrollBox
+        Left = 0
+        Height = 604
+        Top = 26
+        Width = 450
+        Align = alBottom
+        Anchors = [akTop, akLeft, akRight, akBottom]
+        BorderStyle = bsNone
+        TabOrder = 0
+      end
+    end
+    object TransPanel: TPanel
+      Left = 455
+      Height = 630
+      Top = 0
+      Width = 645
+      Align = alClient
+      BevelOuter = bvNone
+      TabOrder = 1
+      object lblTransHeader: TLabel
+        Left = 8
+        Height = 20
+        Top = 4
+        Width = 200
+        Caption = 'Translation'
+        Font.Height = -13
+        Font.Style = [fsBold]
+        ParentFont = False
+      end
+      object TransScrollBox: TScrollBox
+        Left = 0
+        Height = 604
+        Top = 26
+        Width = 645
+        Align = alBottom
+        Anchors = [akTop, akLeft, akRight, akBottom]
+        BorderStyle = bsNone
+        TabOrder = 0
+      end
+    end
+  end
+  object AutoSaveTimer: TTimer
+    Interval = 300000
+    OnTimer = AutoSaveTimerFire
+    Enabled = False
+  end
+end

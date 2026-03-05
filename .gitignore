@@ -1,0 +1,28 @@
+# Aider
+.aider*
+
+# Free Pascal / Lazarus build artifacts
+*.o
+*.ppu
+*.compiled
+*.or
+*.rst
+*.rsj
+lib/
+
+# Lazarus backup and session files
+backup/
+*.bak
+*~
+*.lps
+
+# Built binaries
+TestCLI
+bttwriter2
+
+# Claude Code
+.claude/
+
+# OS files
+.DS_Store
+Thumbs.db

@@ -1,0 +1,160 @@
+object MainWindow: TMainWindow
+  Left = 200
+  Height = 600
+  Top = 100
+  Width = 900
+  Caption = 'BTT-Writer'
+  Color = clWhite
+  OnCreate = FormCreate
+  Position = poScreenCenter
+  LCLVersion = '4.0.0.0'
+  object HeaderPanel: TPanel
+    Left = 0
+    Height = 50
+    Top = 0
+    Width = 900
+    Align = alTop
+    BevelOuter = bvNone
+    Color = 7879740
+    ParentColor = False
+    TabOrder = 0
+    object lblAppName: TLabel
+      Left = 16
+      Height = 20
+      Top = 15
+      Width = 120
+      Caption = 'BTT-Writer'
+      Font.Color = clWhite
+      Font.Height = -16
+      Font.Style = [fsBold]
+      ParentColor = False
+      ParentFont = False
+    end
+    object lblCurrentUser: TLabel
+      Left = 600
+      Height = 15
+      Top = 18
+      Width = 200
+      Caption = 'Current User: (none)'
+      Font.Color = clWhite
+      Font.Height = -12
+      ParentColor = False
+      ParentFont = False
+      Alignment = taRightJustify
+      Anchors = [akTop, akRight]
+    end
+    object btnLogout: TLabel
+      Left = 820
+      Height = 15
+      Top = 18
+      Width = 60
+      Caption = '(Logout)'
+      Font.Color = clYellow
+      Font.Height = -12
+      ParentColor = False
+      ParentFont = False
+      Cursor = crHandPoint
+      Anchors = [akTop, akRight]
+    end
+  end
+  object ContentPanel: TPanel
+    Left = 0
+    Height = 526
+    Top = 50
+    Width = 900
+    Align = alClient
+    BevelOuter = bvNone
+    Color = clWhite
+    ParentColor = False
+    TabOrder = 1
+    object lblProjectsHeading: TLabel
+      Left = 32
+      Height = 20
+      Top = 16
+      Width = 250
+      Caption = 'Your Translation Projects'
+      Font.Color = clBlack
+      Font.Height = -16
+      Font.Style = [fsBold]
+      ParentColor = False
+      ParentFont = False
+    end
+    object WelcomePanel: TPanel
+      Left = 150
+      Height = 200
+      Top = 120
+      Width = 600
+      Anchors = [akTop]
+      BevelOuter = bvNone
+      Color = 15790320
+      ParentColor = False
+      TabOrder = 0
+      object lblWelcome: TLabel
+        Left = 24
+        Height = 20
+        Top = 24
+        Width = 200
+        Caption = 'Welcome!'
+        Font.Color = clBlack
+        Font.Height = -18
+        Font.Style = [fsBold]
+        ParentColor = False
+        ParentFont = False
+      end
+      object lblWelcomeMsg: TLabel
+        Left = 24
+        Height = 60
+        Top = 60
+        Width = 550
+        Caption = 'You don'#39't have any projects yet. Click the button below to start a new translation project.'
+        Font.Color = clGray
+        Font.Height = -13
+        ParentColor = False
+        ParentFont = False
+        WordWrap = True
+      end
+      object btnStartProject: TButton
+        Left = 24
+        Height = 35
+        Top = 140
+        Width = 220
+        Caption = 'START A NEW PROJECT'
+        Font.Style = [fsBold]
+        TabOrder = 0
+      end
+    end
+    object btnAddProject: TSpeedButton
+      Left = 840
+      Height = 40
+      Top = 8
+      Width = 40
+      Caption = '+'
+      Font.Color = clWhite
+      Font.Height = -20
+      Font.Style = [fsBold]
+      Flat = True
+      Anchors = [akTop, akRight]
+    end
+  end
+  object btnMenu: TSpeedButton
+    Left = 8
+    Height = 32
+    Top = 560
+    Width = 32
+    Caption = #8942
+    Font.Height = -18
+    Flat = True
+    Anchors = [akLeft, akBottom]
+  end
+  object StatusBar: TStatusBar
+    Left = 0
+    Height = 23
+    Top = 577
+    Width = 900
+    Panels = <
+      item
+        Text = 'Status: Idle'
+        Width = 50
+      end>
+  end
+end
