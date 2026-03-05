@@ -154,6 +154,43 @@ begin
     S := Copy(S, 1, P - 1) + '\v ' + VerseNum + ' ' + Copy(S, TagEnd, Length(S));
   until False;
 
+  { Replace <note ...>...</note> with \f + \f* (footnote indicator) }
+  repeat
+    P := Pos('<note', S);
+    if P = 0 then
+      Break;
+    TagEnd := Pos('</note>', S, P);
+    if TagEnd > 0 then
+      TagEnd := TagEnd + Length('</note>')
+    else
+    begin
+      { Self-closing or malformed — just strip the opening tag }
+      TagEnd := Pos('>', S, P);
+      if TagEnd = 0 then
+        Break;
+      TagEnd := TagEnd + 1;
+    end;
+    S := Copy(S, 1, P - 1) + '\f + \f*' + Copy(S, TagEnd, Length(S));
+  until False;
+
+  { Strip remaining <char ...> and </char> tags }
+  repeat
+    P := Pos('<char', S);
+    if P = 0 then
+      Break;
+    TagEnd := Pos('>', S, P);
+    if TagEnd = 0 then
+      Break;
+    S := Copy(S, 1, P - 1) + Copy(S, TagEnd + 1, Length(S));
+  until False;
+
+  repeat
+    P := Pos('</char>', S);
+    if P = 0 then
+      Break;
+    S := Copy(S, 1, P - 1) + Copy(S, P + Length('</char>'), Length(S));
+  until False;
+
   { Strip <para ...> and </para> tags }
   repeat
     P := Pos('<para', S);
