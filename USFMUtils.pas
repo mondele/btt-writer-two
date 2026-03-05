@@ -27,34 +27,39 @@ implementation
 
 function FindVerseMarkerPos(const Text: string; VerseNum: Integer): Integer;
 var
-  Marker: string;
-  P, TextLen: Integer;
-  CharAfter: Char;
+  P, TextLen, NumStart, NumEnd: Integer;
+  VerseToken, VerseNumStr: string;
+  DashPos: Integer;
 begin
   Result := 0;
-  Marker := '\v ' + IntToStr(VerseNum);
+  VerseNumStr := IntToStr(VerseNum);
   TextLen := Length(Text);
   P := 1;
 
   while P <= TextLen do
   begin
-    P := Pos(Marker, Text, P);
+    P := Pos('\v ', Text, P);
     if P = 0 then
       Exit(0);
 
-    { Check that the character after the verse number is a word boundary:
-      space, newline, end of string, or another backslash }
-    if (P + Length(Marker)) > TextLen then
-      Exit(P)  { marker is at end of text }
-    else
+    NumStart := P + 3; { skip "\v " }
+    NumEnd := NumStart;
+    while (NumEnd <= TextLen) and (Text[NumEnd] in ['0'..'9', '-']) do
+      Inc(NumEnd);
+
+    VerseToken := Copy(Text, NumStart, NumEnd - NumStart);
+    if VerseToken <> '' then
     begin
-      CharAfter := Text[P + Length(Marker)];
-      if CharAfter in [' ', #10, #13, '\'] then
+      { Support "1" and also range tokens like "1-3". }
+      DashPos := Pos('-', VerseToken);
+      if DashPos > 0 then
+        VerseToken := Copy(VerseToken, 1, DashPos - 1);
+
+      if VerseToken = VerseNumStr then
         Exit(P);
     end;
 
-    { Not a proper boundary match, keep searching }
-    P := P + Length(Marker);
+    P := NumEnd;
   end;
 end;
 

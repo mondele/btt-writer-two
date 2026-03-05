@@ -5,7 +5,7 @@ unit BibleChapter;
 interface
 
 uses
-  SysUtils, Classes, Generics.Collections, BibleChunk, USFMUtils;
+  SysUtils, Classes, Generics.Collections, BibleChunk, USFMUtils, Globals;
 
 type
   TChunkList = specialize TObjectList<TChunk>;
@@ -63,20 +63,52 @@ end;
 
 function TChapter.MergeAllContent: string;
 var
-  I: Integer;
+  I, StartVerse, NextVerse: Integer;
+  ChunkText: string;
 begin
   Result := '';
   for I := 0 to FChunks.Count - 1 do
-    Result := Result + FChunks[I].Content;
+  begin
+    ChunkText := FChunks[I].Content;
+
+    { Legacy project chunks sometimes have no verse markers. Infer a start
+      marker from this chunk filename and an end boundary marker from the
+      next chunk filename so splitting stays bounded. }
+    if (Pos('\v ', ChunkText) = 0) and TryStrToInt(FChunks[I].Name, StartVerse) then
+    begin
+      if Verbose then
+        WriteLn(Format('[VerseInference] chapter=%s chunk=%s startVerse=%d',
+          [FID, FChunks[I].Name, StartVerse]));
+
+      ChunkText := Trim(ChunkText);
+      if ChunkText <> '' then
+        ChunkText := '\v ' + IntToStr(StartVerse) + ' ' + ChunkText
+      else
+        ChunkText := '\v ' + IntToStr(StartVerse) + ' ';
+
+      if (I < FChunks.Count - 1) and
+         TryStrToInt(FChunks[I + 1].Name, NextVerse) and
+         (NextVerse > StartVerse) then
+      begin
+        if Verbose then
+          WriteLn(Format('[VerseInference] chapter=%s chunk=%s endBoundaryVerse=%d',
+            [FID, FChunks[I].Name, NextVerse]));
+        ChunkText := ChunkText + LineEnding + '\v ' + IntToStr(NextVerse) + ' ';
+      end;
+    end;
+
+    Result := Result + ChunkText;
+  end;
 end;
 
 function TChapter.SplitByChunkMap(const MergedText: string; ChunkMap: TStringList): TChunkList;
 var
-  I, VerseNum, StartPos, EndPos, NextVerse: Integer;
+  I, VerseNum, StartPos, EndPos, NextVerse, FallbackPos: Integer;
   ChunkContent: string;
   Chunk: TChunk;
 begin
   Result := TChunkList.Create(True);
+  FallbackPos := 1;
 
   if ChunkMap.Count = 0 then
   begin
@@ -100,16 +132,25 @@ begin
       Chunk := TChunk.Create(ChunkMap[I]);
       Chunk.Content := ChunkContent;
       Result.Add(Chunk);
+      FallbackPos := EndPos;
       Continue;
     end;
 
     StartPos := FindVerseMarkerPos(MergedText, VerseNum);
     if StartPos = 0 then
     begin
-      { Verse not found in text - create empty chunk }
-      Chunk := TChunk.Create(ChunkMap[I]);
-      Result.Add(Chunk);
-      Continue;
+      { Verse marker missing: keep processing from the current fallback cursor
+        instead of dropping text for this chunk. }
+      StartPos := FallbackPos;
+      while (StartPos <= Length(MergedText)) and
+            (MergedText[StartPos] in [' ', #9, #10, #13]) do
+        Inc(StartPos);
+      if StartPos > Length(MergedText) then
+      begin
+        Chunk := TChunk.Create(ChunkMap[I]);
+        Result.Add(Chunk);
+        Continue;
+      end;
     end;
 
     { For verse 1, include any preceding USFM content (like \d)
@@ -139,9 +180,17 @@ begin
     else
       ChunkContent := Copy(MergedText, StartPos, Length(MergedText) - StartPos + 1);
 
+    if (Trim(ChunkContent) <> '') and (Pos('\v ', ChunkContent) = 0) then
+      ChunkContent := '\v ' + ChunkMap[I] + ' ' + Trim(ChunkContent);
+
     Chunk := TChunk.Create(ChunkMap[I]);
     Chunk.Content := ChunkContent;
     Result.Add(Chunk);
+
+    if EndPos > 0 then
+      FallbackPos := EndPos
+    else
+      FallbackPos := Length(MergedText) + 1;
   end;
 end;
 

@@ -1,102 +1,253 @@
 object MainWindow: TMainWindow
   Left = 200
-  Height = 600
+  Height = 620
   Top = 100
-  Width = 900
+  Width = 980
   Caption = 'BTT-Writer'
   Color = clWhite
   OnCreate = FormCreate
+  OnResize = FormResize
   Position = poScreenCenter
   LCLVersion = '4.0.0.0'
   object HeaderPanel: TPanel
     Left = 0
-    Height = 50
+    Height = 40
     Top = 0
-    Width = 900
+    Width = 980
     Align = alTop
     BevelOuter = bvNone
-    Color = 7879740
+    Color = 26258
     ParentColor = False
     TabOrder = 0
     object lblAppName: TLabel
       Left = 16
-      Height = 20
-      Top = 15
-      Width = 120
-      Caption = 'BTT-Writer'
+      Height = 24
+      Top = 8
+      Width = 90
+      Caption = 'BTT Writer'
       Font.Color = clWhite
-      Font.Height = -16
-      Font.Style = [fsBold]
+      Font.Height = -28
       ParentColor = False
       ParentFont = False
     end
     object lblCurrentUser: TLabel
-      Left = 600
-      Height = 15
-      Top = 18
-      Width = 200
-      Caption = 'Current User: (none)'
+      Left = 620
+      Height = 20
+      Top = 10
+      Width = 220
+      Caption = 'Current User: Raphael'
       Font.Color = clWhite
-      Font.Height = -12
+      Font.Height = -21
       ParentColor = False
       ParentFont = False
       Alignment = taRightJustify
       Anchors = [akTop, akRight]
     end
     object btnLogout: TLabel
-      Left = 820
-      Height = 15
-      Top = 18
-      Width = 60
+      Left = 848
+      Height = 20
+      Top = 10
+      Width = 100
       Caption = '(Logout)'
-      Font.Color = clYellow
-      Font.Height = -12
+      Font.Color = clWhite
+      Font.Height = -21
       ParentColor = False
       ParentFont = False
       Cursor = crHandPoint
       Anchors = [akTop, akRight]
     end
   end
-  object ContentPanel: TPanel
+  object LeftRail: TPanel
     Left = 0
-    Height = 526
-    Top = 50
-    Width = 900
-    Align = alClient
+    Height = 557
+    Top = 40
+    Width = 56
+    Align = alLeft
     BevelOuter = bvNone
-    Color = clWhite
+    Color = 26258
     ParentColor = False
     TabOrder = 1
+    object btnMenu: TSpeedButton
+      Left = 10
+      Height = 28
+      Top = 518
+      Width = 36
+      Caption = #8942
+      Font.Color = clWhite
+      Font.Height = -22
+      Flat = True
+      ParentFont = False
+      Anchors = [akLeft, akBottom]
+    end
+  end
+  object ContentPanel: TPanel
+    Left = 56
+    Height = 557
+    Top = 40
+    Width = 924
+    Align = alClient
+    BevelOuter = bvNone
+    Color = 14474460
+    ParentColor = False
+    TabOrder = 2
     object lblProjectsHeading: TLabel
-      Left = 32
-      Height = 20
+      Left = 30
+      Height = 34
       Top = 16
-      Width = 250
+      Width = 300
       Caption = 'Your Translation Projects'
-      Font.Color = clBlack
-      Font.Height = -16
-      Font.Style = [fsBold]
+      Font.Color = 2105376
+      Font.Height = -32
       ParentColor = False
       ParentFont = False
     end
+    object lblSortBy: TLabel
+      Left = 190
+      Height = 18
+      Top = 62
+      Width = 130
+      Caption = 'Columns to Sort By'
+      Font.Color = 9013641
+      Font.Height = -16
+      ParentColor = False
+      ParentFont = False
+    end
+    object lblSortColumnBy: TLabel
+      Left = 505
+      Height = 18
+      Top = 62
+      Width = 160
+      Caption = 'Sort Project Column By'
+      Font.Color = 9013641
+      Font.Height = -16
+      ParentColor = False
+      ParentFont = False
+    end
+    object cmbSortBy: TComboBox
+      Left = 190
+      Height = 28
+      Top = 84
+      Width = 230
+      ItemHeight = 20
+      ItemIndex = 0
+      Items.Strings = (
+        'Language then Project'
+        'Project then Language'
+      )
+      Style = csDropDownList
+      TabOrder = 0
+      Text = 'Language then Project'
+    end
+    object cmbSortColumnBy: TComboBox
+      Left = 505
+      Height = 28
+      Top = 84
+      Width = 230
+      ItemHeight = 20
+      ItemIndex = 0
+      Items.Strings = (
+        'Bible Order'
+        'Alphabetical'
+      )
+      Style = csDropDownList
+      TabOrder = 1
+      Text = 'Bible Order'
+    end
+    object AddProjectCircle: TShape
+      Left = 850
+      Height = 56
+      Top = 20
+      Width = 56
+      Brush.Color = 5025616
+      Pen.Color = 5025616
+      Shape = stCircle
+    end
+    object btnAddProject: TSpeedButton
+      Left = 850
+      Height = 56
+      Top = 20
+      Width = 56
+      Caption = '+'
+      Flat = True
+      Font.Color = clWhite
+      Font.Height = -32
+      ParentFont = False
+      Transparent = True
+      Anchors = [akTop, akRight]
+    end
+    object lblProjectColumn: TLabel
+      Left = 205
+      Height = 20
+      Top = 144
+      Width = 50
+      Caption = 'Project'
+      Font.Color = 9013641
+      Font.Height = -17
+      ParentColor = False
+      ParentFont = False
+    end
+    object lblTypeColumn: TLabel
+      Left = 390
+      Height = 20
+      Top = 144
+      Width = 30
+      Caption = 'Type'
+      Font.Color = 9013641
+      Font.Height = -17
+      ParentColor = False
+      ParentFont = False
+    end
+    object lblLanguageColumn: TLabel
+      Left = 520
+      Height = 20
+      Top = 144
+      Width = 70
+      Caption = 'Language'
+      Font.Color = 9013641
+      Font.Height = -17
+      ParentColor = False
+      ParentFont = False
+    end
+    object lblProgressColumn: TLabel
+      Left = 695
+      Height = 20
+      Top = 144
+      Width = 62
+      Caption = 'Progress'
+      Font.Color = 9013641
+      Font.Height = -17
+      ParentColor = False
+      ParentFont = False
+    end
+    object ProjectsTablePanel: TPanel
+      Left = 145
+      Height = 290
+      Top = 165
+      Width = 630
+      Anchors = [akTop, akLeft, akRight, akBottom]
+      BevelOuter = bvNone
+      Color = clWhite
+      ParentColor = False
+      TabOrder = 2
+    end
     object WelcomePanel: TPanel
-      Left = 150
+      Left = 170
       Height = 200
-      Top = 120
-      Width = 600
+      Top = 210
+      Width = 580
       Anchors = [akTop]
       BevelOuter = bvNone
-      Color = 15790320
+      Color = clWhite
       ParentColor = False
-      TabOrder = 0
+      TabOrder = 3
       object lblWelcome: TLabel
         Left = 24
-        Height = 20
+        Height = 26
         Top = 24
-        Width = 200
+        Width = 90
         Caption = 'Welcome!'
         Font.Color = clBlack
-        Font.Height = -18
+        Font.Height = -24
         Font.Style = [fsBold]
         ParentColor = False
         ParentFont = False
@@ -104,57 +255,38 @@ object MainWindow: TMainWindow
       object lblWelcomeMsg: TLabel
         Left = 24
         Height = 60
-        Top = 60
-        Width = 550
-        Caption = 'You don'#39't have any projects yet. Click the button below to start a new translation project.'
-        Font.Color = clGray
-        Font.Height = -13
+        Top = 64
+        Width = 530
+        Caption = 'You don'#39't have any projects yet. Click below to start a new translation project.'
+        Font.Color = 7303023
+        Font.Height = -15
         ParentColor = False
         ParentFont = False
         WordWrap = True
       end
       object btnStartProject: TButton
         Left = 24
-        Height = 35
-        Top = 140
-        Width = 220
+        Height = 36
+        Top = 138
+        Width = 230
         Caption = 'START A NEW PROJECT'
         Font.Style = [fsBold]
         TabOrder = 0
       end
     end
-    object btnAddProject: TSpeedButton
-      Left = 840
-      Height = 40
-      Top = 8
-      Width = 40
-      Caption = '+'
-      Font.Color = clWhite
-      Font.Height = -20
-      Font.Style = [fsBold]
-      Flat = True
-      Anchors = [akTop, akRight]
-    end
-  end
-  object btnMenu: TSpeedButton
-    Left = 8
-    Height = 32
-    Top = 560
-    Width = 32
-    Caption = #8942
-    Font.Height = -18
-    Flat = True
-    Anchors = [akLeft, akBottom]
   end
   object StatusBar: TStatusBar
     Left = 0
     Height = 23
-    Top = 577
-    Width = 900
+    Top = 597
+    Width = 980
+    Color = 26258
     Panels = <
       item
         Text = 'Status: Idle'
         Width = 50
       end>
+    ParentColor = False
+    SimplePanel = False
   end
 end

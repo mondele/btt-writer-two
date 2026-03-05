@@ -11,6 +11,8 @@ uses
   BibleBook, BibleChapter, BibleChunk, USFMUtils, DataPaths;
 
 type
+  TResourceTab = (rtNotes, rtWords, rtQuestions);
+
   TSegmentKind = (
     skText,       { plain text }
     skVerse,      { \v N — verse number badge }
@@ -62,12 +64,20 @@ type
     lblStatus: TLabel;
     SplitPanel: TPanel;
     Splitter1: TSplitter;
+    Splitter2: TSplitter;
     SourcePanel: TPanel;
+    SourceLangHeader: TLabel;
     lblSourceHeader: TLabel;
     SourceScrollBox: TScrollBox;
     TransPanel: TPanel;
     lblTransHeader: TLabel;
     TransScrollBox: TScrollBox;
+    ResourcePanel: TPanel;
+    ResourceTabsPanel: TPanel;
+    btnTabNotes: TButton;
+    btnTabWords: TButton;
+    btnTabQuestions: TButton;
+    ResourceMemo: TMemo;
     AutoSaveTimer: TTimer;
     procedure FormCreate(Sender: TObject);
     procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
@@ -83,6 +93,12 @@ type
     FProjectPath: string;
     FSourceContentDir: string;
     FEnglishULBContentDir: string;
+    FScrollSyncTimer: TTimer;
+    FLastSourcePos: Integer;
+    FLastTransPos: Integer;
+    FSyncingScroll: Boolean;
+    FSelectedChunkIndex: Integer;
+    FActiveResourceTab: TResourceTab;
 
     procedure ClearChunkPanels;
     procedure LoadChapter(AIndex: Integer);
@@ -90,8 +106,23 @@ type
     procedure UpdateStatus;
     procedure UpdateChapterNav;
     procedure OnChunkFinishedChange(Sender: TObject);
+    procedure OnChunkFinishedToggleClick(Sender: TObject);
     procedure OnChunkMemoExit(Sender: TObject);
     procedure OnChunkEditClick(Sender: TObject);
+    procedure OnChunkPanelClick(Sender: TObject);
+    procedure OnResourceTabClick(Sender: TObject);
+    procedure PaneMouseWheel(Sender: TObject; Shift: TShiftState;
+      WheelDelta: Integer; MousePos: TPoint; var Handled: Boolean);
+    procedure ScrollSyncTimerFire(Sender: TObject);
+    procedure AttachWheelHandlers(AParent: TWinControl);
+    function IsControlInPane(AControl: TControl; APane: TWinControl): Boolean;
+    procedure SetSelectedChunkIndex(AIndex: Integer);
+    procedure UpdateResourcePanelForSelectedChunk;
+    function ResourceDirFor(const ResourceID: string): string;
+    procedure CollectChunkResources(const ChapterID: string; ChunkStart, ChunkEnd: Integer;
+      const ResourceDir: string; OutList: TStringList);
+    procedure CollectWordsResources(const ChapterID: string; ChunkStart, ChunkEnd: Integer;
+      OutList: TStringList);
   public
     procedure OpenProject(const APath: string; const ASummary: TProjectSummary);
   end;
@@ -106,8 +137,14 @@ type
     FTransMemo: TMemo;
     FEditButton: TButton;
     FFinishedCheck: TCheckBox;
+    FFinishedTrack: TShape;
+    FFinishedKnob: TShape;
+    FFinishedToggleBtn: TSpeedButton;
+    FFinishedLabel: TLabel;
     FChapterID: string;
     FChunkName: string;
+    FStartVerse: Integer;
+    FEndVerse: Integer;
     FProject: TProject;
     FEditing: Boolean;
     FOwnerForm: TProjectEditWindow;
@@ -115,11 +152,17 @@ type
     constructor Create(AOwnerForm: TProjectEditWindow;
       ASourceParent, ATransParent: TScrollBox;
       const ASourceText, ATransText, AChapterID, AChunkName, AVerseLabel: string;
+      AStartVerse, AEndVerse: Integer;
       AFinished: Boolean; AProject: TProject);
     destructor Destroy; override;
     procedure SetEditing(AEdit: Boolean);
     procedure SaveContent;
+    procedure UpdateFinishedVisuals;
+    procedure SetSelected(ASelected: Boolean);
+    function OwnsControl(AObj: TObject): Boolean;
     function GetHeight: Integer;
+    property StartVerse: Integer read FStartVerse;
+    property EndVerse: Integer read FEndVerse;
     property SourcePanel: TPanel read FSourcePanel;
     property TransPanel: TPanel read FTransPanel;
   end;
@@ -227,8 +270,8 @@ begin
       while (P <= Length(S)) and (S[P] in ['0'..'9', '-']) do
         Inc(P);
       AddSegment(skVerse, Copy(S, Start, P - Start));
-      { Skip optional trailing space }
-      if (P <= Length(S)) and (S[P] = ' ') then
+      { Skip trailing whitespace/newline so verse text can stay on same line. }
+      while (P <= Length(S)) and (S[P] in [' ', #9, #10, #13]) do
         Inc(P);
     end
     else if MatchMarker(S, P, 'f') then
@@ -526,11 +569,37 @@ begin
   FProject := nil;
   FSourceRC := nil;
   FCurrentChapterIndex := -1;
+  FLastSourcePos := 0;
+  FLastTransPos := 0;
+  FSyncingScroll := False;
+  FSelectedChunkIndex := -1;
+  FActiveResourceTab := rtNotes;
+
+  SourceScrollBox.VertScrollBar.Smooth := True;
+  TransScrollBox.VertScrollBar.Smooth := True;
+
+  SourceScrollBox.OnMouseWheel := @PaneMouseWheel;
+  TransScrollBox.OnMouseWheel := @PaneMouseWheel;
+  btnTabNotes.OnClick := @OnResourceTabClick;
+  btnTabWords.OnClick := @OnResourceTabClick;
+  btnTabQuestions.OnClick := @OnResourceTabClick;
+
+  FScrollSyncTimer := TTimer.Create(Self);
+  FScrollSyncTimer.Interval := 30;
+  FScrollSyncTimer.OnTimer := @ScrollSyncTimerFire;
+  FScrollSyncTimer.Enabled := True;
 end;
 
 procedure TProjectEditWindow.FormClose(Sender: TObject; var CloseAction: TCloseAction);
 begin
-  SaveCurrentChapter;
+  if FScrollSyncTimer <> nil then
+    FScrollSyncTimer.Enabled := False;
+  AutoSaveTimer.Enabled := False;
+  try
+    SaveCurrentChapter;
+  except
+    { Ignore save failures during teardown to avoid app-level crashes. }
+  end;
   ClearChunkPanels;
   FreeAndNil(FProject);
   FreeAndNil(FSourceRC);
@@ -549,7 +618,11 @@ begin
       LoadChapter(FCurrentChapterIndex - 1);
   except
     on E: Exception do
-      ShowMessage('Error navigating: ' + E.ClassName + ': ' + E.Message);
+    begin
+      ShowMessage('Error opening chapter: ' + E.Message +
+        LineEnding + 'Returning to home screen.');
+      Close;
+    end;
   end;
 end;
 
@@ -561,60 +634,184 @@ begin
       LoadChapter(FCurrentChapterIndex + 1);
   except
     on E: Exception do
-      ShowMessage('Error navigating: ' + E.ClassName + ': ' + E.Message);
+    begin
+      ShowMessage('Error opening chapter: ' + E.Message +
+        LineEnding + 'Returning to home screen.');
+      Close;
+    end;
   end;
 end;
 
 procedure TProjectEditWindow.AutoSaveTimerFire(Sender: TObject);
 begin
-  SaveCurrentChapter;
-  lblStatus.Caption := 'Auto-saved at ' + TimeToStr(Now);
+  try
+    SaveCurrentChapter;
+    lblStatus.Caption := 'Auto-saved at ' + TimeToStr(Now);
+  except
+    on E: Exception do
+    begin
+      ShowMessage('Auto-save failed: ' + E.Message +
+        LineEnding + 'Returning to home screen.');
+      Close;
+    end;
+  end;
+end;
+
+function TProjectEditWindow.IsControlInPane(AControl: TControl; APane: TWinControl): Boolean;
+begin
+  Result := False;
+  while AControl <> nil do
+  begin
+    if AControl = APane then
+      Exit(True);
+    AControl := AControl.Parent;
+  end;
+end;
+
+procedure TProjectEditWindow.PaneMouseWheel(Sender: TObject; Shift: TShiftState;
+  WheelDelta: Integer; MousePos: TPoint; var Handled: Boolean);
+var
+  BasePos, NewPos, PixelStep: Integer;
+begin
+  if FSyncingScroll then
+    Exit;
+
+  PixelStep := Round((WheelDelta / 120.0) * 48.0);
+  if PixelStep = 0 then
+    Exit;
+
+  if (Sender is TControl) and
+     IsControlInPane(TControl(Sender), TransScrollBox) then
+    BasePos := TransScrollBox.VertScrollBar.Position
+  else
+    BasePos := SourceScrollBox.VertScrollBar.Position;
+
+  NewPos := BasePos - PixelStep;
+  if NewPos < 0 then
+    NewPos := 0;
+
+  FSyncingScroll := True;
+  try
+    SourceScrollBox.VertScrollBar.Position := NewPos;
+    TransScrollBox.VertScrollBar.Position := NewPos;
+    FLastSourcePos := SourceScrollBox.VertScrollBar.Position;
+    FLastTransPos := TransScrollBox.VertScrollBar.Position;
+  finally
+    FSyncingScroll := False;
+  end;
+
+  Handled := True;
+end;
+
+procedure TProjectEditWindow.ScrollSyncTimerFire(Sender: TObject);
+var
+  SourcePos, TransPos, NewPos: Integer;
+begin
+  if FSyncingScroll then
+    Exit;
+
+  SourcePos := SourceScrollBox.VertScrollBar.Position;
+  TransPos := TransScrollBox.VertScrollBar.Position;
+  if SourcePos = TransPos then
+  begin
+    FLastSourcePos := SourcePos;
+    FLastTransPos := TransPos;
+    Exit;
+  end;
+
+  if SourcePos <> FLastSourcePos then
+    NewPos := SourcePos
+  else if TransPos <> FLastTransPos then
+    NewPos := TransPos
+  else
+    NewPos := SourcePos;
+
+  FSyncingScroll := True;
+  try
+    SourceScrollBox.VertScrollBar.Position := NewPos;
+    TransScrollBox.VertScrollBar.Position := NewPos;
+  finally
+    FSyncingScroll := False;
+  end;
+
+  FLastSourcePos := SourceScrollBox.VertScrollBar.Position;
+  FLastTransPos := TransScrollBox.VertScrollBar.Position;
+end;
+
+procedure TProjectEditWindow.AttachWheelHandlers(AParent: TWinControl);
+var
+  I: Integer;
+begin
+  if AParent = nil then
+    Exit;
+
+  AParent.RemoveHandlerOnMouseWheel(@PaneMouseWheel);
+  AParent.AddHandlerOnMouseWheel(@PaneMouseWheel, True);
+  for I := 0 to AParent.ControlCount - 1 do
+  begin
+    if AParent.Controls[I] is TControl then
+    begin
+      TControl(AParent.Controls[I]).RemoveHandlerOnMouseWheel(@PaneMouseWheel);
+      TControl(AParent.Controls[I]).AddHandlerOnMouseWheel(@PaneMouseWheel, True);
+    end;
+    if AParent.Controls[I] is TWinControl then
+      AttachWheelHandlers(TWinControl(AParent.Controls[I]));
+  end;
 end;
 
 procedure TProjectEditWindow.OpenProject(const APath: string;
   const ASummary: TProjectSummary);
 begin
-  FProjectPath := APath;
+  try
+    FProjectPath := APath;
 
-  { Find source content directory }
-  FSourceContentDir := FindSourceContentDir(ASummary);
-  if FSourceContentDir = '' then
-  begin
-    ShowMessage('Cannot find source text for ' + ASummary.BookCode +
-      '. Please ensure it is installed.');
-    Close;
-    Exit;
-  end;
+    { Find source content directory }
+    FSourceContentDir := FindSourceContentDir(ASummary);
+    if FSourceContentDir = '' then
+    begin
+      ShowMessage('Cannot find source text for ' + ASummary.BookCode +
+        '. Please ensure it is installed.');
+      Close;
+      Exit;
+    end;
 
-  { Find English ULB for save-chunking }
-  FEnglishULBContentDir := FindEnglishULBContentDir(ASummary.BookCode);
+    { Find English ULB for save-chunking }
+    FEnglishULBContentDir := FindEnglishULBContentDir(ASummary.BookCode);
 
-  { Load source resource container }
-  FSourceRC := TResourceContainer.Create('', ASummary.BookCode, 'ulb', '');
-  FSourceRC.Book.LoadFromToc(FSourceContentDir);
-  FSourceRC.Book.LoadContent(FSourceContentDir, '.usx');
+    { Load source resource container }
+    FSourceRC := TResourceContainer.Create('', ASummary.BookCode, 'ulb', '');
+    FSourceRC.Book.LoadFromToc(FSourceContentDir);
+    FSourceRC.Book.LoadContent(FSourceContentDir, '.usx');
 
-  { Load project }
-  FProject := TProject.Create(APath);
-  FProject.LoadContent(FSourceContentDir);
+    { Load project }
+    FProject := TProject.Create(APath);
+    FProject.LoadContent(FSourceContentDir);
 
-  { Set up title }
-  Caption := ASummary.BookName + ' - ' + ASummary.TargetLangName +
-    ' (' + ASummary.TargetLangCode + ')';
-  lblProjectTitle.Caption := Caption;
-  lblSourceHeader.Caption := 'Source Text';
-  lblTransHeader.Caption := 'Translation (' + ASummary.TargetLangCode + ')';
+    { Set up title }
+    Caption := ASummary.BookName + ' - ' + ASummary.TargetLangName +
+      ' (' + ASummary.TargetLangCode + ')';
+    lblProjectTitle.Caption := Caption;
+    lblSourceHeader.Caption := 'Source Text';
+    lblTransHeader.Caption := 'Translation (' + ASummary.TargetLangCode + ')';
 
-  AutoSaveTimer.Enabled := True;
+    AutoSaveTimer.Enabled := True;
 
-  { Load first chapter (skip 'front' if present) }
-  if FSourceRC.Book.Chapters.Count > 0 then
-  begin
-    if (FSourceRC.Book.Chapters.Count > 1) and
-       (FSourceRC.Book.Chapters[0].ID = 'front') then
-      LoadChapter(1)
-    else
-      LoadChapter(0);
+    { Load first chapter (skip 'front' if present) }
+    if FSourceRC.Book.Chapters.Count > 0 then
+    begin
+      if (FSourceRC.Book.Chapters.Count > 1) and
+         (FSourceRC.Book.Chapters[0].ID = 'front') then
+        LoadChapter(1)
+      else
+        LoadChapter(0);
+    end;
+  except
+    on E: Exception do
+    begin
+      AutoSaveTimer.Enabled := False;
+      raise Exception.Create('Unable to open project "' + ASummary.BookName +
+        '" due to invalid or oversized chunk content: ' + E.Message);
+    end;
   end;
 end;
 
@@ -658,96 +855,117 @@ var
   IsFinished: Boolean;
   NextChunkStart: Integer;
 begin
-  { Save previous chapter first }
-  SaveCurrentChapter;
-
-  FCurrentChapterIndex := AIndex;
-  ClearChunkPanels;
-
-  if FSourceRC = nil then
-    Exit;
-  if (AIndex < 0) or (AIndex >= FSourceRC.Book.Chapters.Count) then
-    Exit;
-
-  SourceChapter := FSourceRC.Book.Chapters[AIndex];
-
-  { Get matching project chapter }
-  ProjChapter := nil;
-  if FProject.Book <> nil then
-    ProjChapter := FProject.Book.GetChapter(SourceChapter.ID);
-
-  { Merge project content into single text, then split by source chunking }
-  MergedText := '';
-  if ProjChapter <> nil then
-    MergedText := ProjChapter.MergeAllContent;
-
-  { Build chunk map from source chapter }
-  ChunkMap := TStringList.Create;
+  DisplayChunks := nil;
+  ChunkMap := nil;
   try
+    { Save previous chapter first }
+    SaveCurrentChapter;
+
+    FCurrentChapterIndex := AIndex;
+    ClearChunkPanels;
+
+    if FSourceRC = nil then
+      Exit;
+    if (AIndex < 0) or (AIndex >= FSourceRC.Book.Chapters.Count) then
+      Exit;
+
+    SourceChapter := FSourceRC.Book.Chapters[AIndex];
+
+    { Get matching project chapter }
+    ProjChapter := nil;
+    if FProject.Book <> nil then
+      ProjChapter := FProject.Book.GetChapter(SourceChapter.ID);
+
+    { Merge project content into single text, then split by source chunking }
+    MergedText := '';
+    if ProjChapter <> nil then
+      MergedText := ProjChapter.MergeAllContent;
+
+    { Build chunk map from source chapter }
+    ChunkMap := TStringList.Create;
     for I := 0 to SourceChapter.Chunks.Count - 1 do
       ChunkMap.Add(SourceChapter.Chunks[I].Name);
 
     { Split project text by source chunking }
     if MergedText <> '' then
-      DisplayChunks := SourceChapter.SplitByChunkMap(MergedText, ChunkMap)
-    else
-      DisplayChunks := nil;
-  finally
-    FreeAndNil(ChunkMap);
-  end;
+      DisplayChunks := SourceChapter.SplitByChunkMap(MergedText, ChunkMap);
 
-  { Build UI panels — disable layout during bulk creation }
-  SetLength(FChunkPanels, SourceChapter.Chunks.Count);
-  SourceScrollBox.DisableAutoSizing;
-  TransScrollBox.DisableAutoSizing;
-  try
-    for I := 0 to SourceChapter.Chunks.Count - 1 do
-    begin
-      SourceChunk := SourceChapter.Chunks[I];
-
-      { Convert USX source to plain text }
-      SourceText := UsxToPlainText(SourceChunk.Content);
-
-      { Build verse label }
-      if SourceChunk.Name = 'title' then
-        ChunkLabel := 'Title'
-      else
-        ChunkLabel := 'v' + SourceChunk.Name;
-      { Determine verse range }
-      if I < SourceChapter.Chunks.Count - 1 then
+    { Build UI panels — disable layout during bulk creation }
+    SetLength(FChunkPanels, SourceChapter.Chunks.Count);
+    SourceScrollBox.DisableAutoSizing;
+    TransScrollBox.DisableAutoSizing;
+    try
+      for I := 0 to SourceChapter.Chunks.Count - 1 do
       begin
-        NextChunkStart := StrToIntDef(SourceChapter.Chunks[I + 1].Name, 0);
-        if (NextChunkStart > 0) and (StrToIntDef(SourceChunk.Name, 0) > 0) then
+        SourceChunk := SourceChapter.Chunks[I];
+
+        { Convert USX source to plain text }
+        SourceText := UsxToPlainText(SourceChunk.Content);
+
+        { Build verse label }
+        NextChunkStart := 0;
+        if SourceChunk.Name = 'title' then
+          ChunkLabel := 'Title'
+        else
+          ChunkLabel := 'v' + SourceChunk.Name;
+        { Determine verse range }
+        if I < SourceChapter.Chunks.Count - 1 then
         begin
-          if NextChunkStart - StrToIntDef(SourceChunk.Name, 0) > 1 then
-            ChunkLabel := 'v' + SourceChunk.Name + '-' +
-              IntToStr(NextChunkStart - 1);
+          NextChunkStart := StrToIntDef(SourceChapter.Chunks[I + 1].Name, 0);
+          if (NextChunkStart > 0) and (StrToIntDef(SourceChunk.Name, 0) > 0) then
+          begin
+            if NextChunkStart - StrToIntDef(SourceChunk.Name, 0) > 1 then
+              ChunkLabel := 'v' + SourceChunk.Name + '-' +
+                IntToStr(NextChunkStart - 1);
+          end;
         end;
+
+        { Get translated text for this chunk }
+        TransText := '';
+        if (DisplayChunks <> nil) and (I < DisplayChunks.Count) then
+          TransText := DisplayChunks[I].Content;
+
+        { Check if chunk is finished }
+        IsFinished := FProject.IsFinished(SourceChapter.ID, SourceChunk.Name);
+
+        FChunkPanels[I] := TChunkPanel.Create(Self,
+          SourceScrollBox, TransScrollBox,
+          SourceText, TransText, SourceChapter.ID, SourceChunk.Name,
+          ChunkLabel, StrToIntDef(SourceChunk.Name, 0),
+          NextChunkStart - 1, IsFinished, FProject);
       end;
-
-      { Get translated text for this chunk }
-      TransText := '';
-      if (DisplayChunks <> nil) and (I < DisplayChunks.Count) then
-        TransText := DisplayChunks[I].Content;
-
-      { Check if chunk is finished }
-      IsFinished := FProject.IsFinished(SourceChapter.ID, SourceChunk.Name);
-
-      FChunkPanels[I] := TChunkPanel.Create(Self,
-        SourceScrollBox, TransScrollBox,
-        SourceText, TransText, SourceChapter.ID, SourceChunk.Name,
-        ChunkLabel, IsFinished, FProject);
+    finally
+      SourceScrollBox.EnableAutoSizing;
+      TransScrollBox.EnableAutoSizing;
     end;
-  finally
-    SourceScrollBox.EnableAutoSizing;
-    TransScrollBox.EnableAutoSizing;
+
+    UpdateChapterNav;
+    UpdateStatus;
+
+    { Some controls created during chunk panel build can steal focus and
+      auto-scroll mid-chapter. Force both panes back to the first chunk. }
+    SourceScrollBox.VertScrollBar.Position := 0;
+    TransScrollBox.VertScrollBar.Position := 0;
+    FLastSourcePos := 0;
+    FLastTransPos := 0;
+    AttachWheelHandlers(SourceScrollBox);
+    AttachWheelHandlers(TransScrollBox);
+    if Length(FChunkPanels) > 0 then
+      SetSelectedChunkIndex(0)
+    else
+      FSelectedChunkIndex := -1;
+    ActiveControl := btnBack;
+  except
+    on E: Exception do
+    begin
+      ShowMessage('Error rendering chapter content: ' + E.Message +
+        LineEnding + 'Returning to home screen.');
+      Close;
+    end;
   end;
 
-  if DisplayChunks <> nil then
-    FreeAndNil(DisplayChunks);
-
-  UpdateChapterNav;
-  UpdateStatus;
+  FreeAndNil(DisplayChunks);
+  FreeAndNil(ChunkMap);
 end;
 
 procedure TProjectEditWindow.SaveCurrentChapter;
@@ -884,6 +1102,7 @@ begin
           FChunkPanels[I].SetEditing(False);
         FChunkPanels[I].FEditButton.Enabled := False;
         FChunkPanels[I].FTransDisplay.Font.Color := clGreen;
+        FChunkPanels[I].UpdateFinishedVisuals;
         FChunkPanels[I].FTransDisplay.Invalidate;
         Break;
       end;
@@ -896,11 +1115,24 @@ begin
       begin
         FChunkPanels[I].FEditButton.Enabled := True;
         FChunkPanels[I].FTransDisplay.Font.Color := clBlack;
+        FChunkPanels[I].UpdateFinishedVisuals;
         FChunkPanels[I].FTransDisplay.Invalidate;
         Break;
       end;
   end;
   UpdateStatus;
+end;
+
+procedure TProjectEditWindow.OnChunkFinishedToggleClick(Sender: TObject);
+var
+  I: Integer;
+begin
+  for I := 0 to Length(FChunkPanels) - 1 do
+    if FChunkPanels[I].FFinishedToggleBtn = Sender then
+    begin
+      FChunkPanels[I].FFinishedCheck.Checked := not FChunkPanels[I].FFinishedCheck.Checked;
+      Break;
+    end;
 end;
 
 procedure TProjectEditWindow.OnChunkMemoExit(Sender: TObject);
@@ -923,14 +1155,265 @@ begin
     end;
 end;
 
+procedure TProjectEditWindow.OnChunkPanelClick(Sender: TObject);
+var
+  I: Integer;
+begin
+  for I := 0 to Length(FChunkPanels) - 1 do
+    if FChunkPanels[I].OwnsControl(Sender) then
+    begin
+      SetSelectedChunkIndex(I);
+      Break;
+    end;
+end;
+
+procedure TProjectEditWindow.OnResourceTabClick(Sender: TObject);
+begin
+  if Sender = btnTabNotes then
+    FActiveResourceTab := rtNotes
+  else if Sender = btnTabWords then
+    FActiveResourceTab := rtWords
+  else if Sender = btnTabQuestions then
+    FActiveResourceTab := rtQuestions;
+  UpdateResourcePanelForSelectedChunk;
+end;
+
+procedure TProjectEditWindow.SetSelectedChunkIndex(AIndex: Integer);
+var
+  I: Integer;
+begin
+  if (AIndex < 0) or (AIndex >= Length(FChunkPanels)) then
+    Exit;
+  FSelectedChunkIndex := AIndex;
+  for I := 0 to Length(FChunkPanels) - 1 do
+    FChunkPanels[I].SetSelected(I = AIndex);
+  UpdateResourcePanelForSelectedChunk;
+end;
+
+function TProjectEditWindow.ResourceDirFor(const ResourceID: string): string;
+var
+  LangCode: string;
+begin
+  Result := '';
+  if FProject = nil then
+    Exit;
+  LangCode := FProject.GetSourceLanguageCode;
+  if LangCode = '' then
+    LangCode := 'en';
+  Result := GetLibraryPath + LangCode + '_' + FProject.BookCode + '_' + ResourceID;
+  if not DirectoryExists(Result) then
+    Result := '';
+end;
+
+procedure TProjectEditWindow.CollectChunkResources(const ChapterID: string; ChunkStart,
+  ChunkEnd: Integer; const ResourceDir: string; OutList: TStringList);
+var
+  ChapterDir: string;
+  SR: TSearchRec;
+  Starts: array of Integer;
+  Files: array of string;
+  Count, I, J: Integer;
+  StartV, EndV: Integer;
+  SL: TStringList;
+begin
+  if (OutList = nil) or (ResourceDir = '') then
+    Exit;
+
+  ChapterDir := IncludeTrailingPathDelimiter(ResourceDir) + 'content' +
+    DirectorySeparator + ChapterID;
+  if not DirectoryExists(ChapterDir) then
+    Exit;
+
+  Count := 0;
+  if FindFirst(IncludeTrailingPathDelimiter(ChapterDir) + '*.md', faAnyFile, SR) = 0 then
+  begin
+    repeat
+      if (SR.Attr and faDirectory) <> 0 then
+        Continue;
+      StartV := StrToIntDef(ChangeFileExt(SR.Name, ''), -1);
+      if StartV < 0 then
+        Continue;
+      Inc(Count);
+      SetLength(Starts, Count);
+      SetLength(Files, Count);
+      Starts[Count - 1] := StartV;
+      Files[Count - 1] := IncludeTrailingPathDelimiter(ChapterDir) + SR.Name;
+    until FindNext(SR) <> 0;
+    FindClose(SR);
+  end;
+
+  for I := 0 to Count - 2 do
+    for J := I + 1 to Count - 1 do
+      if Starts[I] > Starts[J] then
+      begin
+        StartV := Starts[I];
+        Starts[I] := Starts[J];
+        Starts[J] := StartV;
+        ChapterDir := Files[I];
+        Files[I] := Files[J];
+        Files[J] := ChapterDir;
+      end;
+
+  for I := 0 to Count - 1 do
+  begin
+    StartV := Starts[I];
+    if I < Count - 1 then
+      EndV := Starts[I + 1] - 1
+    else
+      EndV := 999;
+
+    if (ChunkStart > 0) and ((ChunkEnd > 0) and ((ChunkEnd < StartV) or (ChunkStart > EndV))) then
+      Continue;
+    if (ChunkStart > 0) and (ChunkEnd <= 0) and (StartV < ChunkStart) then
+      Continue;
+
+    SL := TStringList.Create;
+    try
+      SL.LoadFromFile(Files[I]);
+      if Trim(SL.Text) <> '' then
+      begin
+        OutList.Add('[' + IntToStr(StartV) + '-' + IntToStr(EndV) + ']');
+        OutList.Add(Trim(SL.Text));
+        OutList.Add('');
+      end;
+    finally
+      SL.Free;
+    end;
+  end;
+end;
+
+procedure TProjectEditWindow.CollectWordsResources(const ChapterID: string; ChunkStart,
+  ChunkEnd: Integer; OutList: TStringList);
+var
+  ConfigPath, TwDir, RawLine, Line, CurrentChapter, CurrentVerse, WordID, TwFile: string;
+  SL, TwText: TStringList;
+  I, V, Indent: Integer;
+begin
+  if (OutList = nil) or (FSourceContentDir = '') then
+    Exit;
+
+  ConfigPath := IncludeTrailingPathDelimiter(FSourceContentDir) + 'config.yml';
+  TwDir := GetLibraryPath + 'en_bible_tw' + DirectorySeparator + 'content';
+  if (not FileExists(ConfigPath)) or (not DirectoryExists(TwDir)) then
+    Exit;
+
+  CurrentChapter := '';
+  CurrentVerse := '';
+  SL := TStringList.Create;
+  try
+    SL.LoadFromFile(ConfigPath);
+    for I := 0 to SL.Count - 1 do
+    begin
+      RawLine := SL[I];
+      Line := Trim(RawLine);
+      Indent := Length(RawLine) - Length(TrimLeft(RawLine));
+      if (Length(Line) >= 4) and (Line[1] = '''') and (Line[4] = '''') and
+         (Line[5] = ':') then
+      begin
+        if Indent = 2 then
+        begin
+          CurrentChapter := Copy(Line, 2, 2);
+          CurrentVerse := '';
+        end
+        else if Indent = 4 then
+          CurrentVerse := Copy(Line, 2, 2);
+      end
+      else if Pos('- //bible/tw/', Line) = 1 then
+      begin
+        if (CurrentChapter <> ChapterID) then
+          Continue;
+        V := StrToIntDef(CurrentVerse, 0);
+        if (ChunkStart > 0) and (V > 0) and (V < ChunkStart) then
+          Continue;
+        if (ChunkEnd > 0) and (V > ChunkEnd) then
+          Continue;
+
+        WordID := Copy(Line, Length('- //bible/tw/') + 1, MaxInt);
+        TwFile := IncludeTrailingPathDelimiter(TwDir) + WordID + DirectorySeparator + '01.md';
+        if FileExists(TwFile) then
+        begin
+          TwText := TStringList.Create;
+          try
+            TwText.LoadFromFile(TwFile);
+            if Trim(TwText.Text) <> '' then
+            begin
+              OutList.Add('[word:' + WordID + ']');
+              OutList.Add(Trim(TwText.Text));
+              OutList.Add('');
+            end;
+          finally
+            TwText.Free;
+          end;
+        end;
+      end;
+    end;
+  finally
+    SL.Free;
+  end;
+end;
+
+procedure TProjectEditWindow.UpdateResourcePanelForSelectedChunk;
+var
+  NotesList, WordsList, QuestionsList, Display: TStringList;
+  ChapterID: string;
+  StartV, EndV: Integer;
+begin
+  if (FSelectedChunkIndex < 0) or (FSelectedChunkIndex >= Length(FChunkPanels)) then
+  begin
+    ResourceMemo.Lines.Text := '';
+    Exit;
+  end;
+
+  ChapterID := FChunkPanels[FSelectedChunkIndex].FChapterID;
+  StartV := FChunkPanels[FSelectedChunkIndex].StartVerse;
+  EndV := FChunkPanels[FSelectedChunkIndex].EndVerse;
+
+  NotesList := TStringList.Create;
+  WordsList := TStringList.Create;
+  QuestionsList := TStringList.Create;
+  Display := TStringList.Create;
+  try
+    CollectChunkResources(ChapterID, StartV, EndV, ResourceDirFor('tn'), NotesList);
+    CollectWordsResources(ChapterID, StartV, EndV, WordsList);
+    CollectChunkResources(ChapterID, StartV, EndV, ResourceDirFor('tq'), QuestionsList);
+
+    btnTabNotes.Visible := NotesList.Count > 0;
+    btnTabWords.Visible := WordsList.Count > 0;
+    btnTabQuestions.Visible := QuestionsList.Count > 0;
+
+    if (FActiveResourceTab = rtNotes) and (NotesList.Count = 0) then
+      if WordsList.Count > 0 then FActiveResourceTab := rtWords else
+      if QuestionsList.Count > 0 then FActiveResourceTab := rtQuestions;
+    if (FActiveResourceTab = rtWords) and (WordsList.Count = 0) then
+      if NotesList.Count > 0 then FActiveResourceTab := rtNotes else
+      if QuestionsList.Count > 0 then FActiveResourceTab := rtQuestions;
+    if (FActiveResourceTab = rtQuestions) and (QuestionsList.Count = 0) then
+      if NotesList.Count > 0 then FActiveResourceTab := rtNotes else
+      if WordsList.Count > 0 then FActiveResourceTab := rtWords;
+
+    case FActiveResourceTab of
+      rtNotes: Display.Assign(NotesList);
+      rtWords: Display.Assign(WordsList);
+      rtQuestions: Display.Assign(QuestionsList);
+    end;
+    ResourceMemo.Lines.Assign(Display);
+  finally
+    NotesList.Free;
+    WordsList.Free;
+    QuestionsList.Free;
+    Display.Free;
+  end;
+end;
+
 { ---- TChunkPanel ---- }
 
 constructor TChunkPanel.Create(AOwnerForm: TProjectEditWindow;
   ASourceParent, ATransParent: TScrollBox;
   const ASourceText, ATransText, AChapterID, AChunkName, AVerseLabel: string;
-  AFinished: Boolean; AProject: TProject);
+  AStartVerse, AEndVerse: Integer; AFinished: Boolean; AProject: TProject);
 var
   PanelHeight, SourceH, TransH: Integer;
+  HeaderHeight, FooterHeight, BodyTop: Integer;
   HeaderLabel: TLabel;
 begin
   inherited Create;
@@ -940,43 +1423,51 @@ begin
   FProject := AProject;
   FEditing := False;
   FTransText := ATransText;
+  FStartVerse := AStartVerse;
+  FEndVerse := AEndVerse;
+  HeaderHeight := 28;
+  FooterHeight := 34;
+  BodyTop := HeaderHeight + 2;
 
   { Source panel — alTop stacks by Top value, so set high to append at bottom }
   FSourcePanel := TPanel.Create(ASourceParent);
   FSourcePanel.Parent := ASourceParent;
   FSourcePanel.Top := ASourceParent.ControlCount * 100;
   FSourcePanel.Align := alTop;
-  FSourcePanel.BorderSpacing.Bottom := 4;
-  FSourcePanel.BevelOuter := bvNone;
-  FSourcePanel.Color := $F5F5F0;
+  FSourcePanel.BorderSpacing.Bottom := 10;
+  FSourcePanel.BevelOuter := bvLowered;
+  FSourcePanel.Color := clWhite;
 
   { Chunk header label }
   HeaderLabel := TLabel.Create(FSourcePanel);
   HeaderLabel.Parent := FSourcePanel;
-  HeaderLabel.Left := 4;
-  HeaderLabel.Top := 2;
+  HeaderLabel.Left := 10;
+  HeaderLabel.Top := 6;
   HeaderLabel.Caption := AVerseLabel;
   HeaderLabel.Font.Height := -11;
   HeaderLabel.Font.Style := [fsBold];
-  HeaderLabel.Font.Color := $808080;
+  HeaderLabel.Font.Color := $8A8A8A;
+  HeaderLabel.OnClick := @AOwnerForm.OnChunkPanelClick;
 
   { Source verse display }
   FSourceDisplay := TVerseDisplay.Create(FSourcePanel);
   FSourceDisplay.Parent := FSourcePanel;
-  FSourceDisplay.Left := 0;
-  FSourceDisplay.Top := 18;
-  FSourceDisplay.Width := ASourceParent.ClientWidth - 24;
+  FSourceDisplay.Left := 8;
+  FSourceDisplay.Top := BodyTop;
+  FSourceDisplay.Width := ASourceParent.ClientWidth - 16;
   FSourceDisplay.Anchors := [akTop, akLeft, akRight];
-  FSourceDisplay.Color := FSourcePanel.Color;
+  FSourceDisplay.Color := clWhite;
   FSourceDisplay.Font.Height := -13;
-  FSourceDisplay.BadgeColor := $D9904A;  { steel blue }
+  FSourceDisplay.BadgeColor := $00B5652D;
   FSourceDisplay.Text := ASourceText;
+  FSourceDisplay.OnClick := @AOwnerForm.OnChunkPanelClick;
+  FSourcePanel.OnClick := @AOwnerForm.OnChunkPanelClick;
 
   { Calculate source height — use parent width since Align hasn't been applied yet }
-  SourceH := FSourceDisplay.CalcNeededHeight(ASourceParent.ClientWidth - 24) + 20;
+  SourceH := FSourceDisplay.CalcNeededHeight(ASourceParent.ClientWidth - 16) + BodyTop + 8;
   if SourceH < 50 then
     SourceH := 50;
-  FSourceDisplay.Height := SourceH - 20;
+  FSourceDisplay.Height := SourceH - BodyTop - 8;
   FSourcePanel.Height := SourceH;
 
   { Translation panel — alTop stacks by Top value, so set high to append at bottom }
@@ -984,20 +1475,20 @@ begin
   FTransPanel.Parent := ATransParent;
   FTransPanel.Top := ATransParent.ControlCount * 100;
   FTransPanel.Align := alTop;
-  FTransPanel.BorderSpacing.Bottom := 4;
-  FTransPanel.BevelOuter := bvNone;
+  FTransPanel.BorderSpacing.Bottom := 10;
+  FTransPanel.BevelOuter := bvLowered;
   FTransPanel.Color := clWhite;
 
   { Translation verse display (read-only view) }
   FTransDisplay := TVerseDisplay.Create(FTransPanel);
   FTransDisplay.Parent := FTransPanel;
-  FTransDisplay.Left := 0;
-  FTransDisplay.Top := 0;
-  FTransDisplay.Width := ATransParent.ClientWidth - 104;
+  FTransDisplay.Left := 8;
+  FTransDisplay.Top := BodyTop;
+  FTransDisplay.Width := ATransParent.ClientWidth - 16;
   FTransDisplay.Anchors := [akTop, akLeft, akRight];
   FTransDisplay.Color := clWhite;
   FTransDisplay.Font.Height := -13;
-  FTransDisplay.BadgeColor := $60AE27;  { green }
+  FTransDisplay.BadgeColor := $009A8A00;
   if ATransText <> '' then
     FTransDisplay.Text := ATransText
   else
@@ -1005,10 +1496,12 @@ begin
     FTransDisplay.Text := '';
     FTransDisplay.Font.Color := clGray;
   end;
+  FTransDisplay.OnClick := @AOwnerForm.OnChunkPanelClick;
+  FTransPanel.OnClick := @AOwnerForm.OnChunkPanelClick;
 
   { Calculate translation height — use parent width since Align hasn't been applied yet }
   if ATransText <> '' then
-    TransH := FTransDisplay.CalcNeededHeight(ATransParent.ClientWidth - 104)
+    TransH := FTransDisplay.CalcNeededHeight(ATransParent.ClientWidth - 16)
   else
     TransH := 30;
   if TransH < 30 then
@@ -1017,51 +1510,91 @@ begin
 
   { Use the taller of source/trans for both panels }
   PanelHeight := SourceH;
-  if TransH + 4 > PanelHeight then
-    PanelHeight := TransH + 4;
+  if TransH + BodyTop + FooterHeight + 4 > PanelHeight then
+    PanelHeight := TransH + BodyTop + FooterHeight + 4;
   FSourcePanel.Height := PanelHeight;
-  FSourceDisplay.Height := PanelHeight - 20;
+  FSourceDisplay.Height := PanelHeight - BodyTop - 8;
   FTransPanel.Height := PanelHeight;
-  FTransDisplay.Height := PanelHeight;
+  FTransDisplay.Height := PanelHeight - BodyTop - FooterHeight - 6;
 
   { Edit memo (hidden initially) }
   FTransMemo := TMemo.Create(FTransPanel);
   FTransMemo.Parent := FTransPanel;
-  FTransMemo.Left := 0;
-  FTransMemo.Top := 0;
-  FTransMemo.Width := FTransPanel.Width - 80;
-  FTransMemo.Height := PanelHeight;
+  FTransMemo.Left := 8;
+  FTransMemo.Top := BodyTop;
+  FTransMemo.Width := FTransPanel.Width - 16;
+  FTransMemo.Height := PanelHeight - BodyTop - FooterHeight - 6;
   FTransMemo.Anchors := [akTop, akLeft, akRight, akBottom];
   FTransMemo.Text := ATransText;
   FTransMemo.Font.Height := -13;
   FTransMemo.ScrollBars := ssAutoVertical;
   FTransMemo.Visible := False;
   FTransMemo.OnExit := @AOwnerForm.OnChunkMemoExit;
+  FTransMemo.OnClick := @AOwnerForm.OnChunkPanelClick;
 
   { Edit button }
   FEditButton := TButton.Create(FTransPanel);
   FEditButton.Parent := FTransPanel;
-  FEditButton.Width := 50;
-  FEditButton.Height := 26;
-  FEditButton.Left := FTransPanel.Width - 70;
+  FEditButton.Width := 32;
+  FEditButton.Height := 24;
+  FEditButton.Left := FTransPanel.Width - 42;
   FEditButton.Top := 4;
   FEditButton.Anchors := [akTop, akRight];
-  FEditButton.Caption := 'Edit';
+  FEditButton.Caption := #9998;
+  FEditButton.Font.Style := [fsBold];
   FEditButton.OnClick := @AOwnerForm.OnChunkEditClick;
 
-  { Finished checkbox }
+  { Hidden checkbox stores finished state and manifest wiring }
   FFinishedCheck := TCheckBox.Create(FTransPanel);
   FFinishedCheck.Parent := FTransPanel;
-  FFinishedCheck.Width := 60;
-  FFinishedCheck.Height := 20;
-  FFinishedCheck.Left := FTransPanel.Width - 70;
-  FFinishedCheck.Top := 34;
-  FFinishedCheck.Anchors := [akTop, akRight];
-  FFinishedCheck.Caption := 'Done';
+  FFinishedCheck.Visible := False;
   FFinishedCheck.Checked := AFinished;
   FFinishedCheck.Hint := AChapterID;
   FFinishedCheck.HelpKeyword := AChunkName;
   FFinishedCheck.OnChange := @AOwnerForm.OnChunkFinishedChange;
+
+  { Footer label and slider-like toggle }
+  FFinishedLabel := TLabel.Create(FTransPanel);
+  FFinishedLabel.Parent := FTransPanel;
+  FFinishedLabel.Left := 10;
+  FFinishedLabel.Top := PanelHeight - FooterHeight + 8;
+  FFinishedLabel.Caption := 'Mark chunk as done';
+  FFinishedLabel.Font.Color := $00909090;
+  FFinishedLabel.Anchors := [akLeft, akBottom];
+
+  FFinishedTrack := TShape.Create(FTransPanel);
+  FFinishedTrack.Parent := FTransPanel;
+  FFinishedTrack.Shape := stRoundRect;
+  FFinishedTrack.Width := 38;
+  FFinishedTrack.Height := 18;
+  FFinishedTrack.Left := FTransPanel.Width - 52;
+  FFinishedTrack.Top := PanelHeight - FooterHeight + 8;
+  FFinishedTrack.Anchors := [akRight, akBottom];
+  FFinishedTrack.Pen.Color := $00C8C8C8;
+
+  FFinishedKnob := TShape.Create(FTransPanel);
+  FFinishedKnob.Parent := FTransPanel;
+  FFinishedKnob.Shape := stCircle;
+  FFinishedKnob.Width := 14;
+  FFinishedKnob.Height := 14;
+  FFinishedKnob.Top := FFinishedTrack.Top + 2;
+  FFinishedKnob.Anchors := [akRight, akBottom];
+  FFinishedKnob.Pen.Color := clWhite;
+  FFinishedKnob.Brush.Color := clWhite;
+
+  FFinishedToggleBtn := TSpeedButton.Create(FTransPanel);
+  FFinishedToggleBtn.Parent := FTransPanel;
+  FFinishedToggleBtn.Left := FFinishedTrack.Left - 2;
+  FFinishedToggleBtn.Top := FFinishedTrack.Top - 2;
+  FFinishedToggleBtn.Width := FFinishedTrack.Width + 4;
+  FFinishedToggleBtn.Height := FFinishedTrack.Height + 4;
+  FFinishedToggleBtn.Caption := '';
+  FFinishedToggleBtn.Flat := True;
+  FFinishedToggleBtn.Transparent := True;
+  FFinishedToggleBtn.Anchors := [akRight, akBottom];
+  FFinishedToggleBtn.OnClick := @AOwnerForm.OnChunkFinishedToggleClick;
+
+  UpdateFinishedVisuals;
 
   { If finished, disable editing and use green text }
   if AFinished then
@@ -1070,6 +1603,8 @@ begin
     FTransDisplay.Font.Color := clGreen;
     FTransDisplay.Invalidate;
   end;
+
+  SetSelected(False);
 end;
 
 destructor TChunkPanel.Destroy;
@@ -1091,16 +1626,14 @@ begin
   if AEdit then
   begin
     FTransMemo.Text := FTransText;
-    FEditButton.Caption := 'Save';
-    FTransPanel.Color := $F0FFFF;  { light yellow }
-    FTransMemo.Color := $F0FFFF;
+    FEditButton.Caption := #10003;
+    FTransMemo.Color := $00FFFDF0;
     FTransMemo.SetFocus;
   end
   else
   begin
     SaveContent;
-    FEditButton.Caption := 'Edit';
-    FTransPanel.Color := clWhite;
+    FEditButton.Caption := #9998;
     FTransDisplay.Color := clWhite;
   end;
 end;
@@ -1116,6 +1649,44 @@ begin
     else
       FTransDisplay.Font.Color := clGray;
   end;
+end;
+
+procedure TChunkPanel.UpdateFinishedVisuals;
+begin
+  if FFinishedCheck.Checked then
+  begin
+    FFinishedTrack.Brush.Color := $009CC96B;
+    FFinishedTrack.Pen.Color := $009CC96B;
+    FFinishedKnob.Left := FFinishedTrack.Left + FFinishedTrack.Width - FFinishedKnob.Width - 2;
+  end
+  else
+  begin
+    FFinishedTrack.Brush.Color := $00D8D8D8;
+    FFinishedTrack.Pen.Color := $00D8D8D8;
+    FFinishedKnob.Left := FFinishedTrack.Left + 2;
+  end;
+end;
+
+procedure TChunkPanel.SetSelected(ASelected: Boolean);
+begin
+  if ASelected then
+  begin
+    FSourcePanel.BevelColor := $00B8792F;
+    FTransPanel.BevelColor := $00B8792F;
+  end
+  else
+  begin
+    FSourcePanel.BevelColor := $00D0D0D0;
+    FTransPanel.BevelColor := $00D0D0D0;
+  end;
+end;
+
+function TChunkPanel.OwnsControl(AObj: TObject): Boolean;
+begin
+  Result := (AObj = FSourcePanel) or (AObj = FTransPanel) or
+            (AObj = FSourceDisplay) or (AObj = FTransDisplay) or
+            (AObj = FTransMemo) or (AObj = FFinishedToggleBtn) or
+            (AObj = FEditButton);
 end;
 
 function TChunkPanel.GetHeight: Integer;

@@ -20,8 +20,32 @@ var
   ProjectPath: string;
   SR: TSearchRec;
   Proj: TProject;
+  FailCount: Integer;
+
+procedure AssertTrue(const Msg: string; Cond: Boolean);
+begin
+  if Cond then
+    WriteLn('  [PASS] ', Msg)
+  else
+  begin
+    WriteLn('  [FAIL] ', Msg);
+    Inc(FailCount);
+  end;
+end;
+
+procedure AssertEqInt(const Msg: string; Expected, Actual: Integer);
+begin
+  AssertTrue(Format('%s (expected=%d actual=%d)', [Msg, Expected, Actual]),
+    Expected = Actual);
+end;
+
+procedure AssertContains(const Msg, SubStr, S: string);
+begin
+  AssertTrue(Msg + ' contains "' + SubStr + '"', Pos(SubStr, S) > 0);
+end;
 
 begin
+  FailCount := 0;
   { Parse command-line flags }
   for I := 1 to ParamCount do
     if (ParamStr(I) = '-v') or (ParamStr(I) = '--verbose') then
@@ -83,11 +107,23 @@ begin
   WriteLn('  FindVerseMarkerPos(v10)=', FindVerseMarkerPos(MergedText, 10));
   WriteLn('  FindVerseMarkerPos(v11)=', FindVerseMarkerPos(MergedText, 11));
   WriteLn('  FindVerseMarkerPos(v99)=', FindVerseMarkerPos(MergedText, 99));
+  AssertTrue('Find v1 in standard text', FindVerseMarkerPos(MergedText, 1) > 0);
+  AssertTrue('Find v10 in standard text', FindVerseMarkerPos(MergedText, 10) > 0);
+  AssertEqInt('Missing verse returns 0', 0, FindVerseMarkerPos(MergedText, 99));
 
   { Verify \v 1 does not match \v 10 }
   WriteLn('  Boundary test: v1 pos=', FindVerseMarkerPos(MergedText, 1),
           ' v10 pos=', FindVerseMarkerPos(MergedText, 10),
           ' (should differ)');
+  AssertTrue('v1 and v10 are distinct markers',
+    FindVerseMarkerPos(MergedText, 1) <> FindVerseMarkerPos(MergedText, 10));
+
+  { Legacy format without a space after verse number should still parse }
+  MergedText := '\v 1Text one. \v 2Text two.';
+  AssertTrue('Legacy marker format \\v 1Text is found for verse 1',
+    FindVerseMarkerPos(MergedText, 1) > 0);
+  AssertTrue('Legacy marker format \\v 2Text is found for verse 2',
+    FindVerseMarkerPos(MergedText, 2) > 0);
 
   Extracted := ExtractVerseRange(MergedText, 2, 2);
   WriteLn('  ExtractVerseRange(2,2)=', Extracted);
@@ -133,6 +169,39 @@ begin
         WriteLn('  Split into ', SplitResult.Count, ' chunks:');
         for I := 0 to SplitResult.Count - 1 do
           WriteLn('    Chunk ', SplitResult[I].Name, ': ', SplitResult[I].Content);
+        AssertEqInt('Split chunk count', 3, SplitResult.Count);
+        AssertContains('Chunk 1 has verse 1', '\v 1', SplitResult[0].Content);
+        AssertContains('Chunk 3 has verse 3', '\v 3', SplitResult[1].Content);
+        AssertContains('Chunk 5 has verse 5', '\v 5', SplitResult[2].Content);
+      finally
+        FreeAndNil(SplitResult);
+      end;
+    finally
+      FreeAndNil(Verses);
+    end;
+  finally
+    FreeAndNil(Chapter);
+  end;
+  WriteLn;
+
+  { --- Split fallback for missing markers --- }
+  WriteLn('--- Split fallback (missing markers) ---');
+  Chapter := TChapter.Create('01');
+  try
+    Verses := TStringList.Create;
+    try
+      Verses.Add('01');
+      Verses.Add('04');
+      Verses.Add('07');
+      MergedText := 'First section text. Second section text.';
+      SplitResult := Chapter.SplitByChunkMap(MergedText, Verses);
+      try
+        AssertEqInt('Fallback split chunk count', 3, SplitResult.Count);
+        AssertContains('Fallback chunk 01 gets inferred marker', '\v 01', SplitResult[0].Content);
+        AssertTrue('Fallback keeps text in at least one chunk',
+          (Trim(SplitResult[0].Content) <> '') or
+          (Trim(SplitResult[1].Content) <> '') or
+          (Trim(SplitResult[2].Content) <> ''));
       finally
         FreeAndNil(SplitResult);
       end;
@@ -191,5 +260,11 @@ begin
     WriteLn('  No target translations directory found at ', ProjectPath);
 
   WriteLn;
-  WriteLn('=== All tests passed ===');
+  if FailCount = 0 then
+    WriteLn('=== All tests passed ===')
+  else
+  begin
+    WriteLn('=== Tests failed: ', FailCount, ' ===');
+    Halt(1);
+  end;
 end.
