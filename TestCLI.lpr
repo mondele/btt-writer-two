@@ -272,6 +272,8 @@ begin
   if DirectoryExists(TempDir) then
     DeleteFile(TempDir + DirectorySeparator + 'dummy'); { no-op to avoid rm -rf }
   ForceDirectories(TempDir);
+  { Intentionally mismatch directory suffix vs manifest resource.id to verify
+    export canonicalizes from the inner manifest. }
   ProjectPath := IncludeTrailingPathDelimiter(TempDir) + 'zz-demo_tit_text_reg';
   ForceDirectories(ProjectPath);
   ForceDirectories(IncludeTrailingPathDelimiter(ProjectPath) + '01');
@@ -281,7 +283,8 @@ begin
     Text := '{' + LineEnding +
       '  "target_language":{"id":"zz-demo","name":"Demo","direction":"ltr"},' + LineEnding +
       '  "project":{"id":"tit","name":"Titus"},' + LineEnding +
-      '  "resource":{"id":"reg","name":"Regular"},' + LineEnding +
+      '  "type":{"id":"text","name":"Text"},' + LineEnding +
+      '  "resource":{"id":"ulb","name":"Unlocked Literal Bible"},' + LineEnding +
       '  "source_translations":[{"language_id":"en","resource_id":"ulb"}]' + LineEnding +
       '}';
     SaveToFile(IncludeTrailingPathDelimiter(ProjectPath) + 'manifest.json');
@@ -296,7 +299,7 @@ begin
     Free;
   end;
 
-  TempFile := IncludeTrailingPathDelimiter(TempDir) + 'zz-demo_tit_text_reg.tstudio';
+  TempFile := IncludeTrailingPathDelimiter(TempDir) + 'zz-demo_tit_text_ulb.tstudio';
   MergedText := '';
   AssertTrue('Create .tstudio package',
     CreateTStudioPackage(ProjectPath, TempFile, MergedText));
@@ -309,7 +312,7 @@ begin
     ReadTStudioPackageInfo(TempFile, PkgInfo, MergedText));
   AssertTrue('Package version is 2', PkgInfo.PackageVersion = 2);
   AssertTrue('Project path set in package',
-    PkgInfo.ProjectPath = 'zz-demo_tit_text_reg');
+    PkgInfo.ProjectPath = 'zz-demo_tit_text_ulb');
 
   Extracted := '';
   MergedText := '';
