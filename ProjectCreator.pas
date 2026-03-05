@@ -49,6 +49,7 @@ type
   private
     FAll: TTargetLanguageOptionList;
     FVisible: array of Integer;
+    FInternalUpdate: Boolean;
     lblCode: TLabel;
     lblName: TLabel;
     edtCode: TEdit;
@@ -60,6 +61,7 @@ type
     procedure edtCodeChange(Sender: TObject);
     procedure edtCodeKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure lstClick(Sender: TObject);
+    procedure lstKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure lstDblClick(Sender: TObject);
     procedure btnOKClick(Sender: TObject);
   public
@@ -94,6 +96,8 @@ var
   P: TProcess;
   OutS, ErrS: TStringStream;
   I: Integer;
+  Buf: array[0..4095] of Byte;
+  N: LongInt;
 begin
   Result := False;
   ErrorMsg := '';
@@ -104,7 +108,7 @@ begin
   try
     P.Executable := 'git';
     P.CurrentDirectory := WorkDir;
-    P.Options := [poUsePipes, poWaitOnExit];
+    P.Options := [poUsePipes];
     for I := 0 to High(Args) do
       P.Parameters.Add(Args[I]);
 
@@ -118,10 +122,34 @@ begin
       end;
     end;
 
-    if P.Output.NumBytesAvailable > 0 then
-      OutS.CopyFrom(P.Output, P.Output.NumBytesAvailable);
-    if P.Stderr.NumBytesAvailable > 0 then
-      ErrS.CopyFrom(P.Stderr, P.Stderr.NumBytesAvailable);
+    while P.Running do
+    begin
+      while P.Output.NumBytesAvailable > 0 do
+      begin
+        N := P.Output.Read(Buf, SizeOf(Buf));
+        if N > 0 then
+          OutS.WriteBuffer(Buf, N);
+      end;
+      while P.Stderr.NumBytesAvailable > 0 do
+      begin
+        N := P.Stderr.Read(Buf, SizeOf(Buf));
+        if N > 0 then
+          ErrS.WriteBuffer(Buf, N);
+      end;
+      Sleep(5);
+    end;
+    while P.Output.NumBytesAvailable > 0 do
+    begin
+      N := P.Output.Read(Buf, SizeOf(Buf));
+      if N > 0 then
+        OutS.WriteBuffer(Buf, N);
+    end;
+    while P.Stderr.NumBytesAvailable > 0 do
+    begin
+      N := P.Stderr.Read(Buf, SizeOf(Buf));
+      if N > 0 then
+        ErrS.WriteBuffer(Buf, N);
+    end;
 
     if P.ExitStatus = 0 then
       Exit(True);
@@ -144,6 +172,8 @@ var
   P: TProcess;
   OutS, ErrS: TStringStream;
   I: Integer;
+  Buf: array[0..4095] of Byte;
+  N: LongInt;
 begin
   Result := False;
   OutputText := '';
@@ -157,7 +187,7 @@ begin
     P.Executable := Exe;
     if WorkDir <> '' then
       P.CurrentDirectory := WorkDir;
-    P.Options := [poUsePipes, poWaitOnExit];
+    P.Options := [poUsePipes];
     for I := 0 to High(Args) do
       P.Parameters.Add(Args[I]);
     try
@@ -169,10 +199,34 @@ begin
         Exit(False);
       end;
     end;
-    if P.Output.NumBytesAvailable > 0 then
-      OutS.CopyFrom(P.Output, P.Output.NumBytesAvailable);
-    if P.Stderr.NumBytesAvailable > 0 then
-      ErrS.CopyFrom(P.Stderr, P.Stderr.NumBytesAvailable);
+    while P.Running do
+    begin
+      while P.Output.NumBytesAvailable > 0 do
+      begin
+        N := P.Output.Read(Buf, SizeOf(Buf));
+        if N > 0 then
+          OutS.WriteBuffer(Buf, N);
+      end;
+      while P.Stderr.NumBytesAvailable > 0 do
+      begin
+        N := P.Stderr.Read(Buf, SizeOf(Buf));
+        if N > 0 then
+          ErrS.WriteBuffer(Buf, N);
+      end;
+      Sleep(5);
+    end;
+    while P.Output.NumBytesAvailable > 0 do
+    begin
+      N := P.Output.Read(Buf, SizeOf(Buf));
+      if N > 0 then
+        OutS.WriteBuffer(Buf, N);
+    end;
+    while P.Stderr.NumBytesAvailable > 0 do
+    begin
+      N := P.Stderr.Read(Buf, SizeOf(Buf));
+      if N > 0 then
+        ErrS.WriteBuffer(Buf, N);
+    end;
     OutputText := OutS.DataString;
     ErrorText := ErrS.DataString;
     ExitCode := P.ExitStatus;
@@ -277,6 +331,7 @@ begin
   lst.Height := 330;
   lst.Anchors := [akTop, akLeft, akRight, akBottom];
   lst.OnClick := @lstClick;
+  lst.OnKeyUp := @lstKeyUp;
   lst.OnDblClick := @lstDblClick;
 
   btnOK := TButton.Create(Self);
@@ -303,7 +358,7 @@ end;
 
 procedure TLanguagePickerForm.RebuildVisible;
 var
-  I, Count: Integer;
+  I, Count, SelectedVisIdx: Integer;
   Needle: string;
 begin
   lst.Items.BeginUpdate;
@@ -325,17 +380,42 @@ begin
     lst.Items.EndUpdate;
   end;
 
+  SelectedVisIdx := -1;
+  for I := 0 to Length(FVisible) - 1 do
+    if SameText(FAll[FVisible[I]].Code, Trim(edtCode.Text)) then
+    begin
+      SelectedVisIdx := I;
+      Break;
+    end;
+
   if lst.Items.Count > 0 then
   begin
-    lst.ItemIndex := 0;
-    edtName.Text := FAll[FVisible[0]].Name;
+    if SelectedVisIdx >= 0 then
+      lst.ItemIndex := SelectedVisIdx
+    else
+      lst.ItemIndex := 0;
+    FInternalUpdate := True;
+    try
+      edtName.Text := FAll[FVisible[lst.ItemIndex]].Name;
+    finally
+      FInternalUpdate := False;
+    end;
   end
   else
-    edtName.Text := '';
+  begin
+    FInternalUpdate := True;
+    try
+      edtName.Text := '';
+    finally
+      FInternalUpdate := False;
+    end;
+  end;
 end;
 
 procedure TLanguagePickerForm.edtCodeChange(Sender: TObject);
 begin
+  if FInternalUpdate then
+    Exit;
   RebuildVisible;
 end;
 
@@ -362,8 +442,22 @@ begin
   Idx := lst.ItemIndex;
   if (Idx < 0) or (Idx >= Length(FVisible)) then
     Exit;
-  edtCode.Text := FAll[FVisible[Idx]].Code;
-  edtName.Text := FAll[FVisible[Idx]].Name;
+  FInternalUpdate := True;
+  try
+    edtCode.Text := FAll[FVisible[Idx]].Code;
+    edtName.Text := FAll[FVisible[Idx]].Name;
+  finally
+    FInternalUpdate := False;
+  end;
+end;
+
+procedure TLanguagePickerForm.lstKeyUp(Sender: TObject; var Key: Word;
+  Shift: TShiftState);
+begin
+  case Key of
+    VK_UP, VK_DOWN, VK_PRIOR, VK_NEXT, VK_HOME, VK_END:
+      lstClick(Sender);
+  end;
 end;
 
 procedure TLanguagePickerForm.lstDblClick(Sender: TObject);
