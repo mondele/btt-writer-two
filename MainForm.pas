@@ -467,14 +467,18 @@ end;
 
 function TMainWindow.IsInfoIconHit(Index, X, Y: Integer): Boolean;
 var
-  RowTop, IconX, IconY, DX, DY: Integer;
+  ItemRect: TRect;
+  IconX, IconY, DX, DY: Integer;
 begin
   Result := False;
   if (Index < 0) or (Index >= ProjectListBox.Items.Count) then
     Exit;
-  RowTop := (Index - ProjectListBox.TopIndex) * ProjectListBox.ItemHeight;
-  IconX := ProjectListBox.ClientWidth - 30;
-  IconY := RowTop + (ProjectListBox.ItemHeight div 2);
+  ItemRect := ProjectListBox.ItemRect(Index);
+  if (X < ItemRect.Left) or (X >= ItemRect.Right) or
+     (Y < ItemRect.Top) or (Y >= ItemRect.Bottom) then
+    Exit;
+  IconX := ItemRect.Right - 30;
+  IconY := (ItemRect.Top + ItemRect.Bottom) div 2;
   DX := X - IconX;
   DY := Y - IconY;
   Result := (DX * DX + DY * DY) <= (10 * 10);
