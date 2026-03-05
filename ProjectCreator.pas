@@ -41,6 +41,8 @@ function ListSourceTextOptionsForBookFromIndex(const BookCode: string): TSourceT
 function PromptForTargetLanguage(out LangCode, LangName: string): Boolean;
 function PromptForBook(out BookCode, BookName: string): Boolean;
 function PromptForSourceText(const BookCode: string; out Opt: TSourceTextOption): Boolean;
+function EnsureSourceTextPresent(const SourceOpt: TSourceTextOption;
+  out SourceDir, ErrorMsg: string): Boolean;
 function FindSourceTextOption(const SourceLangCode, BookCode, ResourceID: string;
   out Opt: TSourceTextOption): Boolean;
 function CreateProjectFromSource(const TargetLangCode, TargetLangName: string;

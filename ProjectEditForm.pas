@@ -761,16 +761,43 @@ end;
 
 procedure TProjectEditWindow.OpenProject(const APath: string;
   const ASummary: TProjectSummary);
+var
+  SourceOpt: TSourceTextOption;
+  SourceBaseDir, SourceErr, SourceResourceID: string;
 begin
   try
     FProjectPath := APath;
 
-    { Find source content directory }
-    FSourceContentDir := FindSourceContentDir(ASummary);
+    { Load project manifest first so we can resolve exact source language/resource. }
+    FProject := TProject.Create(APath);
+    SourceResourceID := FProject.GetSourceResourceType;
+    if SourceResourceID = '' then
+      SourceResourceID := 'ulb';
+
+    SourceOpt.SourceDir := '';
+    SourceOpt.SourceLangCode := FProject.GetSourceLanguageCode;
+    SourceOpt.SourceLangName := '';
+    SourceOpt.BookCode := FProject.BookCode;
+    SourceOpt.BookName := ASummary.BookName;
+    SourceOpt.ResourceID := SourceResourceID;
+    SourceOpt.ResourceName := '';
+    if SourceOpt.SourceLangCode = '' then
+      SourceOpt.SourceLangCode := 'en';
+
+    if not EnsureSourceTextPresent(SourceOpt, SourceBaseDir, SourceErr) then
+    begin
+      ShowMessage('Cannot prepare source text for ' + ASummary.BookCode + ': ' +
+        SourceErr);
+      Close;
+      Exit;
+    end;
+
+    FSourceContentDir := IncludeTrailingPathDelimiter(SourceBaseDir) + 'content';
+    if not DirectoryExists(FSourceContentDir) then
+      FSourceContentDir := FindSourceContentDir(ASummary);
     if FSourceContentDir = '' then
     begin
-      ShowMessage('Cannot find source text for ' + ASummary.BookCode +
-        '. Please ensure it is installed.');
+      ShowMessage('Cannot find source text content for ' + ASummary.BookCode + '.');
       Close;
       Exit;
     end;
@@ -779,12 +806,11 @@ begin
     FEnglishULBContentDir := FindEnglishULBContentDir(ASummary.BookCode);
 
     { Load source resource container }
-    FSourceRC := TResourceContainer.Create('', ASummary.BookCode, 'ulb', '');
+    FSourceRC := TResourceContainer.Create('', ASummary.BookCode, SourceResourceID, '');
     FSourceRC.Book.LoadFromToc(FSourceContentDir);
     FSourceRC.Book.LoadContent(FSourceContentDir, '.usx');
 
-    { Load project }
-    FProject := TProject.Create(APath);
+    { Load project content }
     FProject.LoadContent(FSourceContentDir);
 
     { Set up title }
