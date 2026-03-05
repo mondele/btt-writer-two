@@ -135,6 +135,67 @@ begin
   end;
 end;
 
+function EnsureProjectCommitted(const ProjectDir: string; out ErrorMsg: string): Boolean;
+var
+  OutText, ErrText: string;
+  ExitCode: Integer;
+begin
+  Result := False;
+  ErrorMsg := '';
+
+  { If this is not a git repo, skip commit enforcement. }
+  if not RunCommandCapture('git', ['-C', ProjectDir, 'rev-parse', '--is-inside-work-tree'],
+    '', OutText, ErrText, ExitCode) then
+    Exit(True);
+  if (ExitCode <> 0) or (Pos('true', LowerCase(OutText)) = 0) then
+    Exit(True);
+
+  if not RunCommandCapture('git', ['-C', ProjectDir, 'status', '--porcelain'],
+    '', OutText, ErrText, ExitCode) then
+  begin
+    ErrorMsg := 'Could not read git status.';
+    Exit(False);
+  end;
+  if ExitCode <> 0 then
+  begin
+    ErrorMsg := Trim(ErrText);
+    Exit(False);
+  end;
+  if Trim(OutText) = '' then
+    Exit(True);
+
+  if not RunCommandCapture('git', ['-C', ProjectDir, 'add', '-A'],
+    '', OutText, ErrText, ExitCode) then
+  begin
+    ErrorMsg := 'Could not stage project changes.';
+    Exit(False);
+  end;
+  if ExitCode <> 0 then
+  begin
+    ErrorMsg := Trim(ErrText);
+    Exit(False);
+  end;
+
+  if not RunCommandCapture('git',
+    ['-C', ProjectDir, 'commit', '-m', 'Export snapshot'],
+    '', OutText, ErrText, ExitCode) then
+  begin
+    ErrorMsg := 'Could not create export commit.';
+    Exit(False);
+  end;
+  if ExitCode <> 0 then
+  begin
+    if Pos('nothing to commit', LowerCase(ErrText + OutText)) > 0 then
+      Exit(True);
+    ErrorMsg := Trim(ErrText);
+    if ErrorMsg = '' then
+      ErrorMsg := Trim(OutText);
+    Exit(False);
+  end;
+
+  Result := True;
+end;
+
 function ReadTStudioManifestJSON(const PackagePath: string;
   out ManifestObj: TJSONObject; out ErrorMsg: string): Boolean;
 var
@@ -282,6 +343,9 @@ begin
     ErrorMsg := 'Project manifest missing: ' + ManifestPath;
     Exit(False);
   end;
+
+  if not EnsureProjectCommitted(ProjectDir, ErrorMsg) then
+    Exit(False);
 
   InnerManifest := ReadJSONFile(ManifestPath);
   if InnerManifest = nil then
