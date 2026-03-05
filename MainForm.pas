@@ -175,6 +175,8 @@ begin
 
   for I := 0 to Length(FProjects) - 1 do
   begin
+    if FProjects[I].HasIssues then
+      Continue;
     P := TProject.Create(FProjects[I].FullPath);
     try
       SourceOpt.SourceDir := '';
@@ -210,10 +212,14 @@ end;
 
 procedure TMainWindow.ScanAndDisplayProjects;
 var
-  I: Integer;
+  I, IssueCount: Integer;
 begin
   FProjects := ScanProjects;
   EnsureSourcesForProjects;
+  IssueCount := 0;
+  for I := 0 to Length(FProjects) - 1 do
+    if FProjects[I].HasIssues then
+      Inc(IssueCount);
 
   if Length(FProjects) = 0 then
   begin
@@ -240,7 +246,11 @@ begin
     for I := 0 to Length(FProjects) - 1 do
       ProjectListBox.Items.Add(FProjects[I].BookName);
 
-    StatusBar.Panels[0].Text := Format('%d project(s) found', [Length(FProjects)]);
+    if IssueCount > 0 then
+      StatusBar.Panels[0].Text := Format('%d project(s) found (%d with issues)',
+        [Length(FProjects), IssueCount])
+    else
+      StatusBar.Panels[0].Text := Format('%d project(s) found', [Length(FProjects)]);
   end;
 end;
 
@@ -253,6 +263,12 @@ begin
   Idx := ProjectListBox.ItemIndex;
   if (Idx < 0) or (Idx >= Length(FProjects)) then
     Exit;
+  if FProjects[Idx].HasIssues then
+  begin
+    ShowMessage('Project cannot be opened until issues are fixed: ' +
+      FProjects[Idx].IssueSummary);
+    Exit;
+  end;
 
   ShownModal := False;
   EditForm := TProjectEditWindow.Create(nil);
@@ -352,6 +368,15 @@ begin
   Cvs.LineTo(ARect.Left + 35, RowTop + 28);
   Cvs.MoveTo(ARect.Left + 25, RowTop + 32);
   Cvs.LineTo(ARect.Left + 33, RowTop + 32);
+
+  { Issue marker }
+  if S.HasIssues then
+  begin
+    Cvs.Pen.Style := psClear;
+    Cvs.Brush.Color := clRed;
+    Cvs.Ellipse(ARect.Left + 8, RowTop + 25, ARect.Left + 18, RowTop + 35);
+    Cvs.Pen.Style := psSolid;
+  end;
 
   { Project name }
   Cvs.Font.Style := [];

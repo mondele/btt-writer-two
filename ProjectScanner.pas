@@ -18,11 +18,17 @@ type
     ResourceType: string;
     TotalChunks: Integer;
     FinishedChunks: Integer;
+    ManifestPresent: Boolean;
+    ManifestValid: Boolean;
+    CanonicalBook: Boolean;
+    GitValid: Boolean;
+    HasIssues: Boolean;
+    IssueSummary: string;
   end;
 
   TProjectSummaryList = array of TProjectSummary;
 
-{ Scan targetTranslations/ and return a summary for each valid project }
+{ Scan targetTranslations/ and return a summary for each project directory }
 function ScanProjects: TProjectSummaryList;
 
 { Find the source content directory for a project in library/resource_containers/ }
@@ -32,6 +38,73 @@ function FindSourceContentDir(const Summary: TProjectSummary): string;
 function FindEnglishULBContentDir(const ABookCode: string): string;
 
 implementation
+
+uses
+  Process;
+
+function RunCommandCapture(const Exe: string; const Args: array of string;
+  out OutputText, ErrorText: string; out ExitCode: Integer): Boolean;
+var
+  P: TProcess;
+  OutS, ErrS: TStringStream;
+  I: Integer;
+begin
+  Result := False;
+  OutputText := '';
+  ErrorText := '';
+  ExitCode := -1;
+  P := TProcess.Create(nil);
+  OutS := TStringStream.Create('');
+  ErrS := TStringStream.Create('');
+  try
+    P.Executable := Exe;
+    P.Options := [poUsePipes, poWaitOnExit];
+    for I := 0 to High(Args) do
+      P.Parameters.Add(Args[I]);
+    try
+      P.Execute;
+    except
+      on E: Exception do
+      begin
+        ErrorText := E.Message;
+        Exit(False);
+      end;
+    end;
+    OutS.CopyFrom(P.Output, 0);
+    ErrS.CopyFrom(P.Stderr, 0);
+    OutputText := OutS.DataString;
+    ErrorText := ErrS.DataString;
+    ExitCode := P.ExitStatus;
+    Result := True;
+  finally
+    ErrS.Free;
+    OutS.Free;
+    P.Free;
+  end;
+end;
+
+function IsGitRepoValid(const ProjectDir: string): Boolean;
+var
+  OutText, ErrText: string;
+  ExitCode: Integer;
+begin
+  Result := False;
+  if not DirectoryExists(IncludeTrailingPathDelimiter(ProjectDir) + '.git') then
+    Exit;
+  if not RunCommandCapture('git', ['-C', ProjectDir, 'rev-parse', '--is-inside-work-tree'],
+    OutText, ErrText, ExitCode) then
+    Exit;
+  Result := (ExitCode = 0) and (Pos('true', LowerCase(OutText)) > 0);
+end;
+
+procedure AddIssue(var S: string; const Msg: string);
+begin
+  if Msg = '' then
+    Exit;
+  if S <> '' then
+    S := S + '; ';
+  S := S + Msg;
+end;
 
 function CountChunkFiles(const ProjectDir: string): Integer;
 var
@@ -81,7 +154,9 @@ var
 begin
   Result := False;
   ManifestPath := IncludeTrailingPathDelimiter(ProjectDir) + 'manifest.json';
-  if not FileExists(ManifestPath) then
+  Summary.ManifestPresent := FileExists(ManifestPath);
+  Summary.ManifestValid := False;
+  if not Summary.ManifestPresent then
     Exit;
 
   SL := TStringList.Create;
@@ -132,8 +207,8 @@ begin
       { Estimate total chunks by counting .txt files in chapter dirs }
       Summary.TotalChunks := CountChunkFiles(ProjectDir);
 
-      Result := (Summary.BookCode <> '') and (Summary.TargetLangCode <> '') and
-        IsCanonicalBibleBookCode(Summary.BookCode);
+      Summary.ManifestValid := (Summary.BookCode <> '') and (Summary.TargetLangCode <> '');
+      Result := Summary.ManifestValid;
     finally
       Manifest.Free;
     end;
@@ -167,12 +242,29 @@ begin
 
         Summary := Default(TProjectSummary);
         Summary.DirName := SearchRec.Name;
-        if ReadManifestSummary(BasePath + SearchRec.Name, Summary) then
-        begin
-          Inc(Count);
-          SetLength(Result, Count);
-          Result[Count - 1] := Summary;
-        end;
+        Summary.FullPath := IncludeTrailingPathDelimiter(BasePath + SearchRec.Name);
+        Summary.BookName := Summary.DirName;
+        Summary.TotalChunks := CountChunkFiles(BasePath + SearchRec.Name);
+        Summary.GitValid := IsGitRepoValid(BasePath + SearchRec.Name);
+
+        ReadManifestSummary(BasePath + SearchRec.Name, Summary);
+        Summary.CanonicalBook := (Summary.BookCode <> '') and
+          IsCanonicalBibleBookCode(Summary.BookCode);
+
+        Summary.IssueSummary := '';
+        if not Summary.ManifestPresent then
+          AddIssue(Summary.IssueSummary, 'manifest missing')
+        else if not Summary.ManifestValid then
+          AddIssue(Summary.IssueSummary, 'manifest invalid');
+        if Summary.ManifestValid and (not Summary.CanonicalBook) then
+          AddIssue(Summary.IssueSummary, 'unsupported book type');
+        if not Summary.GitValid then
+          AddIssue(Summary.IssueSummary, 'git repo invalid');
+        Summary.HasIssues := Summary.IssueSummary <> '';
+
+        Inc(Count);
+        SetLength(Result, Count);
+        Result[Count - 1] := Summary;
       until FindNext(SearchRec) <> 0;
     finally
       FindClose(SearchRec);
@@ -188,6 +280,8 @@ var
   Parts: TStringArray;
 begin
   Result := '';
+  if Summary.BookCode = '' then
+    Exit;
   LibPath := GetLibraryPath;
 
   if not DirectoryExists(LibPath) then
