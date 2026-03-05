@@ -60,6 +60,7 @@ const
   NON_GL_RESOURCE_NAME = 'Regular';
   PROJECT_TYPE_ID = 'text';
   PROJECT_TYPE_NAME = 'Text';
+  LINUX_BUNDLED_CONTAINERS_ZIP = '/opt/BTT-Writer/resources/app/resource_containers.zip';
 
 type
   TCanonicalBook = record
@@ -367,6 +368,91 @@ end;
 function GetIndexSQLitePath: string;
 begin
   Result := IncludeTrailingPathDelimiter(GetDataPath) + 'library' + DirectorySeparator + 'index.sqlite';
+end;
+
+function ShellQuote(const S: string): string;
+begin
+  Result := '''' + StringReplace(S, '''', '''"''"''', [rfReplaceAll]) + '''';
+end;
+
+function ResolveInstalledSourceDir(const SourceOpt: TSourceTextOption): string;
+var
+  Match: TSourceTextOption;
+begin
+  Result := '';
+  if FindSourceTextOption(SourceOpt.SourceLangCode, SourceOpt.BookCode, SourceOpt.ResourceID, Match) then
+    Exit(Match.SourceDir);
+  Result := IncludeTrailingPathDelimiter(GetLibraryPath) +
+    LowerCase(Trim(SourceOpt.SourceLangCode)) + '_' +
+    LowerCase(Trim(SourceOpt.BookCode)) + '_' +
+    LowerCase(Trim(SourceOpt.ResourceID));
+  if not FileExists(IncludeTrailingPathDelimiter(Result) + 'package.json') then
+    Result := '';
+end;
+
+function EnsureSourceTextPresent(const SourceOpt: TSourceTextOption;
+  out SourceDir, ErrorMsg: string): Boolean;
+var
+  ZipPath, RelEntry, EntryName, DestRoot, DestDir, Cmd, OutText, ErrText: string;
+  ExitCode: Integer;
+begin
+  Result := False;
+  SourceDir := '';
+  ErrorMsg := '';
+
+  SourceDir := ResolveInstalledSourceDir(SourceOpt);
+  if SourceDir <> '' then
+    Exit(True);
+
+  {$IFDEF LINUX}
+  ZipPath := LINUX_BUNDLED_CONTAINERS_ZIP;
+  {$ELSE}
+  ZipPath := '';
+  {$ENDIF}
+
+  if (ZipPath = '') or (not FileExists(ZipPath)) then
+  begin
+    ErrorMsg := 'Source text is not installed and bundled resource archive was not found.';
+    Exit(False);
+  end;
+
+  DestRoot := GetLibraryPath;
+  DestDir := IncludeTrailingPathDelimiter(DestRoot) +
+    LowerCase(Trim(SourceOpt.SourceLangCode)) + '_' +
+    LowerCase(Trim(SourceOpt.BookCode)) + '_' +
+    LowerCase(Trim(SourceOpt.ResourceID));
+  EntryName := ExtractFileName(DestDir) + '.tsrc';
+  RelEntry := 'resource_containers/' + EntryName;
+
+  if not ForceDirectories(DestDir) then
+  begin
+    ErrorMsg := 'Could not create source container directory: ' + DestDir;
+    Exit(False);
+  end;
+
+  Cmd := 'set -e; unzip -p ' + ShellQuote(ZipPath) + ' ' + ShellQuote(RelEntry) +
+    ' | bzip2 -dc | tar -xf - -C ' + ShellQuote(DestDir);
+
+  if not RunCommandCapture('bash', ['-lc', Cmd], '', OutText, ErrText, ExitCode) then
+  begin
+    ErrorMsg := 'Failed to extract bundled source text ' + EntryName + '.';
+    Exit(False);
+  end;
+  if ExitCode <> 0 then
+  begin
+    ErrorMsg := 'Failed to extract bundled source text ' + EntryName + ': ' +
+      Trim(ErrText + ' ' + OutText);
+    Exit(False);
+  end;
+
+  if not FileExists(IncludeTrailingPathDelimiter(DestDir) + 'package.json') then
+  begin
+    ErrorMsg := 'Extracted source text is incomplete: package.json missing in ' + DestDir;
+    Exit(False);
+  end;
+
+  SourceDir := DestDir;
+  Result := True;
 end;
 
 function CanonicalBookIsOT(const BookCode: string; out IsOT: Boolean): Boolean;
@@ -1050,8 +1136,8 @@ begin
   L := ListSourceTextOptionsForBookFromIndex(BookCode);
   if Length(L) = 0 then
   begin
-    MessageDlg('No installed source texts found for book "' + Trim(BookCode) +
-      '". (Excluded: tn, tq)', mtError, [mbOK], 0);
+    MessageDlg('No source texts found for book "' + Trim(BookCode) +
+      '" in index.sqlite. (Excluded: tn, tq)', mtError, [mbOK], 0);
     Exit;
   end;
 
@@ -1250,7 +1336,7 @@ function CreateProjectFromSource(const TargetLangCode, TargetLangName: string;
   const SourceOpt: TSourceTextOption; out ProjectDir: string;
   out ErrorMsg: string): Boolean;
 var
-  DirName, FullDir, ManifestPath, LicenseSrc, LicenseDst: string;
+  DirName, FullDir, ManifestPath, LicenseSrc, LicenseDst, SourceDir: string;
   Manifest: TJSONObject;
   SL: TStringList;
   GitErr: string;
@@ -1258,6 +1344,9 @@ begin
   Result := False;
   ErrorMsg := '';
   ProjectDir := '';
+
+  if not EnsureSourceTextPresent(SourceOpt, SourceDir, ErrorMsg) then
+    Exit(False);
 
   DirName := TargetLangCode + '_' + SourceOpt.BookCode + '_' +
     PROJECT_TYPE_ID + '_' + NON_GL_RESOURCE_ID;
@@ -1288,7 +1377,7 @@ begin
     Manifest.Free;
   end;
 
-  LicenseSrc := FindLicenseFile(SourceOpt.SourceDir);
+  LicenseSrc := FindLicenseFile(SourceDir);
   if LicenseSrc <> '' then
   begin
     LicenseDst := IncludeTrailingPathDelimiter(FullDir) + 'LICENSE.md';
