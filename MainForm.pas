@@ -7,7 +7,7 @@ interface
 uses
   Classes, SysUtils, Forms, Controls, Graphics, Dialogs, Math,
   ExtCtrls, StdCtrls, Buttons, ComCtrls, LCLType,
-  Globals, ProjectScanner, ProjectEditForm;
+  Globals, ProjectScanner, ProjectEditForm, ProjectCreator;
 
 type
   TMainWindow = class(TForm)
@@ -35,6 +35,8 @@ type
     btnAddProject: TSpeedButton;
     btnMenu: TSpeedButton;
     StatusBar: TStatusBar;
+    procedure btnAddProjectClick(Sender: TObject);
+    procedure btnStartProjectClick(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure FormResize(Sender: TObject);
   private
@@ -45,6 +47,7 @@ type
     procedure ProjectListBoxClick(Sender: TObject);
     procedure ProjectListBoxDrawItem(Control: TWinControl; Index: Integer;
       ARect: TRect; State: TOwnerDrawState);
+    procedure StartNewProjectFlow;
   public
   end;
 
@@ -137,9 +140,21 @@ begin
   ProjectListBox.BorderStyle := bsNone;
   ProjectListBox.Color := clWhite;
   ProjectListBox.Visible := False;
+  btnAddProject.OnClick := @btnAddProjectClick;
+  btnStartProject.OnClick := @btnStartProjectClick;
 
   UpdateLayout;
   ScanAndDisplayProjects;
+end;
+
+procedure TMainWindow.btnAddProjectClick(Sender: TObject);
+begin
+  StartNewProjectFlow;
+end;
+
+procedure TMainWindow.btnStartProjectClick(Sender: TObject);
+begin
+  StartNewProjectFlow;
 end;
 
 procedure TMainWindow.FormResize(Sender: TObject);
@@ -210,6 +225,72 @@ begin
   end;
 
   { Refresh project list after returning }
+  ScanAndDisplayProjects;
+end;
+
+procedure TMainWindow.StartNewProjectFlow;
+var
+  TargetLangCode, TargetLangName: string;
+  SourceLangCode, BookCode, ResourceID: string;
+  SourceOpt: TSourceTextOption;
+  NewProjectDir, Err: string;
+begin
+  TargetLangCode := '';
+  TargetLangName := '';
+  SourceLangCode := 'en';
+  BookCode := '';
+  ResourceID := 'ulb';
+
+  if not InputQuery('New Project', 'Target language code (e.g. bzc-x-antemoro):', TargetLangCode) then
+    Exit;
+  if Trim(TargetLangCode) = '' then
+  begin
+    ShowMessage('Target language code is required.');
+    Exit;
+  end;
+
+  if not InputQuery('New Project', 'Target language name:', TargetLangName) then
+    Exit;
+  if Trim(TargetLangName) = '' then
+  begin
+    ShowMessage('Target language name is required.');
+    Exit;
+  end;
+
+  if not InputQuery('Source Text', 'Book code (e.g. 1co, mat, psa):', BookCode) then
+    Exit;
+  if Trim(BookCode) = '' then
+  begin
+    ShowMessage('Book code is required.');
+    Exit;
+  end;
+
+  if not InputQuery('Source Text', 'Source language code:', SourceLangCode) then
+    Exit;
+  if Trim(SourceLangCode) = '' then
+    SourceLangCode := 'en';
+
+  if not InputQuery('Source Text', 'Source resource id (ulb/udb):', ResourceID) then
+    Exit;
+  if Trim(ResourceID) = '' then
+    ResourceID := 'ulb';
+
+  if not FindSourceTextOption(Trim(SourceLangCode), Trim(BookCode), Trim(ResourceID), SourceOpt) then
+  begin
+    ShowMessage('Could not find installed source text: ' +
+      Trim(SourceLangCode) + '_' + Trim(BookCode) + '_' + Trim(ResourceID) +
+      LineEnding + 'Install/download that source text first.');
+    Exit;
+  end;
+
+  if not CreateProjectFromSource(Trim(TargetLangCode), Trim(TargetLangName), SourceOpt, NewProjectDir, Err) then
+  begin
+    ShowMessage(Err);
+    ScanAndDisplayProjects;
+    Exit;
+  end;
+
+  ShowMessage('Project created: ' + NewProjectDir);
   ScanAndDisplayProjects;
 end;
 
