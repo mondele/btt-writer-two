@@ -8,6 +8,13 @@ uses
   SysUtils, Classes, fpjson;
 
 type
+  TBookOption = record
+    Code: string;
+    Name: string;
+  end;
+
+  TBookOptionList = array of TBookOption;
+
   TTargetLanguageOption = record
     Code: string;
     Name: string;
@@ -28,9 +35,11 @@ type
   TSourceTextOptionList = array of TSourceTextOption;
 
 function ListSourceTextOptions: TSourceTextOptionList;
+function ListBooksFromIndex: TBookOptionList;
 function ListTargetLanguagesFromIndex: TTargetLanguageOptionList;
 function ListSourceTextOptionsForBookFromIndex(const BookCode: string): TSourceTextOptionList;
 function PromptForTargetLanguage(out LangCode, LangName: string): Boolean;
+function PromptForBook(out BookCode, BookName: string): Boolean;
 function PromptForSourceText(const BookCode: string; out Opt: TSourceTextOption): Boolean;
 function FindSourceTextOption(const SourceLangCode, BookCode, ResourceID: string;
   out Opt: TSourceTextOption): Boolean;
@@ -74,6 +83,19 @@ type
     procedure btnOKClick(Sender: TObject);
   public
     constructor CreatePicker(AOwner: TComponent; const AAll: TTargetLanguageOptionList);
+  end;
+
+  TBookPickerForm = class(TForm)
+  private
+    FAll: TBookOptionList;
+    lst: TListBox;
+    btnOK: TButton;
+    btnCancel: TButton;
+    procedure btnOKClick(Sender: TObject);
+    procedure lstDblClick(Sender: TObject);
+  public
+    constructor CreatePicker(AOwner: TComponent; const AAll: TBookOptionList);
+    function SelectedBook(out BookCode, BookName: string): Boolean;
   end;
 
   TSourcePickerForm = class(TForm)
@@ -293,6 +315,56 @@ begin
         Continue;
       Opt.Code := Copy(Line, 1, Pos(#9, Line) - 1);
       Opt.Name := Copy(Line, Pos(#9, Line) + 1, MaxInt);
+      if (Opt.Code = '') or (Opt.Name = '') then
+        Continue;
+      Inc(Count);
+      SetLength(Result, Count);
+      Result[Count - 1] := Opt;
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
+
+function ListBooksFromIndex: TBookOptionList;
+var
+  OutText, ErrText, Line: string;
+  ExitCode, Count, P, TabPos: Integer;
+  Lines: TStringList;
+  Opt: TBookOption;
+begin
+  SetLength(Result, 0);
+  if not FileExists(GetIndexSQLitePath) then
+    Exit;
+
+  if not RunCommandCapture('sqlite3',
+    [GetIndexSQLitePath,
+     'SELECT p.slug || char(9) || p.name ' +
+     'FROM project p ' +
+     'JOIN resource r ON r.project_id = p.id ' +
+     'WHERE r.type = ''book'' ' +
+     'AND lower(r.slug) NOT IN (''tn'', ''tq'') ' +
+     'GROUP BY p.slug, p.name ' +
+     'ORDER BY p.slug;'],
+    '', OutText, ErrText, ExitCode) then
+    Exit;
+  if ExitCode <> 0 then
+    Exit;
+
+  Lines := TStringList.Create;
+  try
+    Lines.Text := StringReplace(OutText, #13, '', [rfReplaceAll]);
+    Count := 0;
+    for P := 0 to Lines.Count - 1 do
+    begin
+      Line := Trim(Lines[P]);
+      if Line = '' then
+        Continue;
+      TabPos := Pos(#9, Line);
+      if TabPos <= 0 then
+        Continue;
+      Opt.Code := Copy(Line, 1, TabPos - 1);
+      Opt.Name := Copy(Line, TabPos + 1, MaxInt);
       if (Opt.Code = '') or (Opt.Name = '') then
         Continue;
       Inc(Count);
@@ -610,6 +682,107 @@ begin
   end;
 end;
 
+constructor TBookPickerForm.CreatePicker(AOwner: TComponent;
+  const AAll: TBookOptionList);
+var
+  I: Integer;
+begin
+  inherited Create(AOwner);
+  Position := poScreenCenter;
+  Width := 620;
+  Height := 480;
+  BorderIcons := [biSystemMenu];
+  Caption := 'Select Book';
+
+  FAll := AAll;
+
+  lst := TListBox.Create(Self);
+  lst.Parent := Self;
+  lst.Left := 12;
+  lst.Top := 12;
+  lst.Width := 596;
+  lst.Height := 400;
+  lst.Anchors := [akTop, akLeft, akRight, akBottom];
+  lst.OnDblClick := @lstDblClick;
+
+  for I := 0 to Length(FAll) - 1 do
+    lst.Items.Add(FAll[I].Code + '  -  ' + FAll[I].Name);
+  if lst.Items.Count > 0 then
+    lst.ItemIndex := 0;
+
+  btnOK := TButton.Create(Self);
+  btnOK.Parent := Self;
+  btnOK.Left := 436;
+  btnOK.Top := 420;
+  btnOK.Width := 80;
+  btnOK.Caption := 'OK';
+  btnOK.ModalResult := mrNone;
+  btnOK.Anchors := [akRight, akBottom];
+  btnOK.OnClick := @btnOKClick;
+
+  btnCancel := TButton.Create(Self);
+  btnCancel.Parent := Self;
+  btnCancel.Left := 528;
+  btnCancel.Top := 420;
+  btnCancel.Width := 80;
+  btnCancel.Caption := 'Cancel';
+  btnCancel.ModalResult := mrCancel;
+  btnCancel.Anchors := [akRight, akBottom];
+end;
+
+procedure TBookPickerForm.btnOKClick(Sender: TObject);
+begin
+  if (lst.ItemIndex < 0) or (lst.ItemIndex >= Length(FAll)) then
+  begin
+    MessageDlg('Please select a book.', mtWarning, [mbOK], 0);
+    Exit;
+  end;
+  ModalResult := mrOK;
+end;
+
+procedure TBookPickerForm.lstDblClick(Sender: TObject);
+begin
+  btnOKClick(Sender);
+end;
+
+function TBookPickerForm.SelectedBook(out BookCode, BookName: string): Boolean;
+begin
+  Result := False;
+  BookCode := '';
+  BookName := '';
+  if (lst.ItemIndex < 0) or (lst.ItemIndex >= Length(FAll)) then
+    Exit;
+  BookCode := FAll[lst.ItemIndex].Code;
+  BookName := FAll[lst.ItemIndex].Name;
+  Result := True;
+end;
+
+function PromptForBook(out BookCode, BookName: string): Boolean;
+var
+  L: TBookOptionList;
+  F: TBookPickerForm;
+begin
+  Result := False;
+  BookCode := '';
+  BookName := '';
+
+  L := ListBooksFromIndex;
+  if Length(L) = 0 then
+  begin
+    MessageDlg('No source books found in index.sqlite.', mtError, [mbOK], 0);
+    Exit;
+  end;
+
+  F := TBookPickerForm.CreatePicker(nil, L);
+  try
+    if F.ShowModal <> mrOK then
+      Exit;
+    Result := F.SelectedBook(BookCode, BookName);
+  finally
+    F.Free;
+  end;
+end;
+
 constructor TSourcePickerForm.CreatePicker(AOwner: TComponent;
   const AAll: TSourceTextOptionList);
 var
@@ -731,7 +904,7 @@ var
   BasePath: string;
   SR: TSearchRec;
   Count: Integer;
-  DirPath, PackagePath: string;
+  DirPath, PackagePath, ResourceSlug, ResourceType: string;
   Obj, LangObj, ProjObj, ResObj: TJSONObject;
   Opt: TSourceTextOption;
 begin
@@ -771,10 +944,14 @@ begin
         ProjObj := TJSONObject(Obj.Find('project'));
         ResObj := TJSONObject(Obj.Find('resource'));
 
-        { Only show likely source text resources for now }
-        if ResObj.Get('slug', '') = '' then
+        ResourceSlug := LowerCase(Trim(ResObj.Get('slug', '')));
+        ResourceType := LowerCase(Trim(ResObj.Get('type', '')));
+
+        if ResourceSlug = '' then
           Continue;
-        if (ResObj.Get('slug', '') <> 'ulb') and (ResObj.Get('slug', '') <> 'udb') then
+        if (ResourceSlug = 'tn') or (ResourceSlug = 'tq') then
+          Continue;
+        if (ResourceType <> '') and (ResourceType <> 'book') then
           Continue;
 
         Opt.SourceDir := DirPath;

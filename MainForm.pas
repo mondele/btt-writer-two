@@ -231,22 +231,15 @@ end;
 procedure TMainWindow.StartNewProjectFlow;
 var
   TargetLangCode, TargetLangName: string;
-  BookCode: string;
+  BookCode, BookName: string;
   SourceOpt: TSourceTextOption;
   NewProjectDir, Err: string;
 begin
-  BookCode := '';
-
   if not PromptForTargetLanguage(TargetLangCode, TargetLangName) then
     Exit;
 
-  if not InputQuery('Source Text', 'Book code (e.g. 1co, mat, psa):', BookCode) then
+  if not PromptForBook(BookCode, BookName) then
     Exit;
-  if Trim(BookCode) = '' then
-  begin
-    ShowMessage('Book code is required.');
-    Exit;
-  end;
 
   if not PromptForSourceText(Trim(BookCode), SourceOpt) then
     Exit;
