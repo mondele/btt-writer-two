@@ -5,7 +5,7 @@ program TestCLI;
 uses
   SysUtils, Classes,
   Globals, DataPaths, USFMUtils, BibleChunk, BibleChapter, BibleBook,
-  ResourceContainer, ProjectManager;
+  ResourceContainer, ProjectManager, TStudioPackage;
 
 var
   I: Integer;
@@ -20,6 +20,7 @@ var
   ProjectPath: string;
   SR: TSearchRec;
   Proj: TProject;
+  PkgInfo: TTStudioPackageInfo;
   FailCount: Integer;
 
 procedure AssertTrue(const Msg: string; Cond: Boolean);
@@ -31,6 +32,11 @@ begin
     WriteLn('  [FAIL] ', Msg);
     Inc(FailCount);
   end;
+end;
+
+procedure AssertFileExists(const Msg, APath: string);
+begin
+  AssertTrue(Msg + ' exists: ' + APath, FileExists(APath));
 end;
 
 procedure AssertEqInt(const Msg: string; Expected, Actual: Integer);
@@ -46,6 +52,7 @@ end;
 
 begin
   FailCount := 0;
+  Randomize;
   { Parse command-line flags }
   for I := 1 to ParamCount do
     if (ParamStr(I) = '-v') or (ParamStr(I) = '--verbose') then
@@ -258,6 +265,59 @@ begin
   end
   else
     WriteLn('  No target translations directory found at ', ProjectPath);
+
+  WriteLn;
+  WriteLn('--- TStudioPackage ---');
+  TempDir := GetTempDir(False) + DirectorySeparator + 'bttwriter2_tstudio_test';
+  if DirectoryExists(TempDir) then
+    DeleteFile(TempDir + DirectorySeparator + 'dummy'); { no-op to avoid rm -rf }
+  ForceDirectories(TempDir);
+  ProjectPath := IncludeTrailingPathDelimiter(TempDir) + 'zz-demo_tit_text_reg';
+  ForceDirectories(ProjectPath);
+  ForceDirectories(IncludeTrailingPathDelimiter(ProjectPath) + '01');
+
+  with TStringList.Create do
+  try
+    Text := '{' + LineEnding +
+      '  "target_language":{"id":"zz-demo","name":"Demo","direction":"ltr"},' + LineEnding +
+      '  "project":{"id":"tit","name":"Titus"},' + LineEnding +
+      '  "resource":{"id":"reg","name":"Regular"},' + LineEnding +
+      '  "source_translations":[{"language_id":"en","resource_id":"ulb"}]' + LineEnding +
+      '}';
+    SaveToFile(IncludeTrailingPathDelimiter(ProjectPath) + 'manifest.json');
+  finally
+    Free;
+  end;
+  with TStringList.Create do
+  try
+    Text := '\v 1 Demo verse.';
+    SaveToFile(IncludeTrailingPathDelimiter(ProjectPath) + '01' + DirectorySeparator + '01.txt');
+  finally
+    Free;
+  end;
+
+  TempFile := IncludeTrailingPathDelimiter(TempDir) + 'zz-demo_tit_text_reg.tstudio';
+  MergedText := '';
+  AssertTrue('Create .tstudio package',
+    CreateTStudioPackage(ProjectPath, TempFile, MergedText));
+  if MergedText <> '' then
+    WriteLn('  Create message: ', MergedText);
+  AssertFileExists('Created package', TempFile);
+
+  MergedText := '';
+  AssertTrue('Read .tstudio package info',
+    ReadTStudioPackageInfo(TempFile, PkgInfo, MergedText));
+  AssertTrue('Package version is 2', PkgInfo.PackageVersion = 2);
+  AssertTrue('Project path set in package',
+    PkgInfo.ProjectPath = 'zz-demo_tit_text_reg');
+
+  Extracted := '';
+  MergedText := '';
+  AssertTrue('Extract .tstudio package',
+    ExtractTStudioPackage(TempFile, IncludeTrailingPathDelimiter(TempDir) + 'extract', Extracted, MergedText));
+  AssertTrue('Extracted project directory exists', DirectoryExists(Extracted));
+  AssertTrue('Extracted project manifest exists',
+    FileExists(IncludeTrailingPathDelimiter(Extracted) + 'manifest.json'));
 
   WriteLn;
   if FailCount = 0 then
