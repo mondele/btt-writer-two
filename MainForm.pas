@@ -85,6 +85,9 @@ type
     procedure UpdateLayout;
     procedure EnsureSourcesForProjects;
     procedure ScanAndDisplayProjects;
+    procedure RefreshProjectListUI;
+    procedure SortProjects;
+    procedure SortComboChange(Sender: TObject);
     procedure ApplyTheme;
     procedure OpenProjectAtIndex(Idx: Integer);
     function IsInfoIconHit(Index, X, Y: Integer): Boolean;
@@ -124,6 +127,124 @@ type
   public
     constructor CreateDetails(AOwner: TComponent; const ASummary: TProjectSummary);
   end;
+
+function ProjectDisplayName(const S: TProjectSummary): string;
+begin
+  Result := Trim(S.BookName);
+  if Result = '' then
+    Result := Trim(S.DirName);
+  if Result = '' then
+    Result := ExtractFileName(ExcludeTrailingPathDelimiter(S.FullPath));
+  if Result = '' then
+    Result := rsTypeUnknown;
+end;
+
+function ProjectProgressPct(const S: TProjectSummary): Integer;
+begin
+  if S.TotalChunks > 0 then
+    Result := (S.FinishedChunks * 100) div S.TotalChunks
+  else
+    Result := 0;
+end;
+
+function CanonicalBookIndex(const BookCode: string): Integer;
+const
+  BOOK_ORDER: array[0..65] of string = (
+    'gen','exo','lev','num','deu','jos','jdg','rut','1sa','2sa','1ki','2ki',
+    '1ch','2ch','ezr','neh','est','job','psa','pro','ecc','sng','isa','jer',
+    'lam','ezk','dan','hos','jol','amo','oba','jon','mic','nam','hab','zep',
+    'hag','zec','mal','mat','mrk','luk','jhn','act','rom','1co','2co','gal',
+    'eph','php','col','1th','2th','1ti','2ti','tit','phm','heb','jas','1pe',
+    '2pe','1jn','2jn','3jn','jud','rev'
+  );
+var
+  I: Integer;
+  C: string;
+begin
+  C := LowerCase(Trim(BookCode));
+  for I := Low(BOOK_ORDER) to High(BOOK_ORDER) do
+    if BOOK_ORDER[I] = C then
+      Exit(I);
+  Result := 9999;
+end;
+
+function CompareProjectKey(const A, B: TProjectSummary; ProjectSortMode: Integer): Integer;
+var
+  IA, IB: Integer;
+begin
+  if ProjectSortMode = 0 then
+  begin
+    IA := CanonicalBookIndex(A.BookCode);
+    IB := CanonicalBookIndex(B.BookCode);
+    Result := IA - IB;
+    if Result <> 0 then
+      Exit;
+  end;
+  Result := CompareText(ProjectDisplayName(A), ProjectDisplayName(B));
+end;
+
+function CompareLanguageKey(const A, B: TProjectSummary): Integer;
+begin
+  Result := CompareText(A.TargetLangName, B.TargetLangName);
+  if Result = 0 then
+    Result := CompareText(A.TargetLangCode, B.TargetLangCode);
+end;
+
+function CompareProjects(const A, B: TProjectSummary; SortByMode, ProjectSortMode: Integer): Integer;
+begin
+  case SortByMode of
+    1: begin
+      Result := CompareProjectKey(A, B, ProjectSortMode);
+      if Result = 0 then
+        Result := CompareLanguageKey(A, B);
+    end;
+    2: begin
+      Result := ProjectProgressPct(A) - ProjectProgressPct(B);
+      if Result = 0 then
+        Result := CompareProjectKey(A, B, ProjectSortMode);
+      if Result = 0 then
+        Result := CompareLanguageKey(A, B);
+    end;
+  else
+    begin
+      Result := CompareLanguageKey(A, B);
+      if Result = 0 then
+        Result := CompareProjectKey(A, B, ProjectSortMode);
+    end;
+  end;
+
+  if Result = 0 then
+    Result := CompareText(A.DirName, B.DirName);
+end;
+
+procedure QuickSortProjects(var Arr: TProjectSummaryList; L, R, SortByMode,
+  ProjectSortMode: Integer);
+var
+  I, J: Integer;
+  P, T: TProjectSummary;
+begin
+  I := L;
+  J := R;
+  P := Arr[(L + R) div 2];
+  repeat
+    while CompareProjects(Arr[I], P, SortByMode, ProjectSortMode) < 0 do
+      Inc(I);
+    while CompareProjects(Arr[J], P, SortByMode, ProjectSortMode) > 0 do
+      Dec(J);
+    if I <= J then
+    begin
+      T := Arr[I];
+      Arr[I] := Arr[J];
+      Arr[J] := T;
+      Inc(I);
+      Dec(J);
+    end;
+  until I > J;
+  if L < J then
+    QuickSortProjects(Arr, L, J, SortByMode, ProjectSortMode);
+  if I < R then
+    QuickSortProjects(Arr, I, R, SortByMode, ProjectSortMode);
+end;
 
 constructor TProjectDetailsWindow.CreateDetails(AOwner: TComponent;
   const ASummary: TProjectSummary);
@@ -363,11 +484,20 @@ begin
   btnMenu.OnClick := @btnMenuClick;
   btnAddProject.OnClick := @btnAddProjectClick;
   btnStartProject.OnClick := @btnStartProjectClick;
+  cmbSortBy.OnChange := @SortComboChange;
+  cmbSortColumnBy.OnChange := @SortComboChange;
 
   ApplyTheme;
   UpdateStartupSplash(rsSplashLoadingProjects);
   UpdateLayout;
   ScanAndDisplayProjects;
+end;
+
+procedure TMainWindow.SortComboChange(Sender: TObject);
+begin
+  SortProjects;
+  RefreshProjectListUI;
+  ProjectListBox.Invalidate;
 end;
 
 procedure TMainWindow.btnMenuClick(Sender: TObject);
@@ -515,9 +645,6 @@ begin
 end;
 
 procedure TMainWindow.ScanAndDisplayProjects;
-var
-  I, IssueCount: Integer;
-  DisplayName: string;
 begin
   try
     UpdateStartupSplash(rsSplashScanningFolders);
@@ -525,56 +652,62 @@ begin
     UpdateStartupSplash(rsSplashPreparingResources);
     EnsureSourcesForProjects;
     UpdateStartupSplash(rsSplashRenderingList);
-    IssueCount := 0;
-    for I := 0 to Length(FProjects) - 1 do
-      if FProjects[I].HasIssues then
-        Inc(IssueCount);
-
-    if Length(FProjects) = 0 then
-    begin
-      WelcomePanel.Visible := True;
-      ProjectsTablePanel.Visible := False;
-      lblProjectColumn.Visible := False;
-      lblTypeColumn.Visible := False;
-      lblLanguageColumn.Visible := False;
-      lblProgressColumn.Visible := False;
-      ProjectListBox.Visible := False;
-      StatusBar.Panels[0].Text := rsNoProjectsFound;
-    end
-    else
-    begin
-      WelcomePanel.Visible := False;
-      ProjectsTablePanel.Visible := True;
-      lblProjectColumn.Visible := True;
-      lblTypeColumn.Visible := True;
-      lblLanguageColumn.Visible := True;
-      lblProgressColumn.Visible := True;
-      ProjectListBox.Visible := True;
-      ProjectListBox.Items.Clear;
-
-      for I := 0 to Length(FProjects) - 1 do
-      begin
-        DisplayName := Trim(FProjects[I].BookName);
-        if DisplayName = '' then
-          DisplayName := Trim(FProjects[I].DirName);
-        if DisplayName = '' then
-          DisplayName := ExtractFileName(ExcludeTrailingPathDelimiter(FProjects[I].FullPath));
-        if DisplayName = '' then
-          DisplayName := rsTypeUnknown;
-        ProjectListBox.Items.Add(DisplayName);
-      end;
-
-      if IssueCount > 0 then
-        StatusBar.Panels[0].Text := Format(rsProjectsFoundWithIssuesFmt,
-          [Length(FProjects), IssueCount])
-      else
-        StatusBar.Panels[0].Text := Format(rsProjectsFoundFmt, [Length(FProjects)]);
-    end;
+    SortProjects;
+    RefreshProjectListUI;
 
     if not FFirstLoadDone then
       FFirstLoadDone := True;
   finally
     HideStartupSplash;
+  end;
+end;
+
+procedure TMainWindow.SortProjects;
+begin
+  if Length(FProjects) <= 1 then
+    Exit;
+  QuickSortProjects(FProjects, 0, High(FProjects), cmbSortBy.ItemIndex,
+    cmbSortColumnBy.ItemIndex);
+end;
+
+procedure TMainWindow.RefreshProjectListUI;
+var
+  I, IssueCount: Integer;
+begin
+  IssueCount := 0;
+  for I := 0 to Length(FProjects) - 1 do
+    if FProjects[I].HasIssues then
+      Inc(IssueCount);
+
+  if Length(FProjects) = 0 then
+  begin
+    WelcomePanel.Visible := True;
+    ProjectsTablePanel.Visible := False;
+    lblProjectColumn.Visible := False;
+    lblTypeColumn.Visible := False;
+    lblLanguageColumn.Visible := False;
+    lblProgressColumn.Visible := False;
+    ProjectListBox.Visible := False;
+    StatusBar.Panels[0].Text := rsNoProjectsFound;
+  end
+  else
+  begin
+    WelcomePanel.Visible := False;
+    ProjectsTablePanel.Visible := True;
+    lblProjectColumn.Visible := True;
+    lblTypeColumn.Visible := True;
+    lblLanguageColumn.Visible := True;
+    lblProgressColumn.Visible := True;
+    ProjectListBox.Visible := True;
+    ProjectListBox.Items.Clear;
+    for I := 0 to Length(FProjects) - 1 do
+      ProjectListBox.Items.Add(ProjectDisplayName(FProjects[I]));
+
+    if IssueCount > 0 then
+      StatusBar.Panels[0].Text := Format(rsProjectsFoundWithIssuesFmt,
+        [Length(FProjects), IssueCount])
+    else
+      StatusBar.Panels[0].Text := Format(rsProjectsFoundFmt, [Length(FProjects)]);
   end;
 end;
 
