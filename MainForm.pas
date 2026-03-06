@@ -9,7 +9,7 @@ uses
   ExtCtrls, StdCtrls, Buttons, ComCtrls, LCLType,
   fpjson, jsonparser,
   Globals, ProjectScanner, ProjectEditForm, ProjectCreator, ProjectManager,
-  TStudioPackage;
+  TStudioPackage, SplashScreen;
 
 type
   TMainWindow = class(TForm)
@@ -291,6 +291,7 @@ end;
 
 procedure TMainWindow.FormCreate(Sender: TObject);
 begin
+  UpdateStartupSplash('Building home screen...');
   Caption := APP_NAME + ' ' + APP_VERSION;
   lblCurrentUser.Caption := 'Current User: Raphael';
   btnLogout.Caption := '(Logout)';
@@ -315,6 +316,7 @@ begin
   btnAddProject.OnClick := @btnAddProjectClick;
   btnStartProject.OnClick := @btnStartProjectClick;
 
+  UpdateStartupSplash('Loading projects...');
   UpdateLayout;
   ScanAndDisplayProjects;
 end;
@@ -341,6 +343,7 @@ var
   SourceOpt: TSourceTextOption;
   SourceDir, Err, FailMsg: string;
 begin
+  UpdateStartupSplash('Checking required source texts...');
   FailCount := 0;
   FailMsg := '';
 
@@ -385,8 +388,11 @@ procedure TMainWindow.ScanAndDisplayProjects;
 var
   I, IssueCount: Integer;
 begin
+  UpdateStartupSplash('Scanning project folders...');
   FProjects := ScanProjects;
+  UpdateStartupSplash('Preparing project resources...');
   EnsureSourcesForProjects;
+  UpdateStartupSplash('Rendering project list...');
   IssueCount := 0;
   for I := 0 to Length(FProjects) - 1 do
     if FProjects[I].HasIssues then
