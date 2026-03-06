@@ -9,7 +9,7 @@ uses
   ExtCtrls, StdCtrls, Buttons, ComCtrls, LCLType,
   fpjson, jsonparser,
   Globals, ProjectScanner, ProjectEditForm, ProjectCreator, ProjectManager,
-  TStudioPackage, SplashScreen, AppSettings, SettingsForm;
+  TStudioPackage, SplashScreen, AppSettings, SettingsForm, ThemePalette;
 
 resourcestring
   rsProjectDetailsTitle = 'Project Details';
@@ -397,56 +397,58 @@ end;
 
 procedure TMainWindow.ApplyTheme;
 var
+  P: TThemePalette;
   IsDark: Boolean;
 begin
   IsDark := GetAppTheme = atDark;
+  P := GetThemePalette(GetAppTheme);
   if IsDark then
   begin
-    Color := $00222222;
-    HeaderPanel.Color := $002B2B2B;
-    LeftRail.Color := $00303030;
-    ContentPanel.Color := $00262626;
-    ProjectsTablePanel.Color := $002D2D2D;
-    WelcomePanel.Color := $002D2D2D;
-    StatusBar.Color := $002B2B2B;
-    ProjectListBox.Color := $002D2D2D;
-    lblAppName.Font.Color := clWhite;
-    lblCurrentUser.Font.Color := clWhite;
-    btnLogout.Font.Color := clWhite;
-    lblProjectsHeading.Font.Color := clWhite;
-    lblSortBy.Font.Color := $00C8C8C8;
-    lblSortColumnBy.Font.Color := $00C8C8C8;
-    lblProjectColumn.Font.Color := $00C8C8C8;
-    lblTypeColumn.Font.Color := $00C8C8C8;
-    lblLanguageColumn.Font.Color := $00C8C8C8;
-    lblProgressColumn.Font.Color := $00C8C8C8;
-    lblWelcome.Font.Color := clWhite;
-    lblWelcomeMsg.Font.Color := $00D0D0D0;
-    btnMenu.Font.Color := clWhite;
+    Color := P.WindowBg;
+    HeaderPanel.Color := P.HeaderBg;
+    LeftRail.Color := P.RailBg;
+    ContentPanel.Color := P.ContentBg;
+    ProjectsTablePanel.Color := P.PanelBg;
+    WelcomePanel.Color := P.PanelBg;
+    StatusBar.Color := P.StatusBg;
+    ProjectListBox.Color := P.PanelBg;
+    lblAppName.Font.Color := P.TextInverse;
+    lblCurrentUser.Font.Color := P.TextInverse;
+    btnLogout.Font.Color := P.TextInverse;
+    lblProjectsHeading.Font.Color := P.TextPrimary;
+    lblSortBy.Font.Color := P.TextMuted;
+    lblSortColumnBy.Font.Color := P.TextMuted;
+    lblProjectColumn.Font.Color := P.TextMuted;
+    lblTypeColumn.Font.Color := P.TextMuted;
+    lblLanguageColumn.Font.Color := P.TextMuted;
+    lblProgressColumn.Font.Color := P.TextMuted;
+    lblWelcome.Font.Color := P.TextPrimary;
+    lblWelcomeMsg.Font.Color := P.TextSecondary;
+    btnMenu.Font.Color := P.TextInverse;
   end
   else
   begin
-    Color := clWhite;
-    HeaderPanel.Color := 5841152;
-    LeftRail.Color := 13848578;
-    ContentPanel.Color := 14474460;
-    ProjectsTablePanel.Color := clWhite;
-    WelcomePanel.Color := clWhite;
-    StatusBar.Color := 16567595;
-    ProjectListBox.Color := clWhite;
-    lblAppName.Font.Color := clWhite;
-    lblCurrentUser.Font.Color := clWhite;
-    btnLogout.Font.Color := clWhite;
-    lblProjectsHeading.Font.Color := 2105376;
-    lblSortBy.Font.Color := 9013641;
-    lblSortColumnBy.Font.Color := 9013641;
-    lblProjectColumn.Font.Color := 9013641;
-    lblTypeColumn.Font.Color := 9013641;
-    lblLanguageColumn.Font.Color := 9013641;
-    lblProgressColumn.Font.Color := 9013641;
+    Color := P.WindowBg;
+    HeaderPanel.Color := P.HeaderBg;
+    LeftRail.Color := P.RailBg;
+    ContentPanel.Color := P.ContentBg;
+    ProjectsTablePanel.Color := P.PanelBg;
+    WelcomePanel.Color := P.PanelBg;
+    StatusBar.Color := P.StatusBg;
+    ProjectListBox.Color := P.PanelBg;
+    lblAppName.Font.Color := P.TextInverse;
+    lblCurrentUser.Font.Color := P.TextInverse;
+    btnLogout.Font.Color := P.TextInverse;
+    lblProjectsHeading.Font.Color := P.TextPrimary;
+    lblSortBy.Font.Color := P.TextMuted;
+    lblSortColumnBy.Font.Color := P.TextMuted;
+    lblProjectColumn.Font.Color := P.TextMuted;
+    lblTypeColumn.Font.Color := P.TextMuted;
+    lblLanguageColumn.Font.Color := P.TextMuted;
+    lblProgressColumn.Font.Color := P.TextMuted;
     lblWelcome.Font.Color := clBlack;
-    lblWelcomeMsg.Font.Color := 7303023;
-    btnMenu.Font.Color := clWhite;
+    lblWelcomeMsg.Font.Color := P.TextSecondary;
+    btnMenu.Font.Color := P.TextInverse;
   end;
 end;
 

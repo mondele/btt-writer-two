@@ -9,7 +9,7 @@ uses
   ExtCtrls, StdCtrls, Buttons,
   ProjectManager, ResourceContainer, ProjectScanner,
   BibleBook, BibleChapter, BibleChunk, USFMUtils, DataPaths, ProjectCreator,
-  AppSettings, SettingsForm;
+  AppSettings, SettingsForm, ThemePalette;
 
 resourcestring
   rsErrorOpeningChapterPrefix = 'Error opening chapter: ';
@@ -935,53 +935,55 @@ end;
 procedure TProjectEditWindow.ApplyTheme;
 var
   IsDark: Boolean;
+  P: TThemePalette;
 begin
   IsDark := GetAppTheme = atDark;
+  P := GetThemePalette(GetAppTheme);
   if IsDark then
   begin
-    Color := $00222222;
-    TopPanel.Color := $002B2B2B;
-    StatusPanel.Color := $002B2B2B;
-    LeftRail.Color := $00303030;
-    SplitPanel.Color := $00262626;
-    SourcePanel.Color := $002A2A2A;
-    TransPanel.Color := $002A2A2A;
-    ResourcePanel.Color := $002A2A2A;
-    ResourceTabsPanel.Color := $00333333;
-    ResourceMemo.Color := $00252525;
-    ResourceMemo.Font.Color := $00E0E0E0;
-    SourceLangHeader.Color := $00333333;
-    SourceLangHeader.Font.Color := $00D0D0D0;
-    lblProjectTitle.Font.Color := clWhite;
-    lblChapterNav.Font.Color := clWhite;
-    lblChapterNum.Font.Color := clWhite;
-    lblSourceHeader.Font.Color := $00D0D0D0;
-    lblTransHeader.Font.Color := $00D0D0D0;
-    lblStatus.Font.Color := clWhite;
-    btnMenu.Font.Color := clWhite;
+    Color := P.WindowBg;
+    TopPanel.Color := P.HeaderBg;
+    StatusPanel.Color := P.HeaderBg;
+    LeftRail.Color := P.RailBg;
+    SplitPanel.Color := P.ContentBg;
+    SourcePanel.Color := P.SecondaryPanelBg;
+    TransPanel.Color := P.SecondaryPanelBg;
+    ResourcePanel.Color := P.SecondaryPanelBg;
+    ResourceTabsPanel.Color := P.ResourceTabBg;
+    ResourceMemo.Color := P.MemoBg;
+    ResourceMemo.Font.Color := P.TextSecondary;
+    SourceLangHeader.Color := P.ResourceTabBg;
+    SourceLangHeader.Font.Color := P.TextSecondary;
+    lblProjectTitle.Font.Color := P.TextInverse;
+    lblChapterNav.Font.Color := P.TextInverse;
+    lblChapterNum.Font.Color := P.TextInverse;
+    lblSourceHeader.Font.Color := P.TextSecondary;
+    lblTransHeader.Font.Color := P.TextSecondary;
+    lblStatus.Font.Color := P.TextInverse;
+    btnMenu.Font.Color := P.TextInverse;
   end
   else
   begin
-    Color := clWhite;
-    TopPanel.Color := 8991488;
-    StatusPanel.Color := 8991488;
-    LeftRail.Color := 13848578;
+    Color := P.WindowBg;
+    TopPanel.Color := P.HeaderBg;
+    StatusPanel.Color := P.HeaderBg;
+    LeftRail.Color := P.RailBg;
     SplitPanel.Color := clBtnFace;
-    SourcePanel.Color := 15263976;
+    SourcePanel.Color := P.SecondaryPanelBg;
     TransPanel.Color := 15395562;
-    ResourcePanel.Color := 15263976;
-    ResourceTabsPanel.Color := clWhite;
-    ResourceMemo.Color := clWhite;
+    ResourcePanel.Color := P.SecondaryPanelBg;
+    ResourceTabsPanel.Color := P.ResourceTabBg;
+    ResourceMemo.Color := P.MemoBg;
     ResourceMemo.Font.Color := 4492305;
     SourceLangHeader.Color := 15921906;
-    SourceLangHeader.Font.Color := 7303023;
-    lblProjectTitle.Font.Color := clWhite;
-    lblChapterNav.Font.Color := clWhite;
-    lblChapterNum.Font.Color := clWhite;
+    SourceLangHeader.Font.Color := P.TextSecondary;
+    lblProjectTitle.Font.Color := P.TextInverse;
+    lblChapterNav.Font.Color := P.TextInverse;
+    lblChapterNum.Font.Color := P.TextInverse;
     lblSourceHeader.Font.Color := clBlack;
     lblTransHeader.Font.Color := clBlack;
-    lblStatus.Font.Color := clWhite;
-    btnMenu.Font.Color := clWhite;
+    lblStatus.Font.Color := P.TextInverse;
+    btnMenu.Font.Color := P.TextInverse;
   end;
 end;
 
