@@ -65,6 +65,7 @@ type
     ContentPanel: TPanel;
     lblProjectsHeading: TLabel;
     ProjectsTablePanel: TPanel;
+    ProjectGrid: TStringGrid;
     WelcomePanel: TPanel;
     lblWelcome: TLabel;
     lblWelcomeMsg: TLabel;
@@ -79,7 +80,6 @@ type
     procedure FormCreate(Sender: TObject);
     procedure FormResize(Sender: TObject);
   private
-    ProjectGrid: TStringGrid;
     FProjects: TProjectSummaryList;
     FFirstLoadDone: Boolean;
     procedure UpdateLayout;
@@ -990,5 +990,8 @@ begin
   TextY := Rect.Top + ((Rect.Bottom - Rect.Top - AStatusBar.Canvas.TextHeight(Panel.Text)) div 2);
   AStatusBar.Canvas.TextOut(Rect.Left + 8, TextY, Panel.Text);
 end;
+
+initialization
+  RegisterClass(TStringGrid);
 
 end.
