@@ -130,6 +130,10 @@ type
 
 function ProjectDisplayName(const S: TProjectSummary): string;
 begin
+  { Use canonical app-language book name for Bible projects (English for now). }
+  Result := CanonicalBookName(S.BookCode);
+  if Result <> '' then
+    Exit;
   Result := Trim(S.BookName);
   if Result = '' then
     Result := Trim(S.DirName);

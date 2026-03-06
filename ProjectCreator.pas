@@ -44,6 +44,7 @@ function PromptForSourceText(const BookCode: string; out Opt: TSourceTextOption)
 function EnsureSourceTextPresent(const SourceOpt: TSourceTextOption;
   out SourceDir, ErrorMsg: string): Boolean;
 function IsCanonicalBibleBookCode(const BookCode: string): Boolean;
+function CanonicalBookName(const BookCode: string): string;
 function FindSourceTextOption(const SourceLangCode, BookCode, ResourceID: string;
   out Opt: TSourceTextOption): Boolean;
 function CreateProjectFromSource(const TargetLangCode, TargetLangName: string;
@@ -509,6 +510,18 @@ var
   Dummy: Boolean;
 begin
   Result := CanonicalBookIsOT(BookCode, Dummy);
+end;
+
+function CanonicalBookName(const BookCode: string): string;
+var
+  I: Integer;
+  Code: string;
+begin
+  Result := '';
+  Code := LowerCase(Trim(BookCode));
+  for I := 0 to High(CANON_BOOKS) do
+    if CANON_BOOKS[I].Code = Code then
+      Exit(CANON_BOOKS[I].Name);
 end;
 
 function ListTargetLanguagesFromIndex: TTargetLanguageOptionList;
@@ -1319,6 +1332,7 @@ function BuildManifestJSON(const TargetLangCode, TargetLangName: string;
 var
   TargetObj, ProjectObj, TypeObj, ResourceObj, GeneratorObj, SourceObj: TJSONObject;
   SourcesArr, TranslatorsArr, FinishedArr: TJSONArray;
+  ProjectName: string;
 begin
   Result := TJSONObject.Create;
   Result.Add('package_version', 8);
@@ -1339,8 +1353,13 @@ begin
   Result.Add('target_language', TargetObj);
 
   ProjectObj := TJSONObject.Create;
+  ProjectName := CanonicalBookName(SourceOpt.BookCode);
+  if ProjectName = '' then
+    ProjectName := Trim(SourceOpt.BookName);
+  if ProjectName = '' then
+    ProjectName := SourceOpt.BookCode;
   ProjectObj.Add('id', SourceOpt.BookCode);
-  ProjectObj.Add('name', SourceOpt.BookName);
+  ProjectObj.Add('name', ProjectName);
   Result.Add('project', ProjectObj);
 
   TypeObj := TJSONObject.Create;
