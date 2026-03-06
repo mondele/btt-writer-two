@@ -550,7 +550,12 @@ begin
     ProjectListBox.Items.Clear;
 
     for I := 0 to Length(FProjects) - 1 do
-      ProjectListBox.Items.Add(FProjects[I].BookName);
+    begin
+      if Trim(FProjects[I].BookName) <> '' then
+        ProjectListBox.Items.Add(FProjects[I].BookName)
+      else
+        ProjectListBox.Items.Add(FProjects[I].DirName);
+    end;
 
     if IssueCount > 0 then
       StatusBar.Panels[0].Text := Format(rsProjectsFoundWithIssuesFmt,
@@ -704,6 +709,7 @@ procedure TMainWindow.ProjectListBoxDrawItem(Control: TWinControl;
 var
   Cvs: TCanvas;
   S: TProjectSummary;
+  DisplayName: string;
   ProgressPct: Integer;
   RowTop: Integer;
   ProjectX, TypeX, LanguageX: Integer;
@@ -776,7 +782,10 @@ begin
   Cvs.Font.Style := [];
   Cvs.Font.Height := -15;
   Cvs.Font.Color := ProjectTextColor;
-  Cvs.TextOut(ProjectX, RowTop + 20, S.BookName);
+  DisplayName := Trim(S.BookName);
+  if DisplayName = '' then
+    DisplayName := S.DirName;
+  Cvs.TextOut(ProjectX, RowTop + 20, DisplayName);
 
   { Type }
   Cvs.Font.Style := [];
