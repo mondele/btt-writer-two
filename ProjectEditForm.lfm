@@ -1,14 +1,16 @@
 object ProjectEditWindow: TProjectEditWindow
-  Left = 100
+  Left = 331
   Height = 700
-  Top = 50
+  Top = 135
   Width = 1100
   Caption = 'Project Editor'
+  ClientHeight = 700
+  ClientWidth = 1100
   Color = clWhite
+  Position = poScreenCenter
+  LCLVersion = '4.0.0.4'
   OnClose = FormClose
   OnCreate = FormCreate
-  Position = poScreenCenter
-  LCLVersion = '4.0.0.0'
   object TopPanel: TPanel
     Left = 0
     Height = 45
@@ -16,7 +18,10 @@ object ProjectEditWindow: TProjectEditWindow
     Width = 1100
     Align = alTop
     BevelOuter = bvNone
-    Color = 4281410
+    ClientHeight = 45
+    ClientWidth = 1100
+    Color = 8991488
+    ParentBackground = False
     ParentColor = False
     TabOrder = 0
     object btnBack: TButton
@@ -25,15 +30,16 @@ object ProjectEditWindow: TProjectEditWindow
       Top = 8
       Width = 70
       Caption = '<- Back'
-      Font.Color = clWhite
-      OnClick = btnBackClick
+      Font.Color = clBlack
+      ParentFont = False
       TabOrder = 0
+      OnClick = btnBackClick
     end
     object lblProjectTitle: TLabel
       Left = 90
-      Height = 20
+      Height = 17
       Top = 12
-      Width = 400
+      Width = 52
       Caption = 'Project'
       Font.Color = clWhite
       Font.Height = -15
@@ -42,51 +48,51 @@ object ProjectEditWindow: TProjectEditWindow
       ParentFont = False
     end
     object lblChapterNav: TLabel
-      Left = 750
-      Height = 20
+      Left = 780
+      Height = 17
       Top = 12
-      Width = 80
+      Width = 50
+      Alignment = taRightJustify
+      Anchors = [akTop, akRight]
       Caption = 'Chapter'
       Font.Color = clWhite
       Font.Height = -14
       ParentColor = False
       ParentFont = False
-      Alignment = taRightJustify
-      Anchors = [akTop, akRight]
     end
     object btnPrevChapter: TButton
       Left = 840
       Height = 30
       Top = 8
       Width = 30
-      Caption = '<'
-      OnClick = btnPrevChapterClick
-      TabOrder = 1
       Anchors = [akTop, akRight]
+      Caption = '<'
+      TabOrder = 1
+      OnClick = btnPrevChapterClick
     end
     object lblChapterNum: TLabel
-      Left = 880
-      Height = 20
+      Left = 902
+      Height = 17
       Top = 12
-      Width = 40
+      Width = 18
+      Alignment = taCenter
+      Anchors = [akTop, akRight]
       Caption = '01'
       Font.Color = clWhite
       Font.Height = -15
       Font.Style = [fsBold]
       ParentColor = False
       ParentFont = False
-      Alignment = taCenter
-      Anchors = [akTop, akRight]
     end
     object btnNextChapter: TButton
       Left = 930
       Height = 30
       Top = 8
       Width = 30
-      Caption = '>'
-      OnClick = btnNextChapterClick
-      TabOrder = 2
       Anchors = [akTop, akRight]
+      Caption = '>'
+      TabOrder = 2
+      OnClick = btnNextChapterClick
     end
   end
   object StatusPanel: TPanel
@@ -96,14 +102,17 @@ object ProjectEditWindow: TProjectEditWindow
     Width = 1100
     Align = alBottom
     BevelOuter = bvNone
-    Color = 4281410
+    ClientHeight = 25
+    ClientWidth = 1100
+    Color = 8991488
+    ParentBackground = False
     ParentColor = False
     TabOrder = 1
     object lblStatus: TLabel
       Left = 16
       Height = 15
       Top = 5
-      Width = 600
+      Width = 34
       Caption = 'Ready'
       Font.Color = clWhite
       Font.Height = -12
@@ -111,12 +120,15 @@ object ProjectEditWindow: TProjectEditWindow
     end
   end
   object SplitPanel: TPanel
-    Left = 0
+    Left = 56
     Height = 630
     Top = 45
-    Width = 1100
+    Width = 1044
     Align = alClient
     BevelOuter = bvNone
+    ClientHeight = 630
+    ClientWidth = 1044
+    ParentBackground = False
     TabOrder = 2
     object Splitter1: TSplitter
       Left = 360
@@ -125,11 +137,12 @@ object ProjectEditWindow: TProjectEditWindow
       Width = 5
     end
     object Splitter2: TSplitter
-      Left = 775
+      Left = 719
       Height = 630
       Top = 0
       Width = 5
       Align = alRight
+      ResizeAnchor = akRight
     end
     object SourcePanel: TPanel
       Left = 0
@@ -138,90 +151,105 @@ object ProjectEditWindow: TProjectEditWindow
       Width = 360
       Align = alLeft
       BevelOuter = bvNone
+      ClientHeight = 630
+      ClientWidth = 360
       Color = 15263976
+      ParentBackground = False
       ParentColor = False
       TabOrder = 0
       object lblSourceHeader: TLabel
         Left = 0
-        Height = 26
+        Height = 16
         Top = 0
         Width = 360
-        Caption = 'Source Text'
         Align = alTop
+        Caption = 'Source Text'
         Color = clWhite
         Font.Height = -13
         Font.Style = [fsBold]
+        Layout = tlCenter
         ParentColor = False
         ParentFont = False
-        Layout = tlCenter
       end
       object SourceLangHeader: TLabel
         Left = 0
-        Height = 22
-        Top = 26
+        Height = 15
+        Top = 16
         Width = 360
-        Caption = 'Plateau Malagasy ULB'
         Align = alTop
+        Caption = 'Plateau Malagasy ULB'
         Color = 15921906
         Font.Color = 7303023
         Font.Height = -12
         Font.Style = [fsBold]
+        Layout = tlCenter
         ParentColor = False
         ParentFont = False
-        Layout = tlCenter
       end
       object SourceScrollBox: TScrollBox
         Left = 0
-        Height = 582
-        Top = 48
+        Height = 599
+        Top = 31
         Width = 360
+        HorzScrollBar.Page = 1
+        VertScrollBar.Page = 1
         Align = alClient
         BorderStyle = bsNone
+        ParentBackground = False
         TabOrder = 0
       end
     end
     object TransPanel: TPanel
-      Left = 455
+      Left = 365
       Height = 630
       Top = 0
-      Width = 320
+      Width = 354
       Align = alClient
       BevelOuter = bvNone
+      ClientHeight = 630
+      ClientWidth = 354
       Color = 15395562
+      ParentBackground = False
       ParentColor = False
       TabOrder = 1
       object lblTransHeader: TLabel
         Left = 0
-        Height = 26
+        Height = 16
         Top = 0
-        Width = 320
-        Caption = 'Translation'
+        Width = 354
         Align = alTop
+        Caption = 'Translation'
         Color = clWhite
         Font.Height = -13
         Font.Style = [fsBold]
+        Layout = tlCenter
         ParentColor = False
         ParentFont = False
-        Layout = tlCenter
       end
       object TransScrollBox: TScrollBox
         Left = 0
-        Height = 604
-        Top = 26
-        Width = 320
+        Height = 614
+        Top = 16
+        Width = 354
+        HorzScrollBar.Page = 1
+        VertScrollBar.Page = 1
         Align = alClient
         BorderStyle = bsNone
+        ParentBackground = False
         TabOrder = 0
       end
     end
     object ResourcePanel: TPanel
-      Left = 780
+      Left = 724
       Height = 630
       Top = 0
       Width = 320
       Align = alRight
       BevelOuter = bvNone
+      ClientHeight = 630
+      ClientWidth = 320
       Color = 15263976
+      ParentBackground = False
       ParentColor = False
       TabOrder = 2
       object ResourceTabsPanel: TPanel
@@ -231,7 +259,10 @@ object ProjectEditWindow: TProjectEditWindow
         Width = 320
         Align = alTop
         BevelOuter = bvNone
+        ClientHeight = 32
+        ClientWidth = 320
         Color = clWhite
+        ParentBackground = False
         ParentColor = False
         TabOrder = 0
         object btnTabNotes: TButton
@@ -272,19 +303,45 @@ object ProjectEditWindow: TProjectEditWindow
         Color = clWhite
         Font.Color = 4492305
         Font.Height = -15
+        Lines.Strings = (
+          'Context resources will appear here.'
+        )
         ParentFont = False
         ReadOnly = True
         ScrollBars = ssAutoVertical
         TabOrder = 1
-        Lines.Strings = (
-          'Context resources will appear here.'
-        )
       end
     end
   end
+  object LeftRail: TPanel
+    Left = 0
+    Height = 630
+    Top = 45
+    Width = 56
+    Align = alLeft
+    BevelOuter = bvNone
+    ClientHeight = 630
+    ClientWidth = 56
+    Color = 13848578
+    ParentBackground = False
+    ParentColor = False
+    TabOrder = 3
+    object btnMenu: TSpeedButton
+      Left = 10
+      Height = 28
+      Top = 591
+      Width = 36
+      Anchors = [akLeft, akBottom]
+      Caption = '⋮'
+      Flat = True
+      Font.Color = clWhite
+      Font.Height = -22
+      ParentFont = False
+    end
+  end
   object AutoSaveTimer: TTimer
+    Enabled = False
     Interval = 300000
     OnTimer = AutoSaveTimerFire
-    Enabled = False
   end
 end

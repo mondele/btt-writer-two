@@ -1,14 +1,16 @@
 object MainWindow: TMainWindow
-  Left = 200
+  Left = 4859
   Height = 620
-  Top = 100
+  Top = 336
   Width = 980
   Caption = 'BTT-Writer'
+  ClientHeight = 620
+  ClientWidth = 980
   Color = clWhite
+  Position = poScreenCenter
+  LCLVersion = '4.0.0.4'
   OnCreate = FormCreate
   OnResize = FormResize
-  Position = poScreenCenter
-  LCLVersion = '4.0.0.0'
   object HeaderPanel: TPanel
     Left = 0
     Height = 40
@@ -16,14 +18,17 @@ object MainWindow: TMainWindow
     Width = 980
     Align = alTop
     BevelOuter = bvNone
-    Color = 26258
+    ClientHeight = 40
+    ClientWidth = 980
+    Color = 5841152
+    ParentBackground = False
     ParentColor = False
     TabOrder = 0
     object lblAppName: TLabel
       Left = 16
-      Height = 24
+      Height = 33
       Top = 8
-      Width = 90
+      Width = 137
       Caption = 'BTT Writer'
       Font.Color = clWhite
       Font.Height = -28
@@ -31,70 +36,76 @@ object MainWindow: TMainWindow
       ParentFont = False
     end
     object lblCurrentUser: TLabel
-      Left = 620
-      Height = 20
+      Left = 632
+      Height = 24
       Top = 10
-      Width = 220
+      Width = 208
+      Alignment = taRightJustify
+      Anchors = [akTop]
       Caption = 'Current User: Raphael'
       Font.Color = clWhite
       Font.Height = -21
       ParentColor = False
       ParentFont = False
-      Alignment = taRightJustify
-      Anchors = [akTop, akRight]
     end
     object btnLogout: TLabel
-      Left = 848
-      Height = 20
+      Cursor = crHandPoint
+      Left = 867
+      Height = 24
       Top = 10
-      Width = 100
+      Width = 81
+      Anchors = [akTop, akRight]
       Caption = '(Logout)'
       Font.Color = clWhite
       Font.Height = -21
       ParentColor = False
       ParentFont = False
-      Cursor = crHandPoint
-      Anchors = [akTop, akRight]
     end
   end
   object LeftRail: TPanel
     Left = 0
-    Height = 557
+    Height = 562
     Top = 40
     Width = 56
     Align = alLeft
     BevelOuter = bvNone
-    Color = 26258
+    ClientHeight = 562
+    ClientWidth = 56
+    Color = 13848578
+    ParentBackground = False
     ParentColor = False
     TabOrder = 1
     object btnMenu: TSpeedButton
       Left = 10
       Height = 28
-      Top = 518
+      Top = 523
       Width = 36
-      Caption = #8942
+      Anchors = [akLeft, akBottom]
+      Caption = '⋮'
+      Flat = True
       Font.Color = clWhite
       Font.Height = -22
-      Flat = True
       ParentFont = False
-      Anchors = [akLeft, akBottom]
     end
   end
   object ContentPanel: TPanel
     Left = 56
-    Height = 557
+    Height = 562
     Top = 40
     Width = 924
     Align = alClient
     BevelOuter = bvNone
+    ClientHeight = 562
+    ClientWidth = 924
     Color = 14474460
+    ParentBackground = False
     ParentColor = False
     TabOrder = 2
     object lblProjectsHeading: TLabel
       Left = 30
-      Height = 34
+      Height = 37
       Top = 16
-      Width = 300
+      Width = 361
       Caption = 'Your Translation Projects'
       Font.Color = 2105376
       Font.Height = -32
@@ -103,9 +114,9 @@ object MainWindow: TMainWindow
     end
     object lblSortBy: TLabel
       Left = 190
-      Height = 18
+      Height = 19
       Top = 62
-      Width = 130
+      Width = 137
       Caption = 'Columns to Sort By'
       Font.Color = 9013641
       Font.Height = -16
@@ -114,9 +125,9 @@ object MainWindow: TMainWindow
     end
     object lblSortColumnBy: TLabel
       Left = 505
-      Height = 18
+      Height = 19
       Top = 62
-      Width = 160
+      Width = 166
       Caption = 'Sort Project Column By'
       Font.Color = 9013641
       Font.Height = -16
@@ -125,10 +136,10 @@ object MainWindow: TMainWindow
     end
     object cmbSortBy: TComboBox
       Left = 190
-      Height = 28
+      Height = 26
       Top = 84
       Width = 230
-      ItemHeight = 20
+      ItemHeight = 0
       ItemIndex = 0
       Items.Strings = (
         'Language then Project'
@@ -140,10 +151,10 @@ object MainWindow: TMainWindow
     end
     object cmbSortColumnBy: TComboBox
       Left = 505
-      Height = 28
+      Height = 26
       Top = 84
       Width = 230
-      ItemHeight = 20
+      ItemHeight = 0
       ItemIndex = 0
       Items.Strings = (
         'Bible Order'
@@ -167,19 +178,18 @@ object MainWindow: TMainWindow
       Height = 56
       Top = 20
       Width = 56
+      Anchors = [akTop, akRight]
       Caption = '+'
       Flat = True
       Font.Color = clWhite
       Font.Height = -32
       ParentFont = False
-      Transparent = True
-      Anchors = [akTop, akRight]
     end
     object lblProjectColumn: TLabel
       Left = 205
       Height = 20
       Top = 144
-      Width = 50
+      Width = 56
       Caption = 'Project'
       Font.Color = 9013641
       Font.Height = -17
@@ -190,7 +200,7 @@ object MainWindow: TMainWindow
       Left = 390
       Height = 20
       Top = 144
-      Width = 30
+      Width = 37
       Caption = 'Type'
       Font.Color = 9013641
       Font.Height = -17
@@ -201,7 +211,7 @@ object MainWindow: TMainWindow
       Left = 520
       Height = 20
       Top = 144
-      Width = 70
+      Width = 77
       Caption = 'Language'
       Font.Color = 9013641
       Font.Height = -17
@@ -212,7 +222,7 @@ object MainWindow: TMainWindow
       Left = 695
       Height = 20
       Top = 144
-      Width = 62
+      Width = 70
       Caption = 'Progress'
       Font.Color = 9013641
       Font.Height = -17
@@ -221,12 +231,13 @@ object MainWindow: TMainWindow
     end
     object ProjectsTablePanel: TPanel
       Left = 145
-      Height = 290
+      Height = 295
       Top = 165
       Width = 630
       Anchors = [akTop, akLeft, akRight, akBottom]
       BevelOuter = bvNone
       Color = clWhite
+      ParentBackground = False
       ParentColor = False
       TabOrder = 2
     end
@@ -237,14 +248,17 @@ object MainWindow: TMainWindow
       Width = 580
       Anchors = [akTop]
       BevelOuter = bvNone
+      ClientHeight = 200
+      ClientWidth = 580
       Color = clWhite
+      ParentBackground = False
       ParentColor = False
       TabOrder = 3
       object lblWelcome: TLabel
         Left = 24
-        Height = 26
+        Height = 28
         Top = 24
-        Width = 90
+        Width = 112
         Caption = 'Welcome!'
         Font.Color = clBlack
         Font.Height = -24
@@ -254,10 +268,10 @@ object MainWindow: TMainWindow
       end
       object lblWelcomeMsg: TLabel
         Left = 24
-        Height = 60
+        Height = 17
         Top = 64
-        Width = 530
-        Caption = 'You don'#39't have any projects yet. Click below to start a new translation project.'
+        Width = 525
+        Caption = 'You don''t have any projects yet. Click below to start a new translation project.'
         Font.Color = 7303023
         Font.Height = -15
         ParentColor = False
@@ -271,22 +285,25 @@ object MainWindow: TMainWindow
         Width = 230
         Caption = 'START A NEW PROJECT'
         Font.Style = [fsBold]
+        ParentFont = False
         TabOrder = 0
       end
     end
   end
   object StatusBar: TStatusBar
     Left = 0
-    Height = 23
-    Top = 597
+    Height = 18
+    Top = 602
     Width = 980
-    Color = 26258
-    Panels = <
+    Color = 8991488
+    Font.Color = clWhite
+    Panels = <    
       item
         Text = 'Status: Idle'
         Width = 50
       end>
     ParentColor = False
+    ParentFont = False
     SimplePanel = False
   end
 end

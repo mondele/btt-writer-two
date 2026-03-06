@@ -74,7 +74,11 @@ type
 
   TChunkPanel = class;
 
+  { TProjectEditWindow }
+
   TProjectEditWindow = class(TForm)
+    btnMenu: TSpeedButton;
+    LeftRail: TPanel;
     TopPanel: TPanel;
     btnBack: TButton;
     lblProjectTitle: TLabel;
