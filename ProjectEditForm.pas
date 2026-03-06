@@ -952,15 +952,15 @@ begin
     ResourceTabsPanel.Color := P.ResourceTabBg;
     ResourceMemo.Color := P.MemoBg;
     ResourceMemo.Font.Color := P.TextSecondary;
-    SourceLangHeader.Color := P.ResourceTabBg;
+    SourceLangHeader.Color := P.PrimaryLight;
     SourceLangHeader.Font.Color := P.TextSecondary;
-    lblProjectTitle.Font.Color := P.TextInverse;
-    lblChapterNav.Font.Color := P.TextInverse;
-    lblChapterNum.Font.Color := P.TextInverse;
+    lblProjectTitle.Font.Color := P.HeaderText;
+    lblChapterNav.Font.Color := P.HeaderText;
+    lblChapterNum.Font.Color := P.HeaderText;
     lblSourceHeader.Font.Color := P.TextSecondary;
     lblTransHeader.Font.Color := P.TextSecondary;
-    lblStatus.Font.Color := P.TextInverse;
-    btnMenu.Font.Color := P.TextInverse;
+    lblStatus.Font.Color := P.HeaderText;
+    btnMenu.Font.Color := P.RailText;
   end
   else
   begin
@@ -968,22 +968,22 @@ begin
     TopPanel.Color := P.HeaderBg;
     StatusPanel.Color := P.HeaderBg;
     LeftRail.Color := P.RailBg;
-    SplitPanel.Color := clBtnFace;
+    SplitPanel.Color := P.ContentBg;
     SourcePanel.Color := P.SecondaryPanelBg;
-    TransPanel.Color := 15395562;
+    TransPanel.Color := P.PanelBg;
     ResourcePanel.Color := P.SecondaryPanelBg;
     ResourceTabsPanel.Color := P.ResourceTabBg;
     ResourceMemo.Color := P.MemoBg;
-    ResourceMemo.Font.Color := 4492305;
-    SourceLangHeader.Color := 15921906;
+    ResourceMemo.Font.Color := P.TextSecondary;
+    SourceLangHeader.Color := P.PrimaryLight;
     SourceLangHeader.Font.Color := P.TextSecondary;
-    lblProjectTitle.Font.Color := P.TextInverse;
-    lblChapterNav.Font.Color := P.TextInverse;
-    lblChapterNum.Font.Color := P.TextInverse;
-    lblSourceHeader.Font.Color := clBlack;
-    lblTransHeader.Font.Color := clBlack;
-    lblStatus.Font.Color := P.TextInverse;
-    btnMenu.Font.Color := P.TextInverse;
+    lblProjectTitle.Font.Color := P.HeaderText;
+    lblChapterNav.Font.Color := P.HeaderText;
+    lblChapterNum.Font.Color := P.HeaderText;
+    lblSourceHeader.Font.Color := P.TextPrimary;
+    lblTransHeader.Font.Color := P.TextPrimary;
+    lblStatus.Font.Color := P.HeaderText;
+    btnMenu.Font.Color := P.RailText;
   end;
 end;
 

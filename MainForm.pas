@@ -412,9 +412,9 @@ begin
     WelcomePanel.Color := P.PanelBg;
     StatusBar.Color := P.StatusBg;
     ProjectListBox.Color := P.PanelBg;
-    lblAppName.Font.Color := P.TextInverse;
-    lblCurrentUser.Font.Color := P.TextInverse;
-    btnLogout.Font.Color := P.TextInverse;
+    lblAppName.Font.Color := P.HeaderText;
+    lblCurrentUser.Font.Color := P.HeaderText;
+    btnLogout.Font.Color := P.HeaderText;
     lblProjectsHeading.Font.Color := P.TextPrimary;
     lblSortBy.Font.Color := P.TextMuted;
     lblSortColumnBy.Font.Color := P.TextMuted;
@@ -424,7 +424,10 @@ begin
     lblProgressColumn.Font.Color := P.TextMuted;
     lblWelcome.Font.Color := P.TextPrimary;
     lblWelcomeMsg.Font.Color := P.TextSecondary;
-    btnMenu.Font.Color := P.TextInverse;
+    btnMenu.Font.Color := P.RailText;
+    AddProjectCircle.Brush.Color := P.Accent;
+    AddProjectCircle.Pen.Color := P.Accent;
+    btnAddProject.Font.Color := P.TextInverse;
   end
   else
   begin
@@ -436,9 +439,9 @@ begin
     WelcomePanel.Color := P.PanelBg;
     StatusBar.Color := P.StatusBg;
     ProjectListBox.Color := P.PanelBg;
-    lblAppName.Font.Color := P.TextInverse;
-    lblCurrentUser.Font.Color := P.TextInverse;
-    btnLogout.Font.Color := P.TextInverse;
+    lblAppName.Font.Color := P.HeaderText;
+    lblCurrentUser.Font.Color := P.HeaderText;
+    btnLogout.Font.Color := P.HeaderText;
     lblProjectsHeading.Font.Color := P.TextPrimary;
     lblSortBy.Font.Color := P.TextMuted;
     lblSortColumnBy.Font.Color := P.TextMuted;
@@ -448,7 +451,10 @@ begin
     lblProgressColumn.Font.Color := P.TextMuted;
     lblWelcome.Font.Color := clBlack;
     lblWelcomeMsg.Font.Color := P.TextSecondary;
-    btnMenu.Font.Color := P.TextInverse;
+    btnMenu.Font.Color := P.RailText;
+    AddProjectCircle.Brush.Color := P.Accent;
+    AddProjectCircle.Pen.Color := P.Accent;
+    btnAddProject.Font.Color := P.TextInverse;
   end;
 end;
 
