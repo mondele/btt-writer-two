@@ -145,6 +145,7 @@ object MainWindow: TMainWindow
       Items.Strings = (
         'Language then Project'
         'Project then Language'
+        'Progress then Project'
       )
       Style = csDropDownList
       TabOrder = 0
