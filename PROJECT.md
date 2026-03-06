@@ -16,6 +16,36 @@ Step 3 of the process is called "Chunking", when the text is broken up into chun
 
 The new program will use English ULB chunks for file storage, to maintain backwards compatibility with existing tooling. However, when a project is loaded, the chunks will be streamed into a single text in memory or temporary storage. Then, it will split the project on-screen based upon the chunking in the source text being used. This opens the possibility of allowing the user to chunk the text at some future date.
 
+## Current Implementation Notes (Codex)
+
+This section records work completed by Codex so Claude can verify behavior quickly.
+
+### UI, Theme, and Startup
+
+- Implemented theme infrastructure and palette centralization for light/dark mode switching.
+- Applied provided CSS palette values into Lazarus `TColor` mappings.
+- Added settings entry point from sidebar `btnMenu` and theme toggle dialog wiring.
+- Added splash screen workflow and ensured splash closes after first home-screen load.
+- Converted UI text toward `resourcestring` usage for localization readiness.
+- Updated typography:
+  - UI default font: `Noto Sans`
+  - Source/translation content default font: `Roboto`
+- Increased status bar minimum height to 30px in home and project edit screens.
+- Home status bar text is now owner-drawn for readability on Linux/GTK (white text on dark-blue bar in light mode).
+
+### Provenance (Codex-tagged commits)
+
+- `ac7ab65` `[codex]` status bar text rendering fix
+- `b5f7e8f` `[codex]` fonts + status bar sizing/colors
+- `737aa8a` `[codex]` palette alignment to provided CSS
+- `8f16890` `[codex]` shared theme palette
+- `7772c3d` `[codex]` splash close timing
+- `f0c4302` `[codex]` resourcestring/i18n pass
+
+### Related non-codex commit in same area
+
+- `65c704c` branding color update + project edit sidebar (committed without codex tag per request).
+
 ### Source Texts
 The source texts are stored in DATA PATH/library/resource_containers. Most sources are for one Bible book. The source text for Acts in the English Unlocked Literal Bible is stored in a directory called `en_act_ulb`.
 

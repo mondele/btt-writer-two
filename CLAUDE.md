@@ -8,6 +8,31 @@ BTT-Writer Two is a rewrite of BTT-Writer Desktop (Electron/JavaScript) in Free 
 
 Development is on Linux. The project is in early planning phase — see `PROJECT.md` for the full specification.
 
+## Recent Codex Work Log (For Claude Review)
+
+The following commits were implemented by Codex and should be the primary audit targets:
+
+- `ac7ab65` `[codex] Force white status text via owner-drawn home status bar`
+  - Home status bar panel 0 is owner-drawn to force readable text color on GTK/light theme.
+  - Reason: `TStatusBar.Font.Color` was not respected by the platform theme.
+- `b5f7e8f` `[codex] Set UI/content fonts and status bar sizing/colors`
+  - Added `UIFonts.pas` with recursive `ApplyFontRecursive(...)`.
+  - Applied `Noto Sans` across UI forms (home, project edit, settings, splash).
+  - Set source/translation default text controls to `Roboto`.
+  - Set status bar minimum heights to 30px on main and project edit forms.
+- `737aa8a` `[codex] Align app theme colors to provided CSS palette`
+  - Updated Lazarus theme values to match provided CSS light/dark color targets.
+- `8f16890` `[codex] Centralize light/dark color palette in shared theme unit`
+  - Added/used centralized theme palette for form-level application.
+- `7772c3d` `[codex] Close splash after first home screen load`
+  - Splash now closes on first successful project scan/render.
+- `f0c4302` `[codex] Convert UI strings to resourcestrings for localization`
+  - UI strings moved toward i18n-ready `resourcestring` usage.
+
+Notes for audit:
+- There is one non-codex commit in this range: `65c704c` (`Update form branding colors and add project edit sidebar`), created per user request without codex tag.
+- Known untracked local artifacts may exist during dev (`GTAGS`, `GRTAGS`, `GPATH`) and are not part of app behavior.
+
 ## Related Codebases
 
 These sibling directories serve as references:
