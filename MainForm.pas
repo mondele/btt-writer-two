@@ -772,6 +772,7 @@ begin
     MetaTextColor := $00858585;
   end;
 
+  Cvs.Brush.Style := bsClear;
   Cvs.Font.Style := [];
   Cvs.Font.Height := -15;
   Cvs.Font.Color := ProjectTextColor;
@@ -786,6 +787,7 @@ begin
   { Language }
   Cvs.Font.Color := MetaTextColor;
   Cvs.TextOut(LanguageX, RowTop + 23, S.TargetLangName);
+  Cvs.Brush.Style := bsSolid;
 
   { Progress }
   if S.TotalChunks > 0 then
