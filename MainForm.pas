@@ -519,60 +519,61 @@ var
   I, IssueCount: Integer;
   DisplayName: string;
 begin
-  UpdateStartupSplash(rsSplashScanningFolders);
-  FProjects := ScanProjects;
-  UpdateStartupSplash(rsSplashPreparingResources);
-  EnsureSourcesForProjects;
-  UpdateStartupSplash(rsSplashRenderingList);
-  IssueCount := 0;
-  for I := 0 to Length(FProjects) - 1 do
-    if FProjects[I].HasIssues then
-      Inc(IssueCount);
-
-  if Length(FProjects) = 0 then
-  begin
-    WelcomePanel.Visible := True;
-    ProjectsTablePanel.Visible := False;
-    lblProjectColumn.Visible := False;
-    lblTypeColumn.Visible := False;
-    lblLanguageColumn.Visible := False;
-    lblProgressColumn.Visible := False;
-    ProjectListBox.Visible := False;
-    StatusBar.Panels[0].Text := rsNoProjectsFound;
-  end
-  else
-  begin
-    WelcomePanel.Visible := False;
-    ProjectsTablePanel.Visible := True;
-    lblProjectColumn.Visible := True;
-    lblTypeColumn.Visible := True;
-    lblLanguageColumn.Visible := True;
-    lblProgressColumn.Visible := True;
-    ProjectListBox.Visible := True;
-    ProjectListBox.Items.Clear;
-
+  try
+    UpdateStartupSplash(rsSplashScanningFolders);
+    FProjects := ScanProjects;
+    UpdateStartupSplash(rsSplashPreparingResources);
+    EnsureSourcesForProjects;
+    UpdateStartupSplash(rsSplashRenderingList);
+    IssueCount := 0;
     for I := 0 to Length(FProjects) - 1 do
+      if FProjects[I].HasIssues then
+        Inc(IssueCount);
+
+    if Length(FProjects) = 0 then
     begin
-      DisplayName := Trim(FProjects[I].BookName);
-      if DisplayName = '' then
-        DisplayName := Trim(FProjects[I].DirName);
-      if DisplayName = '' then
-        DisplayName := ExtractFileName(ExcludeTrailingPathDelimiter(FProjects[I].FullPath));
-      if DisplayName = '' then
-        DisplayName := rsTypeUnknown;
-      ProjectListBox.Items.Add(DisplayName);
+      WelcomePanel.Visible := True;
+      ProjectsTablePanel.Visible := False;
+      lblProjectColumn.Visible := False;
+      lblTypeColumn.Visible := False;
+      lblLanguageColumn.Visible := False;
+      lblProgressColumn.Visible := False;
+      ProjectListBox.Visible := False;
+      StatusBar.Panels[0].Text := rsNoProjectsFound;
+    end
+    else
+    begin
+      WelcomePanel.Visible := False;
+      ProjectsTablePanel.Visible := True;
+      lblProjectColumn.Visible := True;
+      lblTypeColumn.Visible := True;
+      lblLanguageColumn.Visible := True;
+      lblProgressColumn.Visible := True;
+      ProjectListBox.Visible := True;
+      ProjectListBox.Items.Clear;
+
+      for I := 0 to Length(FProjects) - 1 do
+      begin
+        DisplayName := Trim(FProjects[I].BookName);
+        if DisplayName = '' then
+          DisplayName := Trim(FProjects[I].DirName);
+        if DisplayName = '' then
+          DisplayName := ExtractFileName(ExcludeTrailingPathDelimiter(FProjects[I].FullPath));
+        if DisplayName = '' then
+          DisplayName := rsTypeUnknown;
+        ProjectListBox.Items.Add(DisplayName);
+      end;
+
+      if IssueCount > 0 then
+        StatusBar.Panels[0].Text := Format(rsProjectsFoundWithIssuesFmt,
+          [Length(FProjects), IssueCount])
+      else
+        StatusBar.Panels[0].Text := Format(rsProjectsFoundFmt, [Length(FProjects)]);
     end;
 
-    if IssueCount > 0 then
-      StatusBar.Panels[0].Text := Format(rsProjectsFoundWithIssuesFmt,
-        [Length(FProjects), IssueCount])
-    else
-      StatusBar.Panels[0].Text := Format(rsProjectsFoundFmt, [Length(FProjects)]);
-  end;
-
-  if not FFirstLoadDone then
-  begin
-    FFirstLoadDone := True;
+    if not FFirstLoadDone then
+      FFirstLoadDone := True;
+  finally
     HideStartupSplash;
   end;
 end;
