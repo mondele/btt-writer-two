@@ -10,6 +10,28 @@ uses
   ProjectManager, ResourceContainer, ProjectScanner,
   BibleBook, BibleChapter, BibleChunk, USFMUtils, DataPaths, ProjectCreator;
 
+resourcestring
+  rsErrorOpeningChapterPrefix = 'Error opening chapter: ';
+  rsReturningHomeScreen = 'Returning to home screen.';
+  rsAutoSavedAtPrefix = 'Auto-saved at ';
+  rsAutoSaveFailedPrefix = 'Auto-save failed: ';
+  rsCannotPrepareSourceTextPrefix = 'Cannot prepare source text for ';
+  rsCannotPrepareSourceTextMid = ': ';
+  rsCannotFindSourceTextContentPrefix = 'Cannot find source text content for ';
+  rsCannotFindSourceTextContentSuffix = '.';
+  rsSourceTextHeader = 'Source Text';
+  rsTranslationHeaderPrefix = 'Translation (';
+  rsUnableToOpenProjectPrefix = 'Unable to open project "';
+  rsUnableToOpenProjectMid = '" due to invalid or oversized chunk content: ';
+  rsChunkTitle = 'Title';
+  rsChunkVersePrefix = 'v';
+  rsChunkVerseRangeJoin = '-';
+  rsErrorRenderingChapterPrefix = 'Error rendering chapter content: ';
+  rsUpdateChapterPrefix = 'Update chapter ';
+  rsStatusChapterFmt = 'Chapter %s of %d | %d/%d chunks finished';
+  rsSavedAtPrefix = 'Saved at ';
+  rsFinishedToggleLabel = 'Mark chunk as done';
+
 type
   TResourceTab = (rtNotes, rtWords, rtQuestions);
 
@@ -619,8 +641,8 @@ begin
   except
     on E: Exception do
     begin
-      ShowMessage('Error opening chapter: ' + E.Message +
-        LineEnding + 'Returning to home screen.');
+      ShowMessage(rsErrorOpeningChapterPrefix + E.Message +
+        LineEnding + rsReturningHomeScreen);
       Close;
     end;
   end;
@@ -635,8 +657,8 @@ begin
   except
     on E: Exception do
     begin
-      ShowMessage('Error opening chapter: ' + E.Message +
-        LineEnding + 'Returning to home screen.');
+      ShowMessage(rsErrorOpeningChapterPrefix + E.Message +
+        LineEnding + rsReturningHomeScreen);
       Close;
     end;
   end;
@@ -646,12 +668,12 @@ procedure TProjectEditWindow.AutoSaveTimerFire(Sender: TObject);
 begin
   try
     SaveCurrentChapter;
-    lblStatus.Caption := 'Auto-saved at ' + TimeToStr(Now);
+    lblStatus.Caption := rsAutoSavedAtPrefix + TimeToStr(Now);
   except
     on E: Exception do
     begin
-      ShowMessage('Auto-save failed: ' + E.Message +
-        LineEnding + 'Returning to home screen.');
+      ShowMessage(rsAutoSaveFailedPrefix + E.Message +
+        LineEnding + rsReturningHomeScreen);
       Close;
     end;
   end;
@@ -786,7 +808,7 @@ begin
 
     if not EnsureSourceTextPresent(SourceOpt, SourceBaseDir, SourceErr) then
     begin
-      ShowMessage('Cannot prepare source text for ' + ASummary.BookCode + ': ' +
+      ShowMessage(rsCannotPrepareSourceTextPrefix + ASummary.BookCode + rsCannotPrepareSourceTextMid +
         SourceErr);
       Close;
       Exit;
@@ -797,7 +819,8 @@ begin
       FSourceContentDir := FindSourceContentDir(ASummary);
     if FSourceContentDir = '' then
     begin
-      ShowMessage('Cannot find source text content for ' + ASummary.BookCode + '.');
+      ShowMessage(rsCannotFindSourceTextContentPrefix + ASummary.BookCode +
+        rsCannotFindSourceTextContentSuffix);
       Close;
       Exit;
     end;
@@ -817,8 +840,8 @@ begin
     Caption := ASummary.BookName + ' - ' + ASummary.TargetLangName +
       ' (' + ASummary.TargetLangCode + ')';
     lblProjectTitle.Caption := Caption;
-    lblSourceHeader.Caption := 'Source Text';
-    lblTransHeader.Caption := 'Translation (' + ASummary.TargetLangCode + ')';
+    lblSourceHeader.Caption := rsSourceTextHeader;
+    lblTransHeader.Caption := rsTranslationHeaderPrefix + ASummary.TargetLangCode + ')';
 
     AutoSaveTimer.Enabled := True;
 
@@ -835,8 +858,8 @@ begin
     on E: Exception do
     begin
       AutoSaveTimer.Enabled := False;
-      raise Exception.Create('Unable to open project "' + ASummary.BookName +
-        '" due to invalid or oversized chunk content: ' + E.Message);
+      raise Exception.Create(rsUnableToOpenProjectPrefix + ASummary.BookName +
+        rsUnableToOpenProjectMid + E.Message);
     end;
   end;
 end;
@@ -931,9 +954,9 @@ begin
         { Build verse label }
         NextChunkStart := 0;
         if SourceChunk.Name = 'title' then
-          ChunkLabel := 'Title'
+          ChunkLabel := rsChunkTitle
         else
-          ChunkLabel := 'v' + SourceChunk.Name;
+          ChunkLabel := rsChunkVersePrefix + SourceChunk.Name;
         { Determine verse range }
         if I < SourceChapter.Chunks.Count - 1 then
         begin
@@ -941,7 +964,7 @@ begin
           if (NextChunkStart > 0) and (StrToIntDef(SourceChunk.Name, 0) > 0) then
           begin
             if NextChunkStart - StrToIntDef(SourceChunk.Name, 0) > 1 then
-              ChunkLabel := 'v' + SourceChunk.Name + '-' +
+              ChunkLabel := rsChunkVersePrefix + SourceChunk.Name + rsChunkVerseRangeJoin +
                 IntToStr(NextChunkStart - 1);
           end;
         end;
@@ -984,8 +1007,8 @@ begin
   except
     on E: Exception do
     begin
-      ShowMessage('Error rendering chapter content: ' + E.Message +
-        LineEnding + 'Returning to home screen.');
+      ShowMessage(rsErrorRenderingChapterPrefix + E.Message +
+        LineEnding + rsReturningHomeScreen);
       Close;
     end;
   end;
@@ -1031,7 +1054,7 @@ begin
     SaveContentDir := FProject.ProjectDir;
     CleanChapterDir(SaveContentDir + SourceChapter.ID, '.txt');
     CommitProjectChanges(FProject.ProjectDir,
-      'Update chapter ' + SourceChapter.ID, GitErr);
+      rsUpdateChapterPrefix + SourceChapter.ID, GitErr);
     Exit;
   end;
 
@@ -1091,7 +1114,7 @@ begin
   end;
 
   CommitProjectChanges(FProject.ProjectDir,
-    'Update chapter ' + SourceChapter.ID, GitErr);
+    rsUpdateChapterPrefix + SourceChapter.ID, GitErr);
 end;
 
 procedure TProjectEditWindow.UpdateStatus;
@@ -1108,7 +1131,7 @@ begin
     if FProject.IsFinished(SourceChapter.ID, SourceChapter.Chunks[I].Name) then
       Inc(FinCount);
 
-  lblStatus.Caption := Format('Chapter %s of %d | %d/%d chunks finished',
+  lblStatus.Caption := Format(rsStatusChapterFmt,
     [SourceChapter.ID, FSourceRC.Book.Chapters.Count,
      FinCount, SourceChapter.Chunks.Count]);
 end;
@@ -1176,7 +1199,7 @@ end;
 procedure TProjectEditWindow.OnChunkMemoExit(Sender: TObject);
 begin
   SaveCurrentChapter;
-  lblStatus.Caption := 'Saved at ' + TimeToStr(Now);
+  lblStatus.Caption := rsSavedAtPrefix + TimeToStr(Now);
 end;
 
 procedure TProjectEditWindow.OnChunkEditClick(Sender: TObject);
@@ -1596,7 +1619,7 @@ begin
   FFinishedLabel.Parent := FTransPanel;
   FFinishedLabel.Left := 10;
   FFinishedLabel.Top := PanelHeight - FooterHeight + 8;
-  FFinishedLabel.Caption := 'Mark chunk as done';
+  FFinishedLabel.Caption := rsFinishedToggleLabel;
   FFinishedLabel.Font.Color := $00909090;
   FFinishedLabel.Anchors := [akLeft, akBottom];
 

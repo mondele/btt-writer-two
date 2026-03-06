@@ -11,15 +11,19 @@ uses
   ResourceContainer, ProjectManager, ProjectScanner,
   MainForm, ProjectEditForm, SplashScreen;
 
+resourcestring
+  rsSplashInitializing = 'Initializing interface...';
+  rsSplashStartupComplete = 'Startup complete';
+
 {$R *.res}
 
 begin
   Application.Scaled := True;
   Application.Initialize;
   ShowStartupSplash;
-  UpdateStartupSplash('Initializing interface...');
+  UpdateStartupSplash(rsSplashInitializing);
   Application.CreateForm(TMainWindow, MainWindow);
-  UpdateStartupSplash('Startup complete');
+  UpdateStartupSplash(rsSplashStartupComplete);
   HideStartupSplash;
   Application.Run;
 end.

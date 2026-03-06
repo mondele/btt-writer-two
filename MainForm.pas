@@ -11,6 +11,40 @@ uses
   Globals, ProjectScanner, ProjectEditForm, ProjectCreator, ProjectManager,
   TStudioPackage, SplashScreen;
 
+resourcestring
+  rsProjectDetailsTitle = 'Project Details';
+  rsProjectLabel = 'Project: ';
+  rsTargetLanguageLabel = 'Target Language: ';
+  rsResourceTypeLabel = 'Resource type: ';
+  rsProgressLabel = 'Progress: ';
+  rsIssuesLabel = 'Issues: ';
+  rsIssuesNone = 'none';
+  rsTranslatorsLabel = 'Translators:';
+  rsDismiss = 'Dismiss';
+  rsExportUp = '↑ Export';
+  rsNone = '(none)';
+  rsExportFilter = 'Translation Studio Package (*.tstudio)|*.tstudio|All files|*.*';
+  rsTStudioExt = 'tstudio';
+  rsExportFailedPrefix = 'Export failed: ';
+  rsExportedPrefix = 'Exported: ';
+  rsCurrentUserRaphael = 'Current User: Raphael';
+  rsLogout = '(Logout)';
+  rsSplashBuildingHome = 'Building home screen...';
+  rsSplashLoadingProjects = 'Loading projects...';
+  rsSplashCheckingSources = 'Checking required source texts...';
+  rsSplashScanningFolders = 'Scanning project folders...';
+  rsSplashPreparingResources = 'Preparing project resources...';
+  rsSplashRenderingList = 'Rendering project list...';
+  rsSomeSourcesCouldNotBePreparedFmt = 'Some project sources could not be prepared (%d). First error: %s';
+  rsNoProjectsFound = 'No projects found';
+  rsProjectsFoundWithIssuesFmt = '%d project(s) found (%d with issues)';
+  rsProjectsFoundFmt = '%d project(s) found';
+  rsProjectCannotOpenUntilIssuesFixedPrefix = 'Project cannot be opened until issues are fixed: ';
+  rsProjectOpenSafelyAbortedPrefix = 'Project could not be opened and was safely aborted: ';
+  rsHintDetails = 'details';
+  rsProjectCreatedPrefix = 'Project created: ';
+  rsTypeTextPrefix = 'Text ';
+
 type
   TMainWindow = class(TForm)
     AddProjectCircle: TShape;
@@ -95,7 +129,7 @@ begin
   Width := 520;
   Height := 430;
   BorderIcons := [biSystemMenu];
-  Caption := 'Project Details';
+  Caption := rsProjectDetailsTitle;
   Color := clWhite;
 
   lblTitle := TLabel.Create(Self);
@@ -116,18 +150,18 @@ begin
   else
     ProgressPct := 0;
   lblInfo.Caption :=
-    'Project: ' + FSummary.DirName + LineEnding +
-    'Target Language: ' + FSummary.TargetLangCode + ' - ' + FSummary.TargetLangName + LineEnding +
-    'Resource type: ' + FSummary.ResourceType + LineEnding +
-    'Progress: ' + IntToStr(ProgressPct) + '%' + LineEnding +
-    'Issues: ' + LineEnding +
-    'Translators:';
+    rsProjectLabel + FSummary.DirName + LineEnding +
+    rsTargetLanguageLabel + FSummary.TargetLangCode + ' - ' + FSummary.TargetLangName + LineEnding +
+    rsResourceTypeLabel + FSummary.ResourceType + LineEnding +
+    rsProgressLabel + IntToStr(ProgressPct) + '%' + LineEnding +
+    rsIssuesLabel + LineEnding +
+    rsTranslatorsLabel;
   if FSummary.HasIssues then
-    lblInfo.Caption := StringReplace(lblInfo.Caption, 'Issues: ' + LineEnding,
-      'Issues: ' + FSummary.IssueSummary + LineEnding, [])
+    lblInfo.Caption := StringReplace(lblInfo.Caption, rsIssuesLabel + LineEnding,
+      rsIssuesLabel + FSummary.IssueSummary + LineEnding, [])
   else
-    lblInfo.Caption := StringReplace(lblInfo.Caption, 'Issues: ' + LineEnding,
-      'Issues: none' + LineEnding, []);
+    lblInfo.Caption := StringReplace(lblInfo.Caption, rsIssuesLabel + LineEnding,
+      rsIssuesLabel + rsIssuesNone + LineEnding, []);
 
   memTranslators := TMemo.Create(Self);
   memTranslators.Parent := Self;
@@ -144,7 +178,7 @@ begin
   btnDismiss.Left := 212;
   btnDismiss.Top := 360;
   btnDismiss.Width := 96;
-  btnDismiss.Caption := 'Dismiss';
+  btnDismiss.Caption := rsDismiss;
   btnDismiss.OnClick := @btnDismissClick;
 
   btnExport := TButton.Create(Self);
@@ -152,7 +186,7 @@ begin
   btnExport.Left := 384;
   btnExport.Top := 360;
   btnExport.Width := 104;
-  btnExport.Caption := '↑ Export';
+  btnExport.Caption := rsExportUp;
   btnExport.OnClick := @btnExportClick;
 end;
 
@@ -167,7 +201,7 @@ var
 begin
   Result := '';
   if not FileExists(IncludeTrailingPathDelimiter(FSummary.FullPath) + 'manifest.json') then
-    Exit('(none)');
+    Exit(rsNone);
 
   SL := TStringList.Create;
   try
@@ -176,16 +210,16 @@ begin
     if not (Data is TJSONObject) then
     begin
       Data.Free;
-      Exit('(none)');
+      Exit(rsNone);
     end;
     Obj := TJSONObject(Data);
     try
       Node := Obj.Find('translators');
       if not (Node is TJSONArray) then
-        Exit('(none)');
+        Exit(rsNone);
       Arr := TJSONArray(Node);
       if Arr.Count = 0 then
-        Exit('(none)');
+        Exit(rsNone);
       for I := 0 to Arr.Count - 1 do
       begin
         if Result <> '' then
@@ -212,17 +246,17 @@ var
 begin
   SaveDlg := TSaveDialog.Create(Self);
   try
-    SaveDlg.Filter := 'Translation Studio Package (*.tstudio)|*.tstudio|All files|*.*';
-    SaveDlg.DefaultExt := 'tstudio';
+    SaveDlg.Filter := rsExportFilter;
+    SaveDlg.DefaultExt := rsTStudioExt;
     SaveDlg.FileName := FSummary.DirName + '.tstudio';
     if not SaveDlg.Execute then
       Exit;
     if not CreateTStudioPackage(FSummary.FullPath, SaveDlg.FileName, Err) then
     begin
-      ShowMessage('Export failed: ' + Err);
+      ShowMessage(rsExportFailedPrefix + Err);
       Exit;
     end;
-    ShowMessage('Exported: ' + SaveDlg.FileName);
+    ShowMessage(rsExportedPrefix + SaveDlg.FileName);
   finally
     SaveDlg.Free;
   end;
@@ -291,10 +325,10 @@ end;
 
 procedure TMainWindow.FormCreate(Sender: TObject);
 begin
-  UpdateStartupSplash('Building home screen...');
+  UpdateStartupSplash(rsSplashBuildingHome);
   Caption := APP_NAME + ' ' + APP_VERSION;
-  lblCurrentUser.Caption := 'Current User: Raphael';
-  btnLogout.Caption := '(Logout)';
+  lblCurrentUser.Caption := rsCurrentUserRaphael;
+  btnLogout.Caption := rsLogout;
 
   { Create project list box }
   ProjectListBox := TListBox.Create(Self);
@@ -316,7 +350,7 @@ begin
   btnAddProject.OnClick := @btnAddProjectClick;
   btnStartProject.OnClick := @btnStartProjectClick;
 
-  UpdateStartupSplash('Loading projects...');
+  UpdateStartupSplash(rsSplashLoadingProjects);
   UpdateLayout;
   ScanAndDisplayProjects;
 end;
@@ -343,7 +377,7 @@ var
   SourceOpt: TSourceTextOption;
   SourceDir, Err, FailMsg: string;
 begin
-  UpdateStartupSplash('Checking required source texts...');
+  UpdateStartupSplash(rsSplashCheckingSources);
   FailCount := 0;
   FailMsg := '';
 
@@ -380,19 +414,18 @@ begin
   end;
 
   if FailCount > 0 then
-    ShowMessage('Some project sources could not be prepared (' +
-      IntToStr(FailCount) + '). First error: ' + FailMsg);
+    ShowMessage(Format(rsSomeSourcesCouldNotBePreparedFmt, [FailCount, FailMsg]));
 end;
 
 procedure TMainWindow.ScanAndDisplayProjects;
 var
   I, IssueCount: Integer;
 begin
-  UpdateStartupSplash('Scanning project folders...');
+  UpdateStartupSplash(rsSplashScanningFolders);
   FProjects := ScanProjects;
-  UpdateStartupSplash('Preparing project resources...');
+  UpdateStartupSplash(rsSplashPreparingResources);
   EnsureSourcesForProjects;
-  UpdateStartupSplash('Rendering project list...');
+  UpdateStartupSplash(rsSplashRenderingList);
   IssueCount := 0;
   for I := 0 to Length(FProjects) - 1 do
     if FProjects[I].HasIssues then
@@ -407,7 +440,7 @@ begin
     lblLanguageColumn.Visible := False;
     lblProgressColumn.Visible := False;
     ProjectListBox.Visible := False;
-    StatusBar.Panels[0].Text := 'No projects found';
+    StatusBar.Panels[0].Text := rsNoProjectsFound;
   end
   else
   begin
@@ -424,10 +457,10 @@ begin
       ProjectListBox.Items.Add(FProjects[I].BookName);
 
     if IssueCount > 0 then
-      StatusBar.Panels[0].Text := Format('%d project(s) found (%d with issues)',
+      StatusBar.Panels[0].Text := Format(rsProjectsFoundWithIssuesFmt,
         [Length(FProjects), IssueCount])
     else
-      StatusBar.Panels[0].Text := Format('%d project(s) found', [Length(FProjects)]);
+      StatusBar.Panels[0].Text := Format(rsProjectsFoundFmt, [Length(FProjects)]);
   end;
 end;
 
@@ -445,7 +478,7 @@ begin
     Exit;
   if FProjects[Idx].HasIssues then
   begin
-    ShowMessage('Project cannot be opened until issues are fixed: ' +
+    ShowMessage(rsProjectCannotOpenUntilIssuesFixedPrefix +
       FProjects[Idx].IssueSummary);
     Exit;
   end;
@@ -462,7 +495,7 @@ begin
       if (not ShownModal) and (EditForm <> nil) and
          not (csDestroying in EditForm.ComponentState) then
         FreeAndNil(EditForm);
-      ShowMessage('Project could not be opened and was safely aborted: ' +
+      ShowMessage(rsProjectOpenSafelyAbortedPrefix +
         E.Message);
     end;
   end;
@@ -530,7 +563,7 @@ var
 begin
   Idx := ProjectListBox.ItemAtPos(Point(X, Y), True);
   if (Idx >= 0) and IsInfoIconHit(Idx, X, Y) then
-    NewHint := 'details'
+    NewHint := rsHintDetails
   else
     NewHint := '';
   if ProjectListBox.Hint <> NewHint then
@@ -560,7 +593,7 @@ begin
     Exit;
   end;
 
-  ShowMessage('Project created: ' + NewProjectDir);
+  ShowMessage(rsProjectCreatedPrefix + NewProjectDir);
   ScanAndDisplayProjects;
 end;
 
@@ -634,7 +667,7 @@ begin
   Cvs.Font.Style := [];
   Cvs.Font.Height := -12;
   Cvs.Font.Color := $00858585;
-  Cvs.TextOut(TypeX, RowTop + 23, 'Text ' + S.ResourceType);
+  Cvs.TextOut(TypeX, RowTop + 23, rsTypeTextPrefix + S.ResourceType);
 
   { Language }
   Cvs.TextOut(LanguageX, RowTop + 23, S.TargetLangName);

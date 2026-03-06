@@ -64,6 +64,25 @@ const
   PROJECT_TYPE_ID = 'text';
   PROJECT_TYPE_NAME = 'Text';
 
+resourcestring
+  rsSourceNotInstalledAndNoBundle =
+    'Source text is not installed and bundled resource archive was not found.';
+  rsSelectTargetLanguage = 'Select Target Language';
+  rsLanguageCode = 'Language code';
+  rsLanguageName = 'Language name';
+  rsOK = 'OK';
+  rsCancel = 'Cancel';
+  rsSelectValidLanguageCode = 'Please select a valid language code from the list.';
+  rsNoTargetLanguages = 'No target languages found in index.sqlite.';
+  rsSelectBook = 'Select Book';
+  rsOldTestament = 'Old Testament';
+  rsNewTestament = 'New Testament';
+  rsPleaseSelectBook = 'Please select a book.';
+  rsNoSourceBooks = 'No source books found in index.sqlite.';
+  rsSelectSourceText = 'Select Source Text';
+  rsPleaseSelectSourceText = 'Please select a source text.';
+  rsNoSourceTextsForBookFmt = 'No source texts found for book "%s" in index.sqlite. (Excluded: tn, tq)';
+
 type
   TCanonicalBook = record
     Code: string;
@@ -410,7 +429,7 @@ begin
 
   if (ZipPath = '') or (not FileExists(ZipPath)) then
   begin
-    ErrorMsg := 'Source text is not installed and bundled resource archive was not found.';
+    ErrorMsg := rsSourceNotInstalledAndNoBundle;
     Exit(False);
   end;
 
@@ -671,7 +690,7 @@ begin
   Width := 560;
   Height := 460;
   BorderIcons := [biSystemMenu];
-  Caption := 'Select Target Language';
+  Caption := rsSelectTargetLanguage;
 
   FAll := AAll;
   SetLength(FVisible, 0);
@@ -680,7 +699,7 @@ begin
   lblCode.Parent := Self;
   lblCode.Left := 12;
   lblCode.Top := 12;
-  lblCode.Caption := 'Language code';
+  lblCode.Caption := rsLanguageCode;
 
   edtCode := TEdit.Create(Self);
   edtCode.Parent := Self;
@@ -694,7 +713,7 @@ begin
   lblName.Parent := Self;
   lblName.Left := 250;
   lblName.Top := 12;
-  lblName.Caption := 'Language name';
+  lblName.Caption := rsLanguageName;
 
   edtName := TEdit.Create(Self);
   edtName.Parent := Self;
@@ -719,7 +738,7 @@ begin
   btnOK.Left := 368;
   btnOK.Top := 402;
   btnOK.Width := 80;
-  btnOK.Caption := 'OK';
+  btnOK.Caption := rsOK;
   btnOK.ModalResult := mrNone;
   btnOK.Default := True;
   btnOK.Anchors := [akRight, akBottom];
@@ -730,7 +749,7 @@ begin
   btnCancel.Left := 460;
   btnCancel.Top := 402;
   btnCancel.Width := 80;
-  btnCancel.Caption := 'Cancel';
+  btnCancel.Caption := rsCancel;
   btnCancel.ModalResult := mrCancel;
   btnCancel.Anchors := [akRight, akBottom];
 
@@ -869,7 +888,7 @@ begin
       ModalResult := mrOK;
       Exit;
     end;
-  MessageDlg('Please select a valid language code from the list.', mtWarning, [mbOK], 0);
+  MessageDlg(rsSelectValidLanguageCode, mtWarning, [mbOK], 0);
 end;
 
 function PromptForTargetLanguage(out LangCode, LangName: string): Boolean;
@@ -884,7 +903,7 @@ begin
   L := ListTargetLanguagesFromIndex;
   if Length(L) = 0 then
   begin
-    MessageDlg('No target languages found in index.sqlite.', mtError, [mbOK], 0);
+    MessageDlg(rsNoTargetLanguages, mtError, [mbOK], 0);
     Exit;
   end;
 
@@ -911,7 +930,7 @@ begin
   Width := 620;
   Height := 480;
   BorderIcons := [biSystemMenu];
-  Caption := 'Select Book';
+  Caption := rsSelectBook;
 
   FAll := AAll;
   SetLength(FOTVisible, 0);
@@ -927,11 +946,11 @@ begin
 
   tabOT := TTabSheet.Create(pages);
   tabOT.PageControl := pages;
-  tabOT.Caption := 'Old Testament';
+  tabOT.Caption := rsOldTestament;
 
   tabNT := TTabSheet.Create(pages);
   tabNT.PageControl := pages;
-  tabNT.Caption := 'New Testament';
+  tabNT.Caption := rsNewTestament;
 
   lstOT := TListBox.Create(Self);
   lstOT.Parent := tabOT;
@@ -969,7 +988,7 @@ begin
   btnOK.Left := 436;
   btnOK.Top := 420;
   btnOK.Width := 80;
-  btnOK.Caption := 'OK';
+  btnOK.Caption := rsOK;
   btnOK.ModalResult := mrNone;
   btnOK.Anchors := [akRight, akBottom];
   btnOK.OnClick := @btnOKClick;
@@ -979,7 +998,7 @@ begin
   btnCancel.Left := 528;
   btnCancel.Top := 420;
   btnCancel.Width := 80;
-  btnCancel.Caption := 'Cancel';
+  btnCancel.Caption := rsCancel;
   btnCancel.ModalResult := mrCancel;
   btnCancel.Anchors := [akRight, akBottom];
 end;
@@ -989,13 +1008,13 @@ begin
   if (pages.ActivePage = tabOT) and
      ((lstOT.ItemIndex < 0) or (lstOT.ItemIndex >= Length(FOTVisible))) then
   begin
-    MessageDlg('Please select a book.', mtWarning, [mbOK], 0);
+    MessageDlg(rsPleaseSelectBook, mtWarning, [mbOK], 0);
     Exit;
   end;
   if (pages.ActivePage = tabNT) and
      ((lstNT.ItemIndex < 0) or (lstNT.ItemIndex >= Length(FNTVisible))) then
   begin
-    MessageDlg('Please select a book.', mtWarning, [mbOK], 0);
+    MessageDlg(rsPleaseSelectBook, mtWarning, [mbOK], 0);
     Exit;
   end;
   ModalResult := mrOK;
@@ -1042,7 +1061,7 @@ begin
   L := ListBooksFromIndex;
   if Length(L) = 0 then
   begin
-    MessageDlg('No source books found in index.sqlite.', mtError, [mbOK], 0);
+    MessageDlg(rsNoSourceBooks, mtError, [mbOK], 0);
     Exit;
   end;
 
@@ -1066,7 +1085,7 @@ begin
   Width := 760;
   Height := 480;
   BorderIcons := [biSystemMenu];
-  Caption := 'Select Source Text';
+  Caption := rsSelectSourceText;
 
   FAll := AAll;
 
@@ -1101,7 +1120,7 @@ begin
   btnOK.Left := 576;
   btnOK.Top := 420;
   btnOK.Width := 80;
-  btnOK.Caption := 'OK';
+  btnOK.Caption := rsOK;
   btnOK.ModalResult := mrNone;
   btnOK.Anchors := [akRight, akBottom];
   btnOK.OnClick := @btnOKClick;
@@ -1111,7 +1130,7 @@ begin
   btnCancel.Left := 668;
   btnCancel.Top := 420;
   btnCancel.Width := 80;
-  btnCancel.Caption := 'Cancel';
+  btnCancel.Caption := rsCancel;
   btnCancel.ModalResult := mrCancel;
   btnCancel.Anchors := [akRight, akBottom];
 end;
@@ -1120,7 +1139,7 @@ procedure TSourcePickerForm.btnOKClick(Sender: TObject);
 begin
   if (lst.ItemIndex < 0) or (lst.ItemIndex >= Length(FAll)) then
   begin
-    MessageDlg('Please select a source text.', mtWarning, [mbOK], 0);
+    MessageDlg(rsPleaseSelectSourceText, mtWarning, [mbOK], 0);
     Exit;
   end;
   ModalResult := mrOK;
@@ -1157,8 +1176,7 @@ begin
   L := ListSourceTextOptionsForBookFromIndex(BookCode);
   if Length(L) = 0 then
   begin
-    MessageDlg('No source texts found for book "' + Trim(BookCode) +
-      '" in index.sqlite. (Excluded: tn, tq)', mtError, [mbOK], 0);
+    MessageDlg(Format(rsNoSourceTextsForBookFmt, [Trim(BookCode)]), mtError, [mbOK], 0);
     Exit;
   end;
 

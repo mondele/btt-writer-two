@@ -14,6 +14,9 @@ uses
   Classes, SysUtils, Forms, Controls, Graphics, ExtCtrls, StdCtrls,
   Globals;
 
+resourcestring
+  rsVersionPrefix = 'Version ';
+
 var
   SplashForm: TForm = nil;
   StatusPanel: TPanel = nil;
@@ -75,7 +78,7 @@ begin
   VersionLabel.Top := 78;
   VersionLabel.Font.Height := -24 div 2;
   VersionLabel.Font.Color := $00444444;
-  VersionLabel.Caption := 'Version ' + APP_VERSION;
+  VersionLabel.Caption := rsVersionPrefix + APP_VERSION;
 
   StatusPanel := TPanel.Create(SplashForm);
   StatusPanel.Parent := SplashForm;
