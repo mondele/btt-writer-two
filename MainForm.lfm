@@ -1,7 +1,7 @@
 object MainWindow: TMainWindow
-  Left = 4859
+  Left = 3155
   Height = 620
-  Top = 336
+  Top = 461
   Width = 980
   Caption = 'BTT-Writer'
   ClientHeight = 620
@@ -9,6 +9,7 @@ object MainWindow: TMainWindow
   Color = clWhite
   Position = poScreenCenter
   LCLVersion = '4.0.0.4'
+  OnActivate = FormActivate
   OnCreate = FormCreate
   OnResize = FormResize
   object HeaderPanel: TPanel

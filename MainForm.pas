@@ -9,7 +9,7 @@ uses
   ExtCtrls, StdCtrls, Buttons, ComCtrls, LCLType,
   fpjson, jsonparser,
   Globals, ProjectScanner, ProjectEditForm, ProjectCreator, ProjectManager,
-  TStudioPackage, SplashScreen;
+  TStudioPackage, SplashScreen, AppSettings, SettingsForm;
 
 resourcestring
   rsProjectDetailsTitle = 'Project Details';
@@ -72,7 +72,9 @@ type
     btnMenu: TSpeedButton;
     StatusBar: TStatusBar;
     procedure btnAddProjectClick(Sender: TObject);
+    procedure btnMenuClick(Sender: TObject);
     procedure btnStartProjectClick(Sender: TObject);
+    procedure FormActivate(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure FormResize(Sender: TObject);
   private
@@ -81,6 +83,7 @@ type
     procedure UpdateLayout;
     procedure EnsureSourcesForProjects;
     procedure ScanAndDisplayProjects;
+    procedure ApplyTheme;
     procedure OpenProjectAtIndex(Idx: Integer);
     function IsInfoIconHit(Index, X, Y: Integer): Boolean;
     procedure ShowProjectDetails(Idx: Integer);
@@ -325,6 +328,7 @@ end;
 
 procedure TMainWindow.FormCreate(Sender: TObject);
 begin
+  InitializeAppSettings;
   UpdateStartupSplash(rsSplashBuildingHome);
   Caption := APP_NAME + ' ' + APP_VERSION;
   lblCurrentUser.Caption := rsCurrentUserRaphael;
@@ -347,12 +351,26 @@ begin
   ProjectListBox.Color := clWhite;
   ProjectListBox.ShowHint := True;
   ProjectListBox.Visible := False;
+  btnMenu.OnClick := @btnMenuClick;
   btnAddProject.OnClick := @btnAddProjectClick;
   btnStartProject.OnClick := @btnStartProjectClick;
 
+  ApplyTheme;
   UpdateStartupSplash(rsSplashLoadingProjects);
   UpdateLayout;
   ScanAndDisplayProjects;
+end;
+
+procedure TMainWindow.btnMenuClick(Sender: TObject);
+var
+  Theme: TAppTheme;
+begin
+  Theme := GetAppTheme;
+  if ShowThemeSettingsDialog(Theme) then
+  begin
+    SetAppTheme(Theme, True);
+    ApplyTheme;
+  end;
 end;
 
 procedure TMainWindow.btnAddProjectClick(Sender: TObject);
@@ -368,6 +386,66 @@ end;
 procedure TMainWindow.FormResize(Sender: TObject);
 begin
   UpdateLayout;
+end;
+
+procedure TMainWindow.FormActivate(Sender: TObject);
+begin
+  ApplyTheme;
+end;
+
+procedure TMainWindow.ApplyTheme;
+var
+  IsDark: Boolean;
+begin
+  IsDark := GetAppTheme = atDark;
+  if IsDark then
+  begin
+    Color := $00222222;
+    HeaderPanel.Color := $002B2B2B;
+    LeftRail.Color := $00303030;
+    ContentPanel.Color := $00262626;
+    ProjectsTablePanel.Color := $002D2D2D;
+    WelcomePanel.Color := $002D2D2D;
+    StatusBar.Color := $002B2B2B;
+    ProjectListBox.Color := $002D2D2D;
+    lblAppName.Font.Color := clWhite;
+    lblCurrentUser.Font.Color := clWhite;
+    btnLogout.Font.Color := clWhite;
+    lblProjectsHeading.Font.Color := clWhite;
+    lblSortBy.Font.Color := $00C8C8C8;
+    lblSortColumnBy.Font.Color := $00C8C8C8;
+    lblProjectColumn.Font.Color := $00C8C8C8;
+    lblTypeColumn.Font.Color := $00C8C8C8;
+    lblLanguageColumn.Font.Color := $00C8C8C8;
+    lblProgressColumn.Font.Color := $00C8C8C8;
+    lblWelcome.Font.Color := clWhite;
+    lblWelcomeMsg.Font.Color := $00D0D0D0;
+    btnMenu.Font.Color := clWhite;
+  end
+  else
+  begin
+    Color := clWhite;
+    HeaderPanel.Color := 5841152;
+    LeftRail.Color := 13848578;
+    ContentPanel.Color := 14474460;
+    ProjectsTablePanel.Color := clWhite;
+    WelcomePanel.Color := clWhite;
+    StatusBar.Color := 16567595;
+    ProjectListBox.Color := clWhite;
+    lblAppName.Font.Color := clWhite;
+    lblCurrentUser.Font.Color := clWhite;
+    btnLogout.Font.Color := clWhite;
+    lblProjectsHeading.Font.Color := 2105376;
+    lblSortBy.Font.Color := 9013641;
+    lblSortColumnBy.Font.Color := 9013641;
+    lblProjectColumn.Font.Color := 9013641;
+    lblTypeColumn.Font.Color := 9013641;
+    lblLanguageColumn.Font.Color := 9013641;
+    lblProgressColumn.Font.Color := 9013641;
+    lblWelcome.Font.Color := clBlack;
+    lblWelcomeMsg.Font.Color := 7303023;
+    btnMenu.Font.Color := clWhite;
+  end;
 end;
 
 procedure TMainWindow.EnsureSourcesForProjects;

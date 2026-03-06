@@ -9,7 +9,7 @@ uses
   Interfaces, Forms,
   Globals, DataPaths, USFMUtils, BibleChunk, BibleChapter, BibleBook,
   ResourceContainer, ProjectManager, ProjectScanner,
-  MainForm, ProjectEditForm, SplashScreen;
+  MainForm, ProjectEditForm, SplashScreen, AppSettings;
 
 resourcestring
   rsSplashInitializing = 'Initializing interface...';
@@ -20,6 +20,7 @@ resourcestring
 begin
   Application.Scaled := True;
   Application.Initialize;
+  InitializeAppSettings;
   ShowStartupSplash;
   UpdateStartupSplash(rsSplashInitializing);
   Application.CreateForm(TMainWindow, MainWindow);

@@ -46,6 +46,7 @@ type
     { Source info from manifest }
     function GetSourceLanguageCode: string;
     function GetSourceResourceType: string;
+    function GetTargetLanguageDirection: string;
 
     property ProjectDir: string read FProjectDir;
     property TargetLanguageCode: string read FTargetLanguageCode;
@@ -310,6 +311,18 @@ begin
   Arr := TJSONArray(Node);
   if (Arr.Count > 0) and (Arr.Items[0] is TJSONObject) then
     Result := TJSONObject(Arr.Items[0]).Get('resource_id', '');
+end;
+
+function TProject.GetTargetLanguageDirection: string;
+var
+  Node: TJSONData;
+begin
+  Result := 'ltr';
+  if FManifest = nil then
+    Exit;
+  Node := FManifest.FindPath('target_language.direction');
+  if (Node <> nil) and (Trim(Node.AsString) <> '') then
+    Result := LowerCase(Trim(Node.AsString));
 end;
 
 end.

@@ -8,7 +8,8 @@ uses
   Classes, SysUtils, Forms, Controls, Graphics, Dialogs,
   ExtCtrls, StdCtrls, Buttons,
   ProjectManager, ResourceContainer, ProjectScanner,
-  BibleBook, BibleChapter, BibleChunk, USFMUtils, DataPaths, ProjectCreator;
+  BibleBook, BibleChapter, BibleChunk, USFMUtils, DataPaths, ProjectCreator,
+  AppSettings, SettingsForm;
 
 resourcestring
   rsErrorOpeningChapterPrefix = 'Error opening chapter: ';
@@ -107,6 +108,8 @@ type
     AutoSaveTimer: TTimer;
     procedure FormCreate(Sender: TObject);
     procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
+    procedure FormResize(Sender: TObject);
+    procedure btnMenuClick(Sender: TObject);
     procedure btnBackClick(Sender: TObject);
     procedure btnPrevChapterClick(Sender: TObject);
     procedure btnNextChapterClick(Sender: TObject);
@@ -125,6 +128,7 @@ type
     FSyncingScroll: Boolean;
     FSelectedChunkIndex: Integer;
     FActiveResourceTab: TResourceTab;
+    FLayoutDirection: string;
 
     procedure ClearChunkPanels;
     procedure LoadChapter(AIndex: Integer);
@@ -149,6 +153,8 @@ type
       const ResourceDir: string; OutList: TStringList);
     procedure CollectWordsResources(const ChapterID: string; ChunkStart, ChunkEnd: Integer;
       OutList: TStringList);
+    procedure ApplyOrientationLayout(const Direction: string);
+    procedure ApplyTheme;
   public
     procedure OpenProject(const APath: string; const ASummary: TProjectSummary);
   end;
@@ -600,6 +606,8 @@ begin
   FSyncingScroll := False;
   FSelectedChunkIndex := -1;
   FActiveResourceTab := rtNotes;
+  FLayoutDirection := 'ltr';
+  btnMenu.OnClick := @btnMenuClick;
 
   SourceScrollBox.VertScrollBar.Smooth := True;
   TransScrollBox.VertScrollBar.Smooth := True;
@@ -614,6 +622,25 @@ begin
   FScrollSyncTimer.Interval := 30;
   FScrollSyncTimer.OnTimer := @ScrollSyncTimerFire;
   FScrollSyncTimer.Enabled := True;
+  ApplyTheme;
+  ApplyOrientationLayout(FLayoutDirection);
+end;
+
+procedure TProjectEditWindow.FormResize(Sender: TObject);
+begin
+  ApplyOrientationLayout(FLayoutDirection);
+end;
+
+procedure TProjectEditWindow.btnMenuClick(Sender: TObject);
+var
+  Theme: TAppTheme;
+begin
+  Theme := GetAppTheme;
+  if ShowThemeSettingsDialog(Theme) then
+  begin
+    SetAppTheme(Theme, True);
+    ApplyTheme;
+  end;
 end;
 
 procedure TProjectEditWindow.FormClose(Sender: TObject; var CloseAction: TCloseAction);
@@ -789,7 +816,7 @@ procedure TProjectEditWindow.OpenProject(const APath: string;
   const ASummary: TProjectSummary);
 var
   SourceOpt: TSourceTextOption;
-  SourceBaseDir, SourceErr, SourceResourceID: string;
+  SourceBaseDir, SourceErr, SourceResourceID, Direction: string;
 begin
   try
     FProjectPath := APath;
@@ -799,6 +826,9 @@ begin
     SourceResourceID := FProject.GetSourceResourceType;
     if SourceResourceID = '' then
       SourceResourceID := 'ulb';
+    Direction := FProject.GetTargetLanguageDirection;
+    FLayoutDirection := Direction;
+    ApplyOrientationLayout(FLayoutDirection);
 
     SourceOpt.SourceDir := '';
     SourceOpt.SourceLangCode := FProject.GetSourceLanguageCode;
@@ -865,6 +895,93 @@ begin
       raise Exception.Create(rsUnableToOpenProjectPrefix + ASummary.BookName +
         rsUnableToOpenProjectMid + E.Message);
     end;
+  end;
+end;
+
+procedure TProjectEditWindow.ApplyOrientationLayout(const Direction: string);
+var
+  IsRTL: Boolean;
+begin
+  IsRTL := SameText(Trim(Direction), 'rtl');
+
+  if IsRTL then
+  begin
+    BiDiMode := bdRightToLeft;
+    LeftRail.Align := alRight;
+    SplitPanel.Align := alClient;
+
+    { Mirror inner panes so source stays beside sidebar (on the right). }
+    ResourcePanel.Align := alLeft;
+    Splitter2.Align := alLeft;
+    SourcePanel.Align := alRight;
+    Splitter1.Align := alRight;
+    TransPanel.Align := alClient;
+  end
+  else
+  begin
+    BiDiMode := bdLeftToRight;
+    LeftRail.Align := alLeft;
+    SplitPanel.Align := alClient;
+
+    { LTR defaults: source on left, resources on right. }
+    SourcePanel.Align := alLeft;
+    Splitter1.Align := alLeft;
+    ResourcePanel.Align := alRight;
+    Splitter2.Align := alRight;
+    TransPanel.Align := alClient;
+  end;
+end;
+
+procedure TProjectEditWindow.ApplyTheme;
+var
+  IsDark: Boolean;
+begin
+  IsDark := GetAppTheme = atDark;
+  if IsDark then
+  begin
+    Color := $00222222;
+    TopPanel.Color := $002B2B2B;
+    StatusPanel.Color := $002B2B2B;
+    LeftRail.Color := $00303030;
+    SplitPanel.Color := $00262626;
+    SourcePanel.Color := $002A2A2A;
+    TransPanel.Color := $002A2A2A;
+    ResourcePanel.Color := $002A2A2A;
+    ResourceTabsPanel.Color := $00333333;
+    ResourceMemo.Color := $00252525;
+    ResourceMemo.Font.Color := $00E0E0E0;
+    SourceLangHeader.Color := $00333333;
+    SourceLangHeader.Font.Color := $00D0D0D0;
+    lblProjectTitle.Font.Color := clWhite;
+    lblChapterNav.Font.Color := clWhite;
+    lblChapterNum.Font.Color := clWhite;
+    lblSourceHeader.Font.Color := $00D0D0D0;
+    lblTransHeader.Font.Color := $00D0D0D0;
+    lblStatus.Font.Color := clWhite;
+    btnMenu.Font.Color := clWhite;
+  end
+  else
+  begin
+    Color := clWhite;
+    TopPanel.Color := 8991488;
+    StatusPanel.Color := 8991488;
+    LeftRail.Color := 13848578;
+    SplitPanel.Color := clBtnFace;
+    SourcePanel.Color := 15263976;
+    TransPanel.Color := 15395562;
+    ResourcePanel.Color := 15263976;
+    ResourceTabsPanel.Color := clWhite;
+    ResourceMemo.Color := clWhite;
+    ResourceMemo.Font.Color := 4492305;
+    SourceLangHeader.Color := 15921906;
+    SourceLangHeader.Font.Color := 7303023;
+    lblProjectTitle.Font.Color := clWhite;
+    lblChapterNav.Font.Color := clWhite;
+    lblChapterNum.Font.Color := clWhite;
+    lblSourceHeader.Font.Color := clBlack;
+    lblTransHeader.Font.Color := clBlack;
+    lblStatus.Font.Color := clWhite;
+    btnMenu.Font.Color := clWhite;
   end;
 end;
 

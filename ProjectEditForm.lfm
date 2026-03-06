@@ -1,7 +1,7 @@
 object ProjectEditWindow: TProjectEditWindow
-  Left = 331
+  Left = 2376
   Height = 700
-  Top = 135
+  Top = 447
   Width = 1100
   Caption = 'Project Editor'
   ClientHeight = 700
@@ -11,6 +11,7 @@ object ProjectEditWindow: TProjectEditWindow
   LCLVersion = '4.0.0.4'
   OnClose = FormClose
   OnCreate = FormCreate
+  OnResize = FormResize
   object TopPanel: TPanel
     Left = 0
     Height = 45
