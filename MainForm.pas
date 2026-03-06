@@ -712,6 +712,7 @@ var
   SweepAngle: Double;
   InfoCenterX, InfoCenterY, InfoRadius: Integer;
   ProgressBlue: TColor;
+  ProjectTextColor, MetaTextColor: TColor;
 begin
   if (Index < 0) or (Index >= Length(FProjects)) then
     Exit;
@@ -760,18 +761,30 @@ begin
   end;
 
   { Project name }
+  if S.HasIssues then
+  begin
+    ProjectTextColor := clRed;
+    MetaTextColor := clRed;
+  end
+  else
+  begin
+    ProjectTextColor := $00202020;
+    MetaTextColor := $00858585;
+  end;
+
   Cvs.Font.Style := [];
   Cvs.Font.Height := -15;
-  Cvs.Font.Color := $00202020;
+  Cvs.Font.Color := ProjectTextColor;
   Cvs.TextOut(ProjectX, RowTop + 20, S.BookName);
 
   { Type }
   Cvs.Font.Style := [];
   Cvs.Font.Height := -12;
-  Cvs.Font.Color := $00858585;
+  Cvs.Font.Color := MetaTextColor;
   Cvs.TextOut(TypeX, RowTop + 23, rsTypeTextPrefix + S.ResourceType);
 
   { Language }
+  Cvs.Font.Color := MetaTextColor;
   Cvs.TextOut(LanguageX, RowTop + 23, S.TargetLangName);
 
   { Progress }
