@@ -9,7 +9,7 @@ uses
   ExtCtrls, StdCtrls, Buttons, ComCtrls, LCLType,
   fpjson, jsonparser,
   Globals, ProjectScanner, ProjectEditForm, ProjectCreator, ProjectManager,
-  TStudioPackage, SplashScreen, AppSettings, SettingsForm, ThemePalette;
+  TStudioPackage, SplashScreen, AppSettings, SettingsForm, ThemePalette, UIFonts;
 
 resourcestring
   rsProjectDetailsTitle = 'Project Details';
@@ -331,6 +331,7 @@ procedure TMainWindow.FormCreate(Sender: TObject);
 begin
   InitializeAppSettings;
   FFirstLoadDone := False;
+  ApplyFontRecursive(Self, 'Noto Sans');
   UpdateStartupSplash(rsSplashBuildingHome);
   Caption := APP_NAME + ' ' + APP_VERSION;
   lblCurrentUser.Caption := rsCurrentUserRaphael;
@@ -411,6 +412,7 @@ begin
     ProjectsTablePanel.Color := P.PanelBg;
     WelcomePanel.Color := P.PanelBg;
     StatusBar.Color := P.StatusBg;
+    StatusBar.Font.Color := P.HeaderText;
     ProjectListBox.Color := P.PanelBg;
     lblAppName.Font.Color := P.HeaderText;
     lblCurrentUser.Font.Color := P.HeaderText;
@@ -438,6 +440,7 @@ begin
     ProjectsTablePanel.Color := P.PanelBg;
     WelcomePanel.Color := P.PanelBg;
     StatusBar.Color := P.StatusBg;
+    StatusBar.Font.Color := clWhite;
     ProjectListBox.Color := P.PanelBg;
     lblAppName.Font.Color := P.HeaderText;
     lblCurrentUser.Font.Color := P.HeaderText;

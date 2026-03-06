@@ -9,7 +9,7 @@ uses
   ExtCtrls, StdCtrls, Buttons,
   ProjectManager, ResourceContainer, ProjectScanner,
   BibleBook, BibleChapter, BibleChunk, USFMUtils, DataPaths, ProjectCreator,
-  AppSettings, SettingsForm, ThemePalette;
+  AppSettings, SettingsForm, ThemePalette, UIFonts;
 
 resourcestring
   rsErrorOpeningChapterPrefix = 'Error opening chapter: ';
@@ -231,6 +231,7 @@ begin
   FBadgeColor := $D9904A;  { blue-ish }
   FText := '';
   FRawText := '';
+  Font.Name := 'Roboto';
   Color := clWhite;
 end;
 
@@ -607,6 +608,7 @@ begin
   FSelectedChunkIndex := -1;
   FActiveResourceTab := rtNotes;
   FLayoutDirection := 'ltr';
+  ApplyFontRecursive(Self, 'Noto Sans');
   btnMenu.OnClick := @btnMenuClick;
 
   SourceScrollBox.VertScrollBar.Smooth := True;
@@ -1641,6 +1643,7 @@ begin
   FSourceDisplay.Width := ASourceParent.ClientWidth - 16;
   FSourceDisplay.Anchors := [akTop, akLeft, akRight];
   FSourceDisplay.Color := clWhite;
+  FSourceDisplay.Font.Name := 'Roboto';
   FSourceDisplay.Font.Height := -13;
   FSourceDisplay.BadgeColor := $00B5652D;
   FSourceDisplay.Text := ASourceText;
@@ -1671,6 +1674,7 @@ begin
   FTransDisplay.Width := ATransParent.ClientWidth - 16;
   FTransDisplay.Anchors := [akTop, akLeft, akRight];
   FTransDisplay.Color := clWhite;
+  FTransDisplay.Font.Name := 'Roboto';
   FTransDisplay.Font.Height := -13;
   FTransDisplay.BadgeColor := $009A8A00;
   if ATransText <> '' then
@@ -1710,6 +1714,7 @@ begin
   FTransMemo.Height := PanelHeight - BodyTop - FooterHeight - 6;
   FTransMemo.Anchors := [akTop, akLeft, akRight, akBottom];
   FTransMemo.Text := ATransText;
+  FTransMemo.Font.Name := 'Roboto';
   FTransMemo.Font.Height := -13;
   FTransMemo.ScrollBars := ssAutoVertical;
   FTransMemo.Visible := False;

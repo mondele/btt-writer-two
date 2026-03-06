@@ -293,9 +293,10 @@ object MainWindow: TMainWindow
   end
   object StatusBar: TStatusBar
     Left = 0
-    Height = 18
+    Height = 30
     Top = 602
     Width = 980
+    Constraints.MinHeight = 30
     Color = 8991488
     Font.Color = clWhite
     Panels = <    

@@ -37,6 +37,7 @@ begin
   SplashForm.BorderStyle := bsNone;
   SplashForm.BorderIcons := [];
   SplashForm.Position := poScreenCenter;
+  SplashForm.Font.Name := 'Noto Sans';
   SplashForm.Color := $00EDEDED;
   SplashForm.ClientWidth := 420;
   SplashForm.ClientHeight := 170;
@@ -61,6 +62,7 @@ begin
   LogoGlyph.Layout := tlCenter;
   LogoGlyph.Font.Height := -28;
   LogoGlyph.Font.Style := [fsBold];
+  LogoGlyph.Font.Name := 'Noto Sans';
   LogoGlyph.Font.Color := $00AA6A00;
   LogoGlyph.Caption := 'B';
 
@@ -69,6 +71,7 @@ begin
   TitleLabel.Left := 140;
   TitleLabel.Top := 42;
   TitleLabel.Font.Height := -48 div 2;
+  TitleLabel.Font.Name := 'Noto Sans';
   TitleLabel.Font.Color := $00202020;
   TitleLabel.Caption := APP_NAME;
 
@@ -77,6 +80,7 @@ begin
   VersionLabel.Left := 140;
   VersionLabel.Top := 78;
   VersionLabel.Font.Height := -24 div 2;
+  VersionLabel.Font.Name := 'Noto Sans';
   VersionLabel.Font.Color := $00444444;
   VersionLabel.Caption := rsVersionPrefix + APP_VERSION;
 
@@ -92,6 +96,7 @@ begin
   StatusLabel.Left := 16;
   StatusLabel.Top := 6;
   StatusLabel.Font.Height := -14;
+  StatusLabel.Font.Name := 'Noto Sans';
   StatusLabel.Font.Color := clWhite;
   StatusLabel.Caption := '';
 

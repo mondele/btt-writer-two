@@ -98,10 +98,11 @@ object ProjectEditWindow: TProjectEditWindow
   end
   object StatusPanel: TPanel
     Left = 0
-    Height = 25
+    Height = 30
     Top = 675
     Width = 1100
     Align = alBottom
+    Constraints.MinHeight = 30
     BevelOuter = bvNone
     ClientHeight = 25
     ClientWidth = 1100

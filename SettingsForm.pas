@@ -35,6 +35,7 @@ begin
     F.Position := poScreenCenter;
     F.BorderIcons := [biSystemMenu];
     F.Caption := rsSettingsCaption;
+    F.Font.Name := 'Noto Sans';
     F.Width := 320;
     F.Height := 150;
 
