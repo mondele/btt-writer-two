@@ -80,6 +80,7 @@ type
   private
     ProjectListBox: TListBox;
     FProjects: TProjectSummaryList;
+    FFirstLoadDone: Boolean;
     procedure UpdateLayout;
     procedure EnsureSourcesForProjects;
     procedure ScanAndDisplayProjects;
@@ -329,6 +330,7 @@ end;
 procedure TMainWindow.FormCreate(Sender: TObject);
 begin
   InitializeAppSettings;
+  FFirstLoadDone := False;
   UpdateStartupSplash(rsSplashBuildingHome);
   Caption := APP_NAME + ' ' + APP_VERSION;
   lblCurrentUser.Caption := rsCurrentUserRaphael;
@@ -539,6 +541,12 @@ begin
         [Length(FProjects), IssueCount])
     else
       StatusBar.Panels[0].Text := Format(rsProjectsFoundFmt, [Length(FProjects)]);
+  end;
+
+  if not FFirstLoadDone then
+  begin
+    FFirstLoadDone := True;
+    HideStartupSplash;
   end;
 end;
 

@@ -13,7 +13,6 @@ uses
 
 resourcestring
   rsSplashInitializing = 'Initializing interface...';
-  rsSplashStartupComplete = 'Startup complete';
 
 {$R *.res}
 
@@ -24,7 +23,5 @@ begin
   ShowStartupSplash;
   UpdateStartupSplash(rsSplashInitializing);
   Application.CreateForm(TMainWindow, MainWindow);
-  UpdateStartupSplash(rsSplashStartupComplete);
-  HideStartupSplash;
   Application.Run;
 end.
