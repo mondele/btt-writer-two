@@ -255,6 +255,8 @@ begin
         Summary.GitValid := IsGitRepoValid(BasePath + SearchRec.Name);
 
         ReadManifestSummary(BasePath + SearchRec.Name, Summary);
+        if Trim(Summary.BookName) = '' then
+          Summary.BookName := Summary.DirName;
         Summary.CanonicalBook := IsSupportedProject(Summary);
 
         Summary.IssueSummary := '';
