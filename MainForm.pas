@@ -93,6 +93,8 @@ type
       Shift: TShiftState; X, Y: Integer);
     procedure ProjectListBoxMouseMove(Sender: TObject; Shift: TShiftState;
       X, Y: Integer);
+    procedure StatusBarDrawPanel(AStatusBar: TStatusBar; Panel: TStatusPanel;
+      const Rect: TRect);
     procedure ProjectListBoxDrawItem(Control: TWinControl; Index: Integer;
       ARect: TRect; State: TOwnerDrawState);
     procedure StartNewProjectFlow;
@@ -354,6 +356,9 @@ begin
   ProjectListBox.Color := clWhite;
   ProjectListBox.ShowHint := True;
   ProjectListBox.Visible := False;
+  if StatusBar.Panels.Count > 0 then
+    StatusBar.Panels[0].Style := psOwnerDraw;
+  StatusBar.OnDrawPanel := @StatusBarDrawPanel;
   btnMenu.OnClick := @btnMenuClick;
   btnAddProject.OnClick := @btnAddProjectClick;
   btnStartProject.OnClick := @btnStartProjectClick;
@@ -805,6 +810,24 @@ begin
   Cvs.Font.Height := -12;
   Cvs.Font.Color := clWhite;
   Cvs.TextOut(InfoCenterX - 3, InfoCenterY - 7, 'i');
+end;
+
+procedure TMainWindow.StatusBarDrawPanel(AStatusBar: TStatusBar;
+  Panel: TStatusPanel; const Rect: TRect);
+var
+  P: TThemePalette;
+  TextY: Integer;
+begin
+  P := GetThemePalette(GetAppTheme);
+  AStatusBar.Canvas.Brush.Color := AStatusBar.Color;
+  AStatusBar.Canvas.FillRect(Rect);
+  AStatusBar.Canvas.Font.Assign(AStatusBar.Font);
+  if GetAppTheme = atLight then
+    AStatusBar.Canvas.Font.Color := clWhite
+  else
+    AStatusBar.Canvas.Font.Color := P.HeaderText;
+  TextY := Rect.Top + ((Rect.Bottom - Rect.Top - AStatusBar.Canvas.TextHeight(Panel.Text)) div 2);
+  AStatusBar.Canvas.TextOut(Rect.Left + 8, TextY, Panel.Text);
 end;
 
 end.
