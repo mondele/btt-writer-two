@@ -927,13 +927,7 @@ begin
   Cvs.Font.Style := [];
   Cvs.Font.Height := -15;
   Cvs.Font.Color := ProjectTextColor;
-  DisplayName := Trim(S.BookName);
-  if DisplayName = '' then
-    DisplayName := Trim(S.DirName);
-  if DisplayName = '' then
-    DisplayName := ExtractFileName(ExcludeTrailingPathDelimiter(S.FullPath));
-  if DisplayName = '' then
-    DisplayName := rsTypeUnknown;
+  DisplayName := ProjectDisplayName(S);
   Cvs.TextOut(ProjectX, RowTop + 20, DisplayName);
 
   { Type }
