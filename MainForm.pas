@@ -44,6 +44,7 @@ resourcestring
   rsHintDetails = 'details';
   rsProjectCreatedPrefix = 'Project created: ';
   rsTypeTextPrefix = 'Text ';
+  rsTypeUnknown = 'Unknown';
 
 type
   TMainWindow = class(TForm)
@@ -719,6 +720,7 @@ var
   InfoCenterX, InfoCenterY, InfoRadius: Integer;
   ProgressBlue: TColor;
   ProjectTextColor, MetaTextColor: TColor;
+  TypeLabel: string;
 begin
   if (Index < 0) or (Index >= Length(FProjects)) then
     Exit;
@@ -791,7 +793,11 @@ begin
   Cvs.Font.Style := [];
   Cvs.Font.Height := -12;
   Cvs.Font.Color := MetaTextColor;
-  Cvs.TextOut(TypeX, RowTop + 23, rsTypeTextPrefix + S.ResourceType);
+  if Trim(S.ResourceType) = '' then
+    TypeLabel := rsTypeUnknown
+  else
+    TypeLabel := rsTypeTextPrefix + S.ResourceType;
+  Cvs.TextOut(TypeX, RowTop + 23, TypeLabel);
 
   { Language }
   Cvs.Font.Color := MetaTextColor;
