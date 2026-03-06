@@ -517,6 +517,7 @@ end;
 procedure TMainWindow.ScanAndDisplayProjects;
 var
   I, IssueCount: Integer;
+  DisplayName: string;
 begin
   UpdateStartupSplash(rsSplashScanningFolders);
   FProjects := ScanProjects;
@@ -552,10 +553,14 @@ begin
 
     for I := 0 to Length(FProjects) - 1 do
     begin
-      if Trim(FProjects[I].BookName) <> '' then
-        ProjectListBox.Items.Add(FProjects[I].BookName)
-      else
-        ProjectListBox.Items.Add(FProjects[I].DirName);
+      DisplayName := Trim(FProjects[I].BookName);
+      if DisplayName = '' then
+        DisplayName := Trim(FProjects[I].DirName);
+      if DisplayName = '' then
+        DisplayName := ExtractFileName(ExcludeTrailingPathDelimiter(FProjects[I].FullPath));
+      if DisplayName = '' then
+        DisplayName := rsTypeUnknown;
+      ProjectListBox.Items.Add(DisplayName);
     end;
 
     if IssueCount > 0 then
@@ -786,7 +791,11 @@ begin
   Cvs.Font.Color := ProjectTextColor;
   DisplayName := Trim(S.BookName);
   if DisplayName = '' then
-    DisplayName := S.DirName;
+    DisplayName := Trim(S.DirName);
+  if DisplayName = '' then
+    DisplayName := ExtractFileName(ExcludeTrailingPathDelimiter(S.FullPath));
+  if DisplayName = '' then
+    DisplayName := rsTypeUnknown;
   Cvs.TextOut(ProjectX, RowTop + 20, DisplayName);
 
   { Type }
