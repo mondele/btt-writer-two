@@ -6,7 +6,7 @@ interface
 
 uses
   Classes, SysUtils, Forms, Controls, Graphics, Dialogs, Math,
-  ExtCtrls, StdCtrls, Buttons, ComCtrls, LCLType,
+  ExtCtrls, StdCtrls, Buttons, ComCtrls, Grids, LCLType,
   fpjson, jsonparser,
   Globals, ProjectScanner, ProjectEditForm, ProjectCreator, ProjectManager,
   TStudioPackage, SplashScreen, AppSettings, SettingsForm, ThemePalette, UIFonts;
@@ -79,7 +79,7 @@ type
     procedure FormCreate(Sender: TObject);
     procedure FormResize(Sender: TObject);
   private
-    ProjectListBox: TListBox;
+    ProjectGrid: TStringGrid;
     FProjects: TProjectSummaryList;
     FFirstLoadDone: Boolean;
     procedure UpdateLayout;
@@ -92,15 +92,14 @@ type
     procedure OpenProjectAtIndex(Idx: Integer);
     function IsInfoIconHit(Index, X, Y: Integer): Boolean;
     procedure ShowProjectDetails(Idx: Integer);
-    procedure ProjectListBoxClick(Sender: TObject);
-    procedure ProjectListBoxMouseDown(Sender: TObject; Button: TMouseButton;
+    procedure ProjectGridMouseDown(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
-    procedure ProjectListBoxMouseMove(Sender: TObject; Shift: TShiftState;
+    procedure ProjectGridMouseMove(Sender: TObject; Shift: TShiftState;
       X, Y: Integer);
     procedure StatusBarDrawPanel(AStatusBar: TStatusBar; Panel: TStatusPanel;
       const Rect: TRect);
-    procedure ProjectListBoxDrawItem(Control: TWinControl; Index: Integer;
-      ARect: TRect; State: TOwnerDrawState);
+    procedure ProjectGridDrawCell(Sender: TObject; aCol, aRow: Integer;
+      aRect: TRect; aState: TGridDrawState);
     procedure StartNewProjectFlow;
   public
   end;
@@ -453,6 +452,8 @@ begin
   lblProgressColumn.Left := ProjectsTablePanel.Left + ProjectsTablePanel.Width - 116;
 
   WelcomePanel.Left := (ContentPanel.ClientWidth - WelcomePanel.Width) div 2;
+  if ProjectGrid.ColCount > 0 then
+    ProjectGrid.ColWidths[0] := Max(60, ProjectsTablePanel.ClientWidth - 2);
 end;
 
 procedure TMainWindow.FormCreate(Sender: TObject);
@@ -465,23 +466,17 @@ begin
   lblCurrentUser.Caption := rsCurrentUserRaphael;
   btnLogout.Caption := rsLogout;
 
-  { Create project list box }
-  ProjectListBox := TListBox.Create(Self);
-  ProjectListBox.Parent := ProjectsTablePanel;
-  ProjectListBox.Left := 0;
-  ProjectListBox.Top := 30;
-  ProjectListBox.Width := ProjectsTablePanel.Width;
-  ProjectListBox.Height := ProjectsTablePanel.Height - 30;
-  ProjectListBox.Anchors := [akTop, akLeft, akRight, akBottom];
-  ProjectListBox.Style := lbOwnerDrawFixed;
-  ProjectListBox.ItemHeight := 62;
-  ProjectListBox.OnMouseDown := @ProjectListBoxMouseDown;
-  ProjectListBox.OnMouseMove := @ProjectListBoxMouseMove;
-  ProjectListBox.OnDrawItem := @ProjectListBoxDrawItem;
-  ProjectListBox.BorderStyle := bsNone;
-  ProjectListBox.Color := clWhite;
-  ProjectListBox.ShowHint := True;
-  ProjectListBox.Visible := False;
+  ProjectGrid.DefaultDrawing := False;
+  ProjectGrid.DefaultRowHeight := 62;
+  ProjectGrid.FixedRows := 0;
+  ProjectGrid.FixedCols := 0;
+  ProjectGrid.ColCount := 1;
+  ProjectGrid.Options := ProjectGrid.Options - [goRangeSelect] + [goRowSelect];
+  ProjectGrid.OnMouseDown := @ProjectGridMouseDown;
+  ProjectGrid.OnMouseMove := @ProjectGridMouseMove;
+  ProjectGrid.OnDrawCell := @ProjectGridDrawCell;
+  ProjectGrid.ShowHint := True;
+  ProjectGrid.Visible := False;
   if StatusBar.Panels.Count > 0 then
     StatusBar.Panels[0].Style := psOwnerDraw;
   StatusBar.OnDrawPanel := @StatusBarDrawPanel;
@@ -501,7 +496,7 @@ procedure TMainWindow.SortComboChange(Sender: TObject);
 begin
   SortProjects;
   RefreshProjectListUI;
-  ProjectListBox.Invalidate;
+  ProjectGrid.Invalidate;
 end;
 
 procedure TMainWindow.btnMenuClick(Sender: TObject);
@@ -553,7 +548,7 @@ begin
     WelcomePanel.Color := P.PanelBg;
     StatusBar.Color := P.StatusBg;
     StatusBar.Font.Color := P.HeaderText;
-    ProjectListBox.Color := P.PanelBg;
+    ProjectGrid.Color := P.PanelBg;
     lblAppName.Font.Color := P.HeaderText;
     lblCurrentUser.Font.Color := P.HeaderText;
     btnLogout.Font.Color := P.HeaderText;
@@ -581,7 +576,7 @@ begin
     WelcomePanel.Color := P.PanelBg;
     StatusBar.Color := P.StatusBg;
     StatusBar.Font.Color := clWhite;
-    ProjectListBox.Color := P.PanelBg;
+    ProjectGrid.Color := P.PanelBg;
     lblAppName.Font.Color := P.HeaderText;
     lblCurrentUser.Font.Color := P.HeaderText;
     btnLogout.Font.Color := P.HeaderText;
@@ -691,7 +686,7 @@ begin
     lblTypeColumn.Visible := False;
     lblLanguageColumn.Visible := False;
     lblProgressColumn.Visible := False;
-    ProjectListBox.Visible := False;
+    ProjectGrid.Visible := False;
     StatusBar.Panels[0].Text := rsNoProjectsFound;
   end
   else
@@ -702,10 +697,8 @@ begin
     lblTypeColumn.Visible := True;
     lblLanguageColumn.Visible := True;
     lblProgressColumn.Visible := True;
-    ProjectListBox.Visible := True;
-    ProjectListBox.Items.Clear;
-    for I := 0 to Length(FProjects) - 1 do
-      ProjectListBox.Items.Add(ProjectDisplayName(FProjects[I]));
+    ProjectGrid.Visible := True;
+    ProjectGrid.RowCount := Max(Length(FProjects), 1);
 
     if IssueCount > 0 then
       StatusBar.Panels[0].Text := Format(rsProjectsFoundWithIssuesFmt,
@@ -713,11 +706,6 @@ begin
     else
       StatusBar.Panels[0].Text := Format(rsProjectsFoundFmt, [Length(FProjects)]);
   end;
-end;
-
-procedure TMainWindow.ProjectListBoxClick(Sender: TObject);
-begin
-  OpenProjectAtIndex(ProjectListBox.ItemIndex);
 end;
 
 procedure TMainWindow.OpenProjectAtIndex(Idx: Integer);
@@ -761,9 +749,9 @@ var
   IconX, IconY, DX, DY: Integer;
 begin
   Result := False;
-  if (Index < 0) or (Index >= ProjectListBox.Items.Count) then
+  if (Index < 0) or (Index >= Length(FProjects)) then
     Exit;
-  ItemRect := ProjectListBox.ItemRect(Index);
+  ItemRect := ProjectGrid.CellRect(0, Index);
   if (X < ItemRect.Left) or (X >= ItemRect.Right) or
      (Y < ItemRect.Top) or (Y >= ItemRect.Bottom) then
     Exit;
@@ -789,36 +777,36 @@ begin
   ScanAndDisplayProjects;
 end;
 
-procedure TMainWindow.ProjectListBoxMouseDown(Sender: TObject;
+procedure TMainWindow.ProjectGridMouseDown(Sender: TObject;
   Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
 var
-  Idx: Integer;
+  Col, Row: Integer;
 begin
   if Button <> mbLeft then
     Exit;
-  Idx := ProjectListBox.ItemAtPos(Point(X, Y), True);
-  if (Idx < 0) or (Idx >= Length(FProjects)) then
+  ProjectGrid.MouseToCell(X, Y, Col, Row);
+  if (Row < 0) or (Row >= Length(FProjects)) then
     Exit;
-  ProjectListBox.ItemIndex := Idx;
-  if IsInfoIconHit(Idx, X, Y) then
-    ShowProjectDetails(Idx)
+  ProjectGrid.Row := Row;
+  if IsInfoIconHit(Row, X, Y) then
+    ShowProjectDetails(Row)
   else
-    OpenProjectAtIndex(Idx);
+    OpenProjectAtIndex(Row);
 end;
 
-procedure TMainWindow.ProjectListBoxMouseMove(Sender: TObject;
+procedure TMainWindow.ProjectGridMouseMove(Sender: TObject;
   Shift: TShiftState; X, Y: Integer);
 var
-  Idx: Integer;
+  Col, Row: Integer;
   NewHint: string;
 begin
-  Idx := ProjectListBox.ItemAtPos(Point(X, Y), True);
-  if (Idx >= 0) and IsInfoIconHit(Idx, X, Y) then
+  ProjectGrid.MouseToCell(X, Y, Col, Row);
+  if (Row >= 0) and (Row < Length(FProjects)) and IsInfoIconHit(Row, X, Y) then
     NewHint := rsHintDetails
   else
     NewHint := '';
-  if ProjectListBox.Hint <> NewHint then
-    ProjectListBox.Hint := NewHint;
+  if ProjectGrid.Hint <> NewHint then
+    ProjectGrid.Hint := NewHint;
 end;
 
 procedure TMainWindow.StartNewProjectFlow;
@@ -848,8 +836,8 @@ begin
   ScanAndDisplayProjects;
 end;
 
-procedure TMainWindow.ProjectListBoxDrawItem(Control: TWinControl;
-  Index: Integer; ARect: TRect; State: TOwnerDrawState);
+procedure TMainWindow.ProjectGridDrawCell(Sender: TObject; aCol, aRow: Integer;
+  aRect: TRect; aState: TGridDrawState);
 var
   Cvs: TCanvas;
   S: TProjectSummary;
@@ -865,49 +853,51 @@ var
   ProjectTextColor, MetaTextColor: TColor;
   TypeLabel: string;
 begin
-  if (Index < 0) or (Index >= Length(FProjects)) then
+  if aCol <> 0 then
+    Exit;
+  if (aRow < 0) or (aRow >= Length(FProjects)) then
     Exit;
 
-  Cvs := ProjectListBox.Canvas;
-  S := FProjects[Index];
+  Cvs := ProjectGrid.Canvas;
+  S := FProjects[aRow];
   ProgressBlue := $00A7E8;
 
   { Background }
-  if odSelected in State then
+  if (gdSelected in aState) and (ProjectGrid.Row = aRow) then
     Cvs.Brush.Color := $00F2E8DA
-  else if (Index mod 2) = 0 then
+  else if (aRow mod 2) = 0 then
     Cvs.Brush.Color := clWhite
   else
     Cvs.Brush.Color := $00FCFCFC;
 
-  Cvs.FillRect(ARect);
+  Cvs.FillRect(aRect);
 
   { Draw separator line }
   Cvs.Pen.Color := $00E6E6E6;
-  Cvs.Line(ARect.Left, ARect.Bottom - 1, ARect.Right, ARect.Bottom - 1);
+  Cvs.Line(aRect.Left, aRect.Bottom - 1, aRect.Right, aRect.Bottom - 1);
 
-  RowTop := ARect.Top;
-  ProjectX := ARect.Left + 60;
-  TypeX := ARect.Left + Round((ARect.Right - ARect.Left) * 0.37);
-  LanguageX := ARect.Left + Round((ARect.Right - ARect.Left) * 0.53);
+  RowTop := aRect.Top;
+  ProjectX := aRect.Left + 60;
+  TypeX := aRect.Left + Round((aRect.Right - aRect.Left) * 0.37);
+  LanguageX := aRect.Left + Round((aRect.Right - aRect.Left) * 0.53);
 
   { Document icon }
   Cvs.Pen.Color := $006E6E6E;
   Cvs.Brush.Color := clWhite;
-  Cvs.Rectangle(ARect.Left + 22, RowTop + 20, ARect.Left + 38, RowTop + 36);
-  Cvs.MoveTo(ARect.Left + 25, RowTop + 24);
-  Cvs.LineTo(ARect.Left + 35, RowTop + 24);
-  Cvs.MoveTo(ARect.Left + 25, RowTop + 28);
-  Cvs.LineTo(ARect.Left + 35, RowTop + 28);
-  Cvs.MoveTo(ARect.Left + 25, RowTop + 32);
-  Cvs.LineTo(ARect.Left + 33, RowTop + 32);
+  Cvs.Rectangle(aRect.Left + 22, RowTop + 20, aRect.Left + 38, RowTop + 36);
+  Cvs.MoveTo(aRect.Left + 25, RowTop + 24);
+  Cvs.LineTo(aRect.Left + 35, RowTop + 24);
+  Cvs.MoveTo(aRect.Left + 25, RowTop + 28);
+  Cvs.LineTo(aRect.Left + 35, RowTop + 28);
+  Cvs.MoveTo(aRect.Left + 25, RowTop + 32);
+  Cvs.LineTo(aRect.Left + 33, RowTop + 32);
 
   { Issue marker }
   if S.HasIssues then
   begin
     Cvs.Pen.Style := psClear;
     Cvs.Brush.Color := clRed;
-    Cvs.Ellipse(ARect.Left + 8, RowTop + 25, ARect.Left + 18, RowTop + 35);
+    Cvs.Ellipse(aRect.Left + 8, RowTop + 25, aRect.Left + 18, RowTop + 35);
     Cvs.Pen.Style := psSolid;
   end;
 
@@ -950,8 +940,8 @@ begin
     ProgressPct := (S.FinishedChunks * 100) div S.TotalChunks
   else
     ProgressPct := 0;
-  PieCenterX := ARect.Right - 100;
-  PieCenterY := RowTop + ((ARect.Bottom - ARect.Top) div 2);
+  PieCenterX := aRect.Right - 100;
+  PieCenterY := RowTop + ((aRect.Bottom - aRect.Top) div 2);
   PieRadius := 15;
 
   Cvs.Pen.Style := psClear;
@@ -971,7 +961,7 @@ begin
   Cvs.Pen.Style := psSolid;
 
   { Info icon }
-  InfoCenterX := ARect.Right - 30;
+  InfoCenterX := aRect.Right - 30;
   InfoCenterY := PieCenterY;
   InfoRadius := 10;
   Cvs.Pen.Color := $00B8B8B8;

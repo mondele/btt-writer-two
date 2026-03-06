@@ -242,6 +242,23 @@ object MainWindow: TMainWindow
       ParentBackground = False
       ParentColor = False
       TabOrder = 2
+      object ProjectGrid: TStringGrid
+        Left = 0
+        Height = 295
+        Top = 0
+        Width = 630
+        Align = alClient
+        BorderStyle = bsNone
+        ColCount = 1
+        DefaultColWidth = 620
+        DefaultDrawing = False
+        DefaultRowHeight = 62
+        FixedCols = 0
+        FixedRows = 0
+        Options = [goFixedVertLine, goFixedHorzLine, goVertLine, goHorzLine, goRangeSelect, goRowSelect]
+        RowCount = 1
+        TabOrder = 0
+      end
     end
     object WelcomePanel: TPanel
       Left = 170
