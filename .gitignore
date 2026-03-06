@@ -26,3 +26,8 @@ bttwriter2
 # OS files
 .DS_Store
 Thumbs.db
+
+# GNU Global tag database files
+GTAGS
+GRTAGS
+GPATH
