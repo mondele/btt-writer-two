@@ -656,14 +656,25 @@ end;
 
 procedure TMainWindow.ClearProjectRows;
 var
-  I: Integer;
+  C: TControl;
 begin
+  if (ProjectScrollBox = nil) or (csDestroying in ProjectScrollBox.ComponentState) then
+    Exit;
+  if (ProjectScrollBox.HandleAllocated = False) and (ProjectScrollBox.ControlCount = 0) then
+    Exit;
+
+  ProjectScrollBox.DisableAlign;
   ProjectScrollBox.DisableAutoSizing;
   try
-    for I := ProjectScrollBox.ControlCount - 1 downto 0 do
-      ProjectScrollBox.Controls[I].Free;
+    while ProjectScrollBox.ControlCount > 0 do
+    begin
+      C := ProjectScrollBox.Controls[ProjectScrollBox.ControlCount - 1];
+      C.Parent := nil;
+      C.Free;
+    end;
   finally
     ProjectScrollBox.EnableAutoSizing;
+    ProjectScrollBox.EnableAlign;
   end;
 end;
 
@@ -799,6 +810,9 @@ procedure TMainWindow.RefreshProjectListUI;
 var
   I, IssueCount: Integer;
 begin
+  if (ProjectScrollBox = nil) or (csDestroying in ProjectScrollBox.ComponentState) then
+    Exit;
+
   IssueCount := 0;
   for I := 0 to Length(FProjects) - 1 do
     if FProjects[I].HasIssues then
@@ -865,7 +879,12 @@ begin
   end;
 
   { Refresh project list after returning }
-  ScanAndDisplayProjects;
+  try
+    ScanAndDisplayProjects;
+  except
+    on E: Exception do
+      ShowMessage(rsProjectOpenSafelyAbortedPrefix + E.Message);
+  end;
 end;
 
 procedure TMainWindow.ShowProjectDetails(Idx: Integer);
@@ -880,7 +899,12 @@ begin
   finally
     D.Free;
   end;
-  ScanAndDisplayProjects;
+  try
+    ScanAndDisplayProjects;
+  except
+    on E: Exception do
+      ShowMessage(rsProjectOpenSafelyAbortedPrefix + E.Message);
+  end;
 end;
 
 procedure TMainWindow.ProjectRowClick(Sender: TObject);
