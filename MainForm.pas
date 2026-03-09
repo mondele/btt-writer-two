@@ -85,6 +85,8 @@ type
     procedure UpdateLayout;
     procedure EnsureSourcesForProjects;
     procedure ScanAndDisplayProjects;
+    procedure QueueProjectRescan;
+    procedure AsyncProjectRescan(Data: PtrInt);
     procedure RefreshProjectListUI;
     procedure ClearProjectRows;
     procedure CreateProjectRow(const S: TProjectSummary; Idx: Integer);
@@ -646,6 +648,16 @@ begin
   end;
 end;
 
+procedure TMainWindow.AsyncProjectRescan(Data: PtrInt);
+begin
+  ScanAndDisplayProjects;
+end;
+
+procedure TMainWindow.QueueProjectRescan;
+begin
+  Application.QueueAsyncCall(@AsyncProjectRescan, 0);
+end;
+
 procedure TMainWindow.SortProjects;
 begin
   if Length(FProjects) <= 1 then
@@ -878,13 +890,8 @@ begin
       ShowMessage(rsProjectOpenSafelyAbortedPrefix + E.Message);
   end;
 
-  { Refresh project list after returning }
-  try
-    ScanAndDisplayProjects;
-  except
-    on E: Exception do
-      ShowMessage(rsProjectOpenSafelyAbortedPrefix + E.Message);
-  end;
+  { Refresh project list after returning, deferred until current click stack unwinds }
+  QueueProjectRescan;
 end;
 
 procedure TMainWindow.ShowProjectDetails(Idx: Integer);
@@ -899,12 +906,7 @@ begin
   finally
     D.Free;
   end;
-  try
-    ScanAndDisplayProjects;
-  except
-    on E: Exception do
-      ShowMessage(rsProjectOpenSafelyAbortedPrefix + E.Message);
-  end;
+  QueueProjectRescan;
 end;
 
 procedure TMainWindow.ProjectRowClick(Sender: TObject);
