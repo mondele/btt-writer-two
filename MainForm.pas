@@ -6,7 +6,7 @@ interface
 
 uses
   Classes, SysUtils, Forms, Controls, Graphics, Dialogs, Math,
-  ExtCtrls, StdCtrls, Buttons, ComCtrls, Grids, LCLType,
+  ExtCtrls, StdCtrls, Buttons, ComCtrls, LCLType,
   fpjson, jsonparser,
   Globals, ProjectScanner, ProjectEditForm, ProjectCreator, ProjectManager,
   TStudioPackage, SplashScreen, AppSettings, SettingsForm, ThemePalette, UIFonts;
@@ -65,7 +65,7 @@ type
     ContentPanel: TPanel;
     lblProjectsHeading: TLabel;
     ProjectsTablePanel: TPanel;
-    ProjectGrid: TStringGrid;
+    ProjectScrollBox: TScrollBox;
     WelcomePanel: TPanel;
     lblWelcome: TLabel;
     lblWelcomeMsg: TLabel;
@@ -86,20 +86,18 @@ type
     procedure EnsureSourcesForProjects;
     procedure ScanAndDisplayProjects;
     procedure RefreshProjectListUI;
+    procedure ClearProjectRows;
+    procedure CreateProjectRow(const S: TProjectSummary; Idx: Integer);
     procedure SortProjects;
     procedure SortComboChange(Sender: TObject);
     procedure ApplyTheme;
     procedure OpenProjectAtIndex(Idx: Integer);
-    function IsInfoIconHit(Index, X, Y: Integer): Boolean;
     procedure ShowProjectDetails(Idx: Integer);
-    procedure ProjectGridMouseDown(Sender: TObject; Button: TMouseButton;
-      Shift: TShiftState; X, Y: Integer);
-    procedure ProjectGridMouseMove(Sender: TObject; Shift: TShiftState;
-      X, Y: Integer);
+    procedure ProjectRowClick(Sender: TObject);
+    procedure InfoButtonClick(Sender: TObject);
+    procedure PieChartPaint(Sender: TObject);
     procedure StatusBarDrawPanel(AStatusBar: TStatusBar; Panel: TStatusPanel;
       const Rect: TRect);
-    procedure ProjectGridDrawCell(Sender: TObject; aCol, aRow: Integer;
-      aRect: TRect; aState: TGridDrawState);
     procedure StartNewProjectFlow;
   public
   end;
@@ -452,8 +450,6 @@ begin
   lblProgressColumn.Left := ProjectsTablePanel.Left + ProjectsTablePanel.Width - 116;
 
   WelcomePanel.Left := (ContentPanel.ClientWidth - WelcomePanel.Width) div 2;
-  if ProjectGrid.ColCount > 0 then
-    ProjectGrid.ColWidths[0] := Max(60, ProjectsTablePanel.ClientWidth - 2);
 end;
 
 procedure TMainWindow.FormCreate(Sender: TObject);
@@ -466,17 +462,7 @@ begin
   lblCurrentUser.Caption := rsCurrentUserRaphael;
   btnLogout.Caption := rsLogout;
 
-  ProjectGrid.DefaultDrawing := False;
-  ProjectGrid.DefaultRowHeight := 62;
-  ProjectGrid.FixedRows := 0;
-  ProjectGrid.FixedCols := 0;
-  ProjectGrid.ColCount := 1;
-  ProjectGrid.Options := ProjectGrid.Options - [goRangeSelect] + [goRowSelect];
-  ProjectGrid.OnMouseDown := @ProjectGridMouseDown;
-  ProjectGrid.OnMouseMove := @ProjectGridMouseMove;
-  ProjectGrid.OnDrawCell := @ProjectGridDrawCell;
-  ProjectGrid.ShowHint := True;
-  ProjectGrid.Visible := False;
+  ProjectScrollBox.Visible := False;
   if StatusBar.Panels.Count > 0 then
     StatusBar.Panels[0].Style := psOwnerDraw;
   StatusBar.OnDrawPanel := @StatusBarDrawPanel;
@@ -496,7 +482,6 @@ procedure TMainWindow.SortComboChange(Sender: TObject);
 begin
   SortProjects;
   RefreshProjectListUI;
-  ProjectGrid.Invalidate;
 end;
 
 procedure TMainWindow.btnMenuClick(Sender: TObject);
@@ -548,7 +533,7 @@ begin
     WelcomePanel.Color := P.PanelBg;
     StatusBar.Color := P.StatusBg;
     StatusBar.Font.Color := P.HeaderText;
-    ProjectGrid.Color := P.PanelBg;
+    ProjectScrollBox.Color := P.PanelBg;
     lblAppName.Font.Color := P.HeaderText;
     lblCurrentUser.Font.Color := P.HeaderText;
     btnLogout.Font.Color := P.HeaderText;
@@ -576,7 +561,7 @@ begin
     WelcomePanel.Color := P.PanelBg;
     StatusBar.Color := P.StatusBg;
     StatusBar.Font.Color := clWhite;
-    ProjectGrid.Color := P.PanelBg;
+    ProjectScrollBox.Color := P.PanelBg;
     lblAppName.Font.Color := P.HeaderText;
     lblCurrentUser.Font.Color := P.HeaderText;
     btnLogout.Font.Color := P.HeaderText;
@@ -669,6 +654,147 @@ begin
     cmbSortColumnBy.ItemIndex);
 end;
 
+procedure TMainWindow.ClearProjectRows;
+var
+  I: Integer;
+begin
+  ProjectScrollBox.DisableAutoSizing;
+  try
+    for I := ProjectScrollBox.ControlCount - 1 downto 0 do
+      ProjectScrollBox.Controls[I].Free;
+  finally
+    ProjectScrollBox.EnableAutoSizing;
+  end;
+end;
+
+procedure TMainWindow.CreateProjectRow(const S: TProjectSummary; Idx: Integer);
+const
+  ROW_HEIGHT = 62;
+var
+  RowPanel: TPanel;
+  IssueMarker: TShape;
+  lblName, lblType, lblLang: TLabel;
+  pbPie: TPaintBox;
+  btnInfo: TSpeedButton;
+  TypeLabel: string;
+  RowWidth: Integer;
+begin
+  RowWidth := ProjectScrollBox.ClientWidth;
+
+  RowPanel := TPanel.Create(ProjectScrollBox);
+  RowPanel.Parent := ProjectScrollBox;
+  RowPanel.Height := ROW_HEIGHT;
+  RowPanel.Align := alTop;
+  RowPanel.Top := Idx * ROW_HEIGHT;
+  RowPanel.BevelOuter := bvNone;
+  RowPanel.Tag := Idx;
+  RowPanel.Cursor := crHandPoint;
+  RowPanel.OnClick := @ProjectRowClick;
+  if (Idx mod 2) = 0 then
+    RowPanel.Color := clWhite
+  else
+    RowPanel.Color := $00FCFCFC;
+
+  { Issue marker — small red circle }
+  IssueMarker := TShape.Create(RowPanel);
+  IssueMarker.Parent := RowPanel;
+  IssueMarker.Shape := stCircle;
+  IssueMarker.SetBounds(8, 25, 10, 10);
+  IssueMarker.Brush.Color := clRed;
+  IssueMarker.Pen.Style := psClear;
+  IssueMarker.Visible := S.HasIssues;
+
+  { Project name }
+  lblName := TLabel.Create(RowPanel);
+  lblName.Parent := RowPanel;
+  lblName.Left := 30;
+  lblName.Top := 20;
+  lblName.Font.Height := -15;
+  lblName.Font.Style := [];
+  lblName.Caption := ProjectDisplayName(S);
+  lblName.OnClick := @ProjectRowClick;
+  lblName.Cursor := crHandPoint;
+  lblName.Tag := Idx;
+  if S.HasIssues then
+    lblName.Font.Color := clRed
+  else
+    lblName.Font.Color := $00202020;
+
+  { Type label }
+  lblType := TLabel.Create(RowPanel);
+  lblType.Parent := RowPanel;
+  lblType.Left := Round(RowWidth * 0.37);
+  lblType.Top := 23;
+  lblType.Font.Height := -12;
+  lblType.Cursor := crHandPoint;
+  lblType.OnClick := @ProjectRowClick;
+  lblType.Tag := Idx;
+  if Trim(S.ResourceType) = '' then
+    TypeLabel := rsTypeUnknown
+  else
+    TypeLabel := rsTypeTextPrefix + S.ResourceType;
+  lblType.Caption := TypeLabel;
+  if S.HasIssues then
+    lblType.Font.Color := clRed
+  else
+    lblType.Font.Color := $00858585;
+
+  { Language label }
+  lblLang := TLabel.Create(RowPanel);
+  lblLang.Parent := RowPanel;
+  lblLang.Left := Round(RowWidth * 0.53);
+  lblLang.Top := 23;
+  lblLang.Font.Height := -12;
+  lblLang.Cursor := crHandPoint;
+  lblLang.OnClick := @ProjectRowClick;
+  lblLang.Tag := Idx;
+  lblLang.Caption := S.TargetLangName;
+  if S.HasIssues then
+    lblLang.Font.Color := clRed
+  else
+    lblLang.Font.Color := $00858585;
+
+  { Pie chart progress }
+  pbPie := TPaintBox.Create(RowPanel);
+  pbPie.Parent := RowPanel;
+  pbPie.SetBounds(RowWidth - 140, (ROW_HEIGHT - 30) div 2, 30, 30);
+  pbPie.Tag := ProjectProgressPct(S);
+  pbPie.OnPaint := @PieChartPaint;
+  pbPie.Cursor := crHandPoint;
+
+  { Info button with gray circle background }
+  with TShape.Create(RowPanel) do
+  begin
+    Parent := RowPanel;
+    Shape := stCircle;
+    SetBounds(RowWidth - 52, (ROW_HEIGHT - 24) div 2, 24, 24);
+    Brush.Color := $00B8B8B8;
+    Pen.Style := psClear;
+  end;
+  btnInfo := TSpeedButton.Create(RowPanel);
+  btnInfo.Parent := RowPanel;
+  btnInfo.SetBounds(RowWidth - 52, (ROW_HEIGHT - 24) div 2, 24, 24);
+  btnInfo.Caption := 'i';
+  btnInfo.Flat := True;
+  btnInfo.Font.Height := -12;
+  btnInfo.Font.Color := clWhite;
+  btnInfo.Tag := Idx;
+  btnInfo.OnClick := @InfoButtonClick;
+  btnInfo.Hint := rsHintDetails;
+  btnInfo.ShowHint := True;
+
+  { Bottom separator line }
+  with TShape.Create(RowPanel) do
+  begin
+    Parent := RowPanel;
+    Shape := stRectangle;
+    Align := alBottom;
+    Height := 1;
+    Pen.Style := psClear;
+    Brush.Color := $00E6E6E6;
+  end;
+end;
+
 procedure TMainWindow.RefreshProjectListUI;
 var
   I, IssueCount: Integer;
@@ -686,7 +812,7 @@ begin
     lblTypeColumn.Visible := False;
     lblLanguageColumn.Visible := False;
     lblProgressColumn.Visible := False;
-    ProjectGrid.Visible := False;
+    ProjectScrollBox.Visible := False;
     StatusBar.Panels[0].Text := rsNoProjectsFound;
   end
   else
@@ -697,8 +823,16 @@ begin
     lblTypeColumn.Visible := True;
     lblLanguageColumn.Visible := True;
     lblProgressColumn.Visible := True;
-    ProjectGrid.Visible := True;
-    ProjectGrid.RowCount := Max(Length(FProjects), 1);
+    ProjectScrollBox.Visible := True;
+
+    ClearProjectRows;
+    ProjectScrollBox.DisableAutoSizing;
+    try
+      for I := 0 to Length(FProjects) - 1 do
+        CreateProjectRow(FProjects[I], I);
+    finally
+      ProjectScrollBox.EnableAutoSizing;
+    end;
 
     if IssueCount > 0 then
       StatusBar.Panels[0].Text := Format(rsProjectsFoundWithIssuesFmt,
@@ -711,7 +845,6 @@ end;
 procedure TMainWindow.OpenProjectAtIndex(Idx: Integer);
 var
   EditForm: TProjectEditWindow;
-  ShownModal: Boolean;
 begin
   if (Idx < 0) or (Idx >= Length(FProjects)) then
     Exit;
@@ -722,44 +855,17 @@ begin
     Exit;
   end;
 
-  ShownModal := False;
   EditForm := TProjectEditWindow.Create(nil);
   try
     EditForm.OpenProject(FProjects[Idx].FullPath, FProjects[Idx]);
-    ShownModal := True;
     EditForm.ShowModal;
   except
     on E: Exception do
-    begin
-      if (not ShownModal) and (EditForm <> nil) and
-         not (csDestroying in EditForm.ComponentState) then
-        FreeAndNil(EditForm);
-      ShowMessage(rsProjectOpenSafelyAbortedPrefix +
-        E.Message);
-    end;
+      ShowMessage(rsProjectOpenSafelyAbortedPrefix + E.Message);
   end;
 
   { Refresh project list after returning }
   ScanAndDisplayProjects;
-end;
-
-function TMainWindow.IsInfoIconHit(Index, X, Y: Integer): Boolean;
-var
-  ItemRect: TRect;
-  IconX, IconY, DX, DY: Integer;
-begin
-  Result := False;
-  if (Index < 0) or (Index >= Length(FProjects)) then
-    Exit;
-  ItemRect := ProjectGrid.CellRect(0, Index);
-  if (X < ItemRect.Left) or (X >= ItemRect.Right) or
-     (Y < ItemRect.Top) or (Y >= ItemRect.Bottom) then
-    Exit;
-  IconX := ItemRect.Right - 30;
-  IconY := (ItemRect.Top + ItemRect.Bottom) div 2;
-  DX := X - IconX;
-  DY := Y - IconY;
-  Result := (DX * DX + DY * DY) <= (10 * 10);
 end;
 
 procedure TMainWindow.ShowProjectDetails(Idx: Integer);
@@ -777,36 +883,66 @@ begin
   ScanAndDisplayProjects;
 end;
 
-procedure TMainWindow.ProjectGridMouseDown(Sender: TObject;
-  Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+procedure TMainWindow.ProjectRowClick(Sender: TObject);
 var
-  Col, Row: Integer;
+  Idx: Integer;
+  Ctrl: TControl;
 begin
-  if Button <> mbLeft then
-    Exit;
-  ProjectGrid.MouseToCell(X, Y, Col, Row);
-  if (Row < 0) or (Row >= Length(FProjects)) then
-    Exit;
-  ProjectGrid.Row := Row;
-  if IsInfoIconHit(Row, X, Y) then
-    ShowProjectDetails(Row)
+  if Sender is TControl then
+    Ctrl := TControl(Sender)
   else
-    OpenProjectAtIndex(Row);
+    Exit;
+  { Labels have their own Tag; panels have theirs }
+  Idx := Ctrl.Tag;
+  { If clicked a child label, its parent panel has the index too }
+  if not (Ctrl is TPanel) and (Ctrl.Parent is TPanel) then
+    Idx := Ctrl.Tag;
+  OpenProjectAtIndex(Idx);
 end;
 
-procedure TMainWindow.ProjectGridMouseMove(Sender: TObject;
-  Shift: TShiftState; X, Y: Integer);
+procedure TMainWindow.InfoButtonClick(Sender: TObject);
 var
-  Col, Row: Integer;
-  NewHint: string;
+  Idx: Integer;
 begin
-  ProjectGrid.MouseToCell(X, Y, Col, Row);
-  if (Row >= 0) and (Row < Length(FProjects)) and IsInfoIconHit(Row, X, Y) then
-    NewHint := rsHintDetails
+  if Sender is TControl then
+    Idx := TControl(Sender).Tag
   else
-    NewHint := '';
-  if ProjectGrid.Hint <> NewHint then
-    ProjectGrid.Hint := NewHint;
+    Exit;
+  ShowProjectDetails(Idx);
+end;
+
+procedure TMainWindow.PieChartPaint(Sender: TObject);
+var
+  PB: TPaintBox;
+  Cvs: TCanvas;
+  CX, CY, R: Integer;
+  Pct: Integer;
+  SweepAngle: Double;
+  EndX, EndY: Integer;
+begin
+  PB := Sender as TPaintBox;
+  Cvs := PB.Canvas;
+  CX := PB.Width div 2;
+  CY := PB.Height div 2;
+  R := Min(CX, CY) - 1;
+  Pct := PB.Tag;
+
+  { Background circle }
+  Cvs.Pen.Style := psClear;
+  Cvs.Brush.Color := $00D8D8D8;
+  Cvs.Ellipse(CX - R, CY - R, CX + R, CY + R);
+
+  { Progress wedge }
+  if Pct > 0 then
+  begin
+    SweepAngle := 2 * Pi * (Pct / 100.0) - (Pi / 2);
+    EndX := CX + Round(Cos(SweepAngle) * R);
+    EndY := CY + Round(Sin(SweepAngle) * R);
+    Cvs.Brush.Color := $00A7E8;
+    Cvs.Pie(CX - R, CY - R, CX + R, CY + R,
+            CX, CY - R, EndX, EndY);
+  end;
+  Cvs.Pen.Style := psSolid;
 end;
 
 procedure TMainWindow.StartNewProjectFlow;
@@ -836,142 +972,6 @@ begin
   ScanAndDisplayProjects;
 end;
 
-procedure TMainWindow.ProjectGridDrawCell(Sender: TObject; aCol, aRow: Integer;
-  aRect: TRect; aState: TGridDrawState);
-var
-  Cvs: TCanvas;
-  S: TProjectSummary;
-  DisplayName: string;
-  ProgressPct: Integer;
-  RowTop: Integer;
-  ProjectX, TypeX, LanguageX: Integer;
-  PieCenterX, PieCenterY, PieRadius: Integer;
-  PieEndX, PieEndY: Integer;
-  SweepAngle: Double;
-  InfoCenterX, InfoCenterY, InfoRadius: Integer;
-  ProgressBlue: TColor;
-  ProjectTextColor, MetaTextColor: TColor;
-  TypeLabel: string;
-begin
-  if aCol <> 0 then
-    Exit;
-  if (aRow < 0) or (aRow >= Length(FProjects)) then
-    Exit;
-
-  Cvs := ProjectGrid.Canvas;
-  S := FProjects[aRow];
-  ProgressBlue := $00A7E8;
-
-  { Background }
-  if (gdSelected in aState) and (ProjectGrid.Row = aRow) then
-    Cvs.Brush.Color := $00F2E8DA
-  else if (aRow mod 2) = 0 then
-    Cvs.Brush.Color := clWhite
-  else
-    Cvs.Brush.Color := $00FCFCFC;
-
-  Cvs.FillRect(aRect);
-
-  { Draw separator line }
-  Cvs.Pen.Color := $00E6E6E6;
-  Cvs.Line(aRect.Left, aRect.Bottom - 1, aRect.Right, aRect.Bottom - 1);
-
-  RowTop := aRect.Top;
-  ProjectX := aRect.Left + 60;
-  TypeX := aRect.Left + Round((aRect.Right - aRect.Left) * 0.37);
-  LanguageX := aRect.Left + Round((aRect.Right - aRect.Left) * 0.53);
-
-  { Document icon }
-  Cvs.Pen.Color := $006E6E6E;
-  Cvs.Brush.Color := clWhite;
-  Cvs.Rectangle(aRect.Left + 22, RowTop + 20, aRect.Left + 38, RowTop + 36);
-  Cvs.MoveTo(aRect.Left + 25, RowTop + 24);
-  Cvs.LineTo(aRect.Left + 35, RowTop + 24);
-  Cvs.MoveTo(aRect.Left + 25, RowTop + 28);
-  Cvs.LineTo(aRect.Left + 35, RowTop + 28);
-  Cvs.MoveTo(aRect.Left + 25, RowTop + 32);
-  Cvs.LineTo(aRect.Left + 33, RowTop + 32);
-
-  { Issue marker }
-  if S.HasIssues then
-  begin
-    Cvs.Pen.Style := psClear;
-    Cvs.Brush.Color := clRed;
-    Cvs.Ellipse(aRect.Left + 8, RowTop + 25, aRect.Left + 18, RowTop + 35);
-    Cvs.Pen.Style := psSolid;
-  end;
-
-  { Project name }
-  if S.HasIssues then
-  begin
-    ProjectTextColor := clRed;
-    MetaTextColor := clRed;
-  end
-  else
-  begin
-    ProjectTextColor := $00202020;
-    MetaTextColor := $00858585;
-  end;
-
-  Cvs.Brush.Style := bsClear;
-  Cvs.Font.Style := [];
-  Cvs.Font.Height := -15;
-  Cvs.Font.Color := ProjectTextColor;
-  DisplayName := ProjectDisplayName(S);
-  Cvs.TextOut(ProjectX, RowTop + 20, DisplayName);
-
-  { Type }
-  Cvs.Font.Style := [];
-  Cvs.Font.Height := -12;
-  Cvs.Font.Color := MetaTextColor;
-  if Trim(S.ResourceType) = '' then
-    TypeLabel := rsTypeUnknown
-  else
-    TypeLabel := rsTypeTextPrefix + S.ResourceType;
-  Cvs.TextOut(TypeX, RowTop + 23, TypeLabel);
-
-  { Language }
-  Cvs.Font.Color := MetaTextColor;
-  Cvs.TextOut(LanguageX, RowTop + 23, S.TargetLangName);
-  Cvs.Brush.Style := bsSolid;
-
-  { Progress }
-  if S.TotalChunks > 0 then
-    ProgressPct := (S.FinishedChunks * 100) div S.TotalChunks
-  else
-    ProgressPct := 0;
-  PieCenterX := aRect.Right - 100;
-  PieCenterY := RowTop + ((aRect.Bottom - aRect.Top) div 2);
-  PieRadius := 15;
-
-  Cvs.Pen.Style := psClear;
-  Cvs.Brush.Color := $00D8D8D8;
-  Cvs.Ellipse(PieCenterX - PieRadius, PieCenterY - PieRadius,
-              PieCenterX + PieRadius, PieCenterY + PieRadius);
-  if ProgressPct > 0 then
-  begin
-    SweepAngle := 2 * Pi * (ProgressPct / 100.0) - (Pi / 2);
-    PieEndX := PieCenterX + Round(Cos(SweepAngle) * PieRadius);
-    PieEndY := PieCenterY + Round(Sin(SweepAngle) * PieRadius);
-    Cvs.Brush.Color := ProgressBlue;
-    Cvs.Pie(PieCenterX - PieRadius, PieCenterY - PieRadius,
-            PieCenterX + PieRadius, PieCenterY + PieRadius,
-            PieCenterX, PieCenterY - PieRadius, PieEndX, PieEndY);
-  end;
-  Cvs.Pen.Style := psSolid;
-
-  { Info icon }
-  InfoCenterX := aRect.Right - 30;
-  InfoCenterY := PieCenterY;
-  InfoRadius := 10;
-  Cvs.Pen.Color := $00B8B8B8;
-  Cvs.Brush.Color := $00B8B8B8;
-  Cvs.Ellipse(InfoCenterX - InfoRadius, InfoCenterY - InfoRadius,
-              InfoCenterX + InfoRadius, InfoCenterY + InfoRadius);
-  Cvs.Font.Height := -12;
-  Cvs.Font.Color := clWhite;
-  Cvs.TextOut(InfoCenterX - 3, InfoCenterY - 7, 'i');
-end;
 
 procedure TMainWindow.StatusBarDrawPanel(AStatusBar: TStatusBar;
   Panel: TStatusPanel; const Rect: TRect);
@@ -990,8 +990,5 @@ begin
   TextY := Rect.Top + ((Rect.Bottom - Rect.Top - AStatusBar.Canvas.TextHeight(Panel.Text)) div 2);
   AStatusBar.Canvas.TextOut(Rect.Left + 8, TextY, Panel.Text);
 end;
-
-initialization
-  RegisterClass(TStringGrid);
 
 end.
