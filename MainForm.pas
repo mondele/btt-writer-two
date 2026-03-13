@@ -1014,6 +1014,7 @@ begin
     try
       EditForm.OpenProject(FProjects[Idx].FullPath, FProjects[Idx]);
       LogFmt(llInfo, 'OpenProjectAtIndex(%d): ShowModal', [Idx]);
+      Hide;
       EditForm.ShowModal;
       LogFmt(llInfo, 'OpenProjectAtIndex(%d): ShowModal returned', [Idx]);
     except
@@ -1027,6 +1028,7 @@ begin
     LogFmt(llInfo, 'OpenProjectAtIndex(%d): FreeAndNil(EditForm)', [Idx]);
     FreeAndNil(EditForm);
     LogFmt(llInfo, 'OpenProjectAtIndex(%d): EditForm freed', [Idx]);
+    Show;
   end;
 
   { Refresh project list after returning, deferred until current click stack unwinds }

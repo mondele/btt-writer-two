@@ -25,8 +25,7 @@ var
 procedure ShowStartupSplash;
 var
   TopPanel: TPanel;
-  LogoPanel: TPanel;
-  LogoGlyph: TLabel;
+  LogoImage: TImage;
   TitleLabel: TLabel;
   VersionLabel: TLabel;
 begin
@@ -48,23 +47,14 @@ begin
   TopPanel.BevelOuter := bvNone;
   TopPanel.Color := clWhite;
 
-  LogoPanel := TPanel.Create(TopPanel);
-  LogoPanel.Parent := TopPanel;
-  LogoPanel.SetBounds(24, 36, 84, 84);
-  LogoPanel.BevelOuter := bvNone;
-  LogoPanel.Color := $00F2F7FF;
-
-  LogoGlyph := TLabel.Create(LogoPanel);
-  LogoGlyph.Parent := LogoPanel;
-  LogoGlyph.AutoSize := False;
-  LogoGlyph.SetBounds(0, 0, LogoPanel.Width, LogoPanel.Height);
-  LogoGlyph.Alignment := taLeftJustify;
-  LogoGlyph.Layout := tlCenter;
-  LogoGlyph.Font.Height := -28;
-  LogoGlyph.Font.Style := [fsBold];
-  LogoGlyph.Font.Name := 'Noto Sans';
-  LogoGlyph.Font.Color := $00AA6A00;
-  LogoGlyph.Caption := 'B';
+  { App icon from application resource }
+  LogoImage := TImage.Create(TopPanel);
+  LogoImage.Parent := TopPanel;
+  LogoImage.SetBounds(24, 36, 84, 84);
+  LogoImage.Stretch := True;
+  LogoImage.Proportional := True;
+  LogoImage.Center := True;
+  LogoImage.Picture.Icon.Assign(Application.Icon);
 
   TitleLabel := TLabel.Create(TopPanel);
   TitleLabel.Parent := TopPanel;

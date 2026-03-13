@@ -6,7 +6,7 @@ interface
 
 uses
   Classes, SysUtils, Forms, Controls, Graphics, Dialogs,
-  ExtCtrls, StdCtrls, Buttons, ComCtrls,
+  ExtCtrls, StdCtrls, Buttons, ComCtrls, LCLIntf, LCLType,
   fpjson, jsonparser,
   ProjectManager, ResourceContainer, ProjectScanner,
   BibleBook, BibleChapter, BibleChunk, USFMUtils, DataPaths, ProjectCreator,
@@ -610,11 +610,20 @@ begin
 end;
 
 procedure TVerseDisplay.Paint;
+var
+  R: TRect;
 begin
+  R := ClientRect;
   Canvas.Brush.Color := Color;
-  Canvas.FillRect(ClientRect);
-  if Length(FSegments) > 0 then
-    DoLayout(Canvas, Width, True);
+  Canvas.FillRect(R);
+  { Clip drawing to control bounds so text cannot overflow right edge }
+  IntersectClipRect(Canvas.Handle, R.Left, R.Top, R.Right, R.Bottom);
+  try
+    if Length(FSegments) > 0 then
+      DoLayout(Canvas, Width, True);
+  finally
+    SelectClipRgn(Canvas.Handle, 0);
+  end;
 end;
 
 { ---- TProjectEditWindow ---- }
