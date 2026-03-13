@@ -6,8 +6,8 @@ interface
 
 uses
   Classes, SysUtils, Forms, Controls, Graphics, Dialogs,
-  ExtCtrls, StdCtrls, Buttons, ComCtrls, LCLIntf, LCLType,
-  fpjson, jsonparser,
+  ExtCtrls, StdCtrls, Buttons, ComCtrls, Types,
+  fpjson, jsonparser, IpHtml,
   ProjectManager, ResourceContainer, ProjectScanner,
   BibleBook, BibleChapter, BibleChunk, USFMUtils, DataPaths, ProjectCreator,
   AppSettings, SettingsForm, ThemePalette, UIFonts, AppLog,
@@ -41,43 +41,6 @@ resourcestring
 
 type
   TResourceTab = (rtNotes, rtWords, rtQuestions);
-
-  TSegmentKind = (
-    skText,       { plain text }
-    skVerse,      { \v N — verse number badge }
-    skFootnote,   { \f ... \f* — footnote indicator }
-    skHeading,    { \s — section heading (bold, larger) }
-    skDescription { \d — descriptive title (italic) }
-  );
-
-  TTextSegment = record
-    Kind: TSegmentKind;
-    Text: string;
-  end;
-  TTextSegmentArray = array of TTextSegment;
-
-  { Custom control that renders USFM text with verse numbers as colored badges }
-  TVerseDisplay = class(TCustomControl)
-  private
-    FText: string;
-    FRawText: string;  { original text with \v markers, for save }
-    FBadgeColor: TColor;
-    FSegments: TTextSegmentArray;
-    procedure SetText(const AText: string);
-    procedure ParseSegments;
-    procedure AddSegment(AKind: TSegmentKind; const AText: string);
-    function MatchMarker(const S: string; P: Integer; const Marker: string): Boolean;
-    function DoLayout(ACanvas: TCanvas; AWidth: Integer; ADraw: Boolean): Integer;
-    procedure DrawWordWrapped(ACanvas: TCanvas; const AText: string;
-      var X, Y: Integer; MaxW, LineH, SpaceW: Integer; ADraw: Boolean);
-  protected
-    procedure Paint; override;
-  public
-    constructor Create(AOwner: TComponent); override;
-    function CalcNeededHeight(AWidth: Integer): Integer;
-    property Text: string read FRawText write SetText;
-    property BadgeColor: TColor read FBadgeColor write FBadgeColor;
-  end;
 
   TChunkPanel = class;
 
@@ -171,10 +134,9 @@ type
     procedure btnChangeSourceClick(Sender: TObject);
     procedure SplitterMoved(Sender: TObject);
     procedure RecalcAllChunkLayouts;
-    procedure ScheduleRecalcLayout;
-    procedure RecalcLayoutTimerFire(Sender: TObject);
   private
-    FRecalcTimer: TTimer;
+    FSourceProportion: Double;
+    FResourceProportion: Double;
   private
     { Loading splash }
     FLoadingSplash: TForm;
@@ -191,9 +153,13 @@ type
   private
     FSourcePanel: TPanel;
     FTransPanel: TPanel;
-    FSourceDisplay: TVerseDisplay;
-    FTransDisplay: TVerseDisplay;
-    FTransText: string;  { raw USFM text for this chunk }
+    FSourceHtml: TIpHtmlPanel;
+    FTransHtml: TIpHtmlPanel;
+    FSourceText: string;   { raw USFM text for source chunk }
+    FTransText: string;    { raw USFM text for this chunk }
+    FSourceBadgeColor: TColor;
+    FTransBadgeColor: TColor;
+    FIsFinished: Boolean;
     FTransMemo: TMemo;
     FEditButton: TButton;
     FFinishedCheck: TCheckBox;
@@ -208,6 +174,8 @@ type
     FProject: TProject;
     FEditing: Boolean;
     FOwnerForm: TProjectEditWindow;
+    procedure RefreshSourceHtml;
+    procedure RefreshTransHtml;
   public
     constructor Create(AOwnerForm: TProjectEditWindow;
       ASourceParent, ATransParent: TScrollBox;
@@ -252,385 +220,173 @@ begin
   end;
 end;
 
-{ ---- TVerseDisplay ---- }
+{ ---- USFM to HTML conversion ---- }
 
-constructor TVerseDisplay.Create(AOwner: TComponent);
+function HtmlEscape(const S: string): string;
+var
+  I: Integer;
 begin
-  inherited Create(AOwner);
-  FBadgeColor := $D9904A;  { blue-ish }
-  FText := '';
-  FRawText := '';
-  Font.Name := 'Roboto';
-  Color := clWhite;
+  Result := '';
+  for I := 1 to Length(S) do
+    case S[I] of
+      '<': Result := Result + '&lt;';
+      '>': Result := Result + '&gt;';
+      '&': Result := Result + '&amp;';
+      '"': Result := Result + '&quot;';
+    else
+      Result := Result + S[I];
+    end;
 end;
 
-procedure TVerseDisplay.SetText(const AText: string);
+function ColorToHtmlHex(C: TColor): string;
+{ Convert BGR TColor to #RRGGBB }
+var
+  R, G, B: Byte;
 begin
-  FRawText := AText;
-  FText := AText;
-  ParseSegments;
-  Invalidate;
+  C := ColorToRGB(C);
+  R := C and $FF;
+  G := (C shr 8) and $FF;
+  B := (C shr 16) and $FF;
+  Result := '#' + IntToHex(R, 2) + IntToHex(G, 2) + IntToHex(B, 2);
 end;
 
-procedure TVerseDisplay.AddSegment(AKind: TSegmentKind; const AText: string);
-begin
-  SetLength(FSegments, Length(FSegments) + 1);
-  FSegments[High(FSegments)].Kind := AKind;
-  FSegments[High(FSegments)].Text := AText;
-end;
-
-function TVerseDisplay.MatchMarker(const S: string; P: Integer;
-  const Marker: string): Boolean;
-{ Check if S at position P starts with backslash + Marker + space/newline/end }
+function MatchUSFMMarker(const S: string; P: Integer; const Marker: string): Boolean;
 var
   MLen: Integer;
 begin
   Result := False;
   MLen := Length(Marker);
-  if P + MLen > Length(S) then
-    Exit;
-  if S[P] <> '\' then
-    Exit;
-  if Copy(S, P + 1, MLen) <> Marker then
-    Exit;
-  { Must be followed by space, newline, or end of string }
+  if P + MLen > Length(S) then Exit;
+  if S[P] <> '\' then Exit;
+  if Copy(S, P + 1, MLen) <> Marker then Exit;
   if P + MLen + 1 > Length(S) then
     Result := True
   else
     Result := S[P + MLen + 1] in [' ', #10, #13];
 end;
 
-procedure TVerseDisplay.ParseSegments;
+function USFMToHtml(const AText: string; ABadgeColor: TColor;
+  const ATextColor: string): string;
+{ Convert USFM text to HTML with styled verse badges }
 var
   S: string;
   P, Start, EndP: Integer;
-  SegText: string;
+  SegText, BadgeHex: string;
+const
+  FootnoteChar = '&#8224;'; { dagger U+2020 }
 begin
-  SetLength(FSegments, 0);
-  S := FText;
-  if S = '' then
-    Exit;
+  Result := '';
+  S := AText;
+  if S = '' then Exit;
+
+  BadgeHex := ColorToHtmlHex(ABadgeColor);
 
   P := 1;
   while P <= Length(S) do
   begin
     if S[P] <> '\' then
     begin
-      { Collect plain text until next backslash or end }
       Start := P;
       while (P <= Length(S)) and (S[P] <> '\') do
         Inc(P);
       SegText := Copy(S, Start, P - Start);
       if Trim(SegText) <> '' then
-        AddSegment(skText, SegText);
+        Result := Result + '<span style="color:' + ATextColor + ';">' +
+          HtmlEscape(SegText) + '</span>';
     end
-    else if MatchMarker(S, P, 'v') then
+    else if MatchUSFMMarker(S, P, 'v') then
     begin
-      { \v N — verse marker }
-      P := P + 3; { skip \v and space }
+      P := P + 3;
       Start := P;
       while (P <= Length(S)) and (S[P] in ['0'..'9', '-']) do
         Inc(P);
-      AddSegment(skVerse, Copy(S, Start, P - Start));
-      { Skip trailing whitespace/newline so verse text can stay on same line. }
+      SegText := Copy(S, Start, P - Start);
+      Result := Result + ' <span style="background-color:' + BadgeHex +
+        '; color:white; padding:1px 5px; font-weight:bold;">' +
+        HtmlEscape(SegText) + '</span> ';
       while (P <= Length(S)) and (S[P] in [' ', #9, #10, #13]) do
         Inc(P);
     end
-    else if MatchMarker(S, P, 'f') then
+    else if MatchUSFMMarker(S, P, 'f') then
     begin
-      { \f ... \f* — footnote: skip to closing marker, emit indicator }
-      Start := P;
       EndP := Pos('\f*', S, P);
       if EndP > 0 then
         P := EndP + 3
       else
         P := Length(S) + 1;
-      AddSegment(skFootnote, '');
+      Result := Result + ' <span style="background-color:#FF8040; color:white;' +
+        ' padding:1px 3px; font-weight:bold;">' + FootnoteChar + '</span> ';
     end
-    else if MatchMarker(S, P, 'd') then
+    else if MatchUSFMMarker(S, P, 'd') then
     begin
-      { \d Text — descriptive title, runs to end of line }
-      P := P + 2; { skip \d }
-      if (P <= Length(S)) and (S[P] = ' ') then
-        Inc(P);
+      P := P + 2;
+      if (P <= Length(S)) and (S[P] = ' ') then Inc(P);
       Start := P;
       while (P <= Length(S)) and not (S[P] in [#10, #13]) do
         Inc(P);
       SegText := Trim(Copy(S, Start, P - Start));
       if SegText <> '' then
-        AddSegment(skDescription, SegText);
-      { Skip newline }
+        Result := Result + '<br><i style="color:#606060;">' +
+          HtmlEscape(SegText) + '</i><br>';
       if (P <= Length(S)) and (S[P] = #13) then Inc(P);
       if (P <= Length(S)) and (S[P] = #10) then Inc(P);
     end
-    else if MatchMarker(S, P, 's') then
+    else if MatchUSFMMarker(S, P, 's') then
     begin
-      { \s or \s1...\s5 — section heading, runs to end of line }
-      P := P + 2; { skip \s }
-      { Skip optional digit }
-      if (P <= Length(S)) and (S[P] in ['1'..'5']) then
-        Inc(P);
-      if (P <= Length(S)) and (S[P] = ' ') then
-        Inc(P);
+      P := P + 2;
+      if (P <= Length(S)) and (S[P] in ['1'..'5']) then Inc(P);
+      if (P <= Length(S)) and (S[P] = ' ') then Inc(P);
       Start := P;
       while (P <= Length(S)) and not (S[P] in [#10, #13]) do
         Inc(P);
       SegText := Trim(Copy(S, Start, P - Start));
       if SegText <> '' then
-        AddSegment(skHeading, SegText);
+        Result := Result + '<br><b style="font-size:larger;">' +
+          HtmlEscape(SegText) + '</b><br>';
       if (P <= Length(S)) and (S[P] = #13) then Inc(P);
       if (P <= Length(S)) and (S[P] = #10) then Inc(P);
     end
-    else if MatchMarker(S, P, 'q') or MatchMarker(S, P, 'q2') then
+    else if MatchUSFMMarker(S, P, 'q') or MatchUSFMMarker(S, P, 'q2') then
     begin
-      { \q / \q2 — poetry markers, treat as line break }
-      P := P + 2; { skip \q }
-      if (P <= Length(S)) and (S[P] in ['1'..'4']) then
-        Inc(P);
-      if (P <= Length(S)) and (S[P] = ' ') then
-        Inc(P);
-    end
-    else if MatchMarker(S, P, 'p') then
-    begin
-      { \p — paragraph marker, treat as line break }
       P := P + 2;
-      if (P <= Length(S)) and (S[P] = ' ') then
-        Inc(P);
+      if (P <= Length(S)) and (S[P] in ['1'..'4']) then Inc(P);
+      if (P <= Length(S)) and (S[P] = ' ') then Inc(P);
+      Result := Result + '<br>';
     end
-    else if MatchMarker(S, P, 'c') then
+    else if MatchUSFMMarker(S, P, 'p') then
     begin
-      { \c N — chapter marker, skip }
       P := P + 2;
-      if (P <= Length(S)) and (S[P] = ' ') then
-        Inc(P);
-      while (P <= Length(S)) and (S[P] in ['0'..'9']) do
-        Inc(P);
-      if (P <= Length(S)) and (S[P] = ' ') then
-        Inc(P);
+      if (P <= Length(S)) and (S[P] = ' ') then Inc(P);
+      Result := Result + '<br>';
+    end
+    else if MatchUSFMMarker(S, P, 'c') then
+    begin
+      P := P + 2;
+      if (P <= Length(S)) and (S[P] = ' ') then Inc(P);
+      while (P <= Length(S)) and (S[P] in ['0'..'9']) do Inc(P);
+      if (P <= Length(S)) and (S[P] = ' ') then Inc(P);
     end
     else
     begin
-      { Unknown marker — skip the backslash and emit as text }
       Start := P;
       Inc(P);
       while (P <= Length(S)) and (S[P] <> '\') and not (S[P] in [#10, #13]) do
         Inc(P);
       SegText := Copy(S, Start, P - Start);
       if Trim(SegText) <> '' then
-        AddSegment(skText, SegText);
+        Result := Result + '<span style="color:' + ATextColor + ';">' +
+          HtmlEscape(SegText) + '</span>';
     end;
   end;
 end;
 
-function TVerseDisplay.CalcNeededHeight(AWidth: Integer): Integer;
-var
-  Bmp: TBitmap;
+function WrapInHtmlDoc(const ABody, AFontName: string; AFontSize: Integer;
+  ABgColor: TColor): string;
 begin
-  { Use a temporary bitmap to measure text without needing a valid handle }
-  Bmp := TBitmap.Create;
-  try
-    Bmp.Canvas.Font.Assign(Font);
-    Result := DoLayout(Bmp.Canvas, AWidth, False);
-  finally
-    Bmp.Free;
-  end;
-end;
-
-procedure TVerseDisplay.DrawWordWrapped(ACanvas: TCanvas; const AText: string;
-  var X, Y: Integer; MaxW, LineH, SpaceW: Integer; ADraw: Boolean);
-var
-  Lines: TStringList;
-  Words: TStringList;
-  Word: string;
-  J, WordW: Integer;
-begin
-  Lines := TStringList.Create;
-  try
-    Lines.Text := AText;
-    for J := 0 to Lines.Count - 1 do
-    begin
-      if J > 0 then
-      begin
-        X := 4;
-        Y := Y + LineH;
-      end;
-
-      Words := TStringList.Create;
-      try
-        Words.Delimiter := ' ';
-        Words.StrictDelimiter := True;
-        Words.DelimitedText := Lines[J];
-
-        while Words.Count > 0 do
-        begin
-          Word := Words[0];
-          Words.Delete(0);
-          if Word = '' then
-            Continue;
-
-          WordW := ACanvas.TextWidth(Word);
-          if (X > 4) and (X + WordW > MaxW) then
-          begin
-            X := 4;
-            Y := Y + LineH;
-          end;
-          if ADraw then
-          begin
-            ACanvas.Brush.Color := Self.Color;
-            ACanvas.TextOut(X, Y + 1, Word);
-          end;
-          X := X + WordW + SpaceW;
-        end;
-      finally
-        Words.Free;
-      end;
-    end;
-  finally
-    Lines.Free;
-  end;
-end;
-
-function TVerseDisplay.DoLayout(ACanvas: TCanvas; AWidth: Integer;
-  ADraw: Boolean): Integer;
-var
-  X, Y, MaxW, LineH, BadgeW, BadgeH, BadgePad, SpaceW: Integer;
-  I: Integer;
-  SavedStyle: TFontStyles;
-  SavedHeight: Integer;
-  SavedColor: TColor;
-const
-  FootnoteChar = #$E2#$80#$A0; { dagger character U+2020 }
-begin
-  ACanvas.Font.Assign(Font);
-  LineH := ACanvas.TextHeight('Ag') + 4;
-  BadgeH := LineH - 2;
-  BadgePad := 5;
-  SpaceW := ACanvas.TextWidth(' ');
-  MaxW := AWidth - 8;
-
-  X := 4;
-  Y := 4;
-
-  for I := 0 to Length(FSegments) - 1 do
-  begin
-    case FSegments[I].Kind of
-      skVerse:
-      begin
-        { Verse number badge }
-        BadgeW := ACanvas.TextWidth(FSegments[I].Text) + BadgePad * 2 + 2;
-        if (X > 4) and (X + BadgeW > MaxW) then
-        begin
-          X := 4;
-          Y := Y + LineH;
-        end;
-        if ADraw then
-        begin
-          ACanvas.Brush.Color := FBadgeColor;
-          ACanvas.Pen.Color := FBadgeColor;
-          ACanvas.RoundRect(X, Y, X + BadgeW, Y + BadgeH, 8, 8);
-          ACanvas.Font.Color := clWhite;
-          ACanvas.Font.Style := [fsBold];
-          ACanvas.Brush.Style := bsClear;
-          ACanvas.TextOut(X + BadgePad + 1, Y + 1, FSegments[I].Text);
-          ACanvas.Brush.Style := bsSolid;
-          ACanvas.Font.Color := Self.Font.Color;
-          ACanvas.Font.Style := Self.Font.Style;
-        end;
-        X := X + BadgeW + 4;
-      end;
-
-      skFootnote:
-      begin
-        { Small footnote indicator badge }
-        BadgeW := ACanvas.TextWidth(FootnoteChar) + 6;
-        if (X > 4) and (X + BadgeW > MaxW) then
-        begin
-          X := 4;
-          Y := Y + LineH;
-        end;
-        if ADraw then
-        begin
-          ACanvas.Brush.Color := $4080FF;  { orange-red }
-          ACanvas.Pen.Color := $4080FF;
-          ACanvas.RoundRect(X, Y + 2, X + BadgeW, Y + BadgeH - 2, 6, 6);
-          ACanvas.Font.Color := clWhite;
-          ACanvas.Font.Style := [fsBold];
-          ACanvas.Brush.Style := bsClear;
-          ACanvas.TextOut(X + 3, Y + 2, FootnoteChar);
-          ACanvas.Brush.Style := bsSolid;
-          ACanvas.Font.Color := Self.Font.Color;
-          ACanvas.Font.Style := Self.Font.Style;
-        end;
-        X := X + BadgeW + 3;
-      end;
-
-      skHeading:
-      begin
-        { Section heading: new line, bold, slightly larger }
-        if X > 4 then
-        begin
-          X := 4;
-          Y := Y + LineH;
-        end;
-        SavedStyle := ACanvas.Font.Style;
-        SavedHeight := ACanvas.Font.Height;
-        ACanvas.Font.Style := [fsBold];
-        ACanvas.Font.Height := ACanvas.Font.Height - 2;
-        DrawWordWrapped(ACanvas, FSegments[I].Text, X, Y, MaxW, LineH + 2, SpaceW, ADraw);
-        ACanvas.Font.Style := SavedStyle;
-        ACanvas.Font.Height := SavedHeight;
-        { Force new line after heading }
-        X := 4;
-        Y := Y + LineH;
-      end;
-
-      skDescription:
-      begin
-        { Descriptive title: new line, italic }
-        if X > 4 then
-        begin
-          X := 4;
-          Y := Y + LineH;
-        end;
-        SavedStyle := ACanvas.Font.Style;
-        SavedColor := ACanvas.Font.Color;
-        ACanvas.Font.Style := [fsItalic];
-        ACanvas.Font.Color := $606060;
-        DrawWordWrapped(ACanvas, FSegments[I].Text, X, Y, MaxW, LineH, SpaceW, ADraw);
-        ACanvas.Font.Style := SavedStyle;
-        ACanvas.Font.Color := SavedColor;
-        { Force new line after description }
-        X := 4;
-        Y := Y + LineH;
-      end;
-
-      skText:
-      begin
-        ACanvas.Font.Style := Self.Font.Style;
-        ACanvas.Font.Color := Self.Font.Color;
-        DrawWordWrapped(ACanvas, FSegments[I].Text, X, Y, MaxW, LineH, SpaceW, ADraw);
-      end;
-    end;
-  end;
-
-  Result := Y + LineH + 6;
-end;
-
-procedure TVerseDisplay.Paint;
-var
-  R: TRect;
-begin
-  R := ClientRect;
-  Canvas.Brush.Color := Color;
-  Canvas.FillRect(R);
-  { Clip drawing to control bounds so text cannot overflow right edge }
-  IntersectClipRect(Canvas.Handle, R.Left, R.Top, R.Right, R.Bottom);
-  try
-    if Length(FSegments) > 0 then
-      DoLayout(Canvas, Width, True);
-  finally
-    SelectClipRgn(Canvas.Handle, 0);
-  end;
+  Result := '<html><head><style>' +
+    'body { font-family: ' + AFontName + '; font-size: ' + IntToStr(AFontSize) +
+    'pt; margin: 4px; background-color: ' + ColorToHtmlHex(ABgColor) + '; }' +
+    '</style></head><body>' + ABody + '</body></html>';
 end;
 
 { ---- TProjectEditWindow ---- }
@@ -666,6 +422,11 @@ begin
   FScrollSyncTimer.Interval := 30;
   FScrollSyncTimer.OnTimer := @ScrollSyncTimerFire;
   FScrollSyncTimer.Enabled := True;
+
+  { Default proportional split: source 35%, resource 25%, trans fills rest }
+  FSourceProportion := 0.35;
+  FResourceProportion := 0.25;
+
   ApplyTheme;
   ApplyOrientationLayout(FLayoutDirection);
   UpdatePaneHeaders;
@@ -679,35 +440,42 @@ begin
     FChunkPanels[I].RecalcLayout;
 end;
 
-procedure TProjectEditWindow.ScheduleRecalcLayout;
-begin
-  if FRecalcTimer = nil then
-  begin
-    FRecalcTimer := TTimer.Create(Self);
-    FRecalcTimer.Interval := 50;
-    FRecalcTimer.OnTimer := @RecalcLayoutTimerFire;
-  end;
-  { Restart the timer on each resize event so we only fire once after settling }
-  FRecalcTimer.Enabled := False;
-  FRecalcTimer.Enabled := True;
-end;
-
-procedure TProjectEditWindow.RecalcLayoutTimerFire(Sender: TObject);
-begin
-  FRecalcTimer.Enabled := False;
-  RecalcAllChunkLayouts;
-end;
-
 procedure TProjectEditWindow.FormResize(Sender: TObject);
+var
+  TotalW, SrcW, ResW: Integer;
 begin
   ApplyOrientationLayout(FLayoutDirection);
   UpdatePaneHeaders;
-  ScheduleRecalcLayout;
+
+  { Restore proportional panel widths }
+  TotalW := SplitPanel.ClientWidth - Splitter1.Width - Splitter2.Width;
+  if TotalW > 100 then
+  begin
+    SrcW := Round(TotalW * FSourceProportion);
+    ResW := Round(TotalW * FResourceProportion);
+    if SrcW < 100 then SrcW := 100;
+    if ResW < 100 then ResW := 100;
+    SourcePanel.Width := SrcW;
+    ResourcePanel.Width := ResW;
+  end;
+
+  RecalcAllChunkLayouts;
 end;
 
 procedure TProjectEditWindow.SplitterMoved(Sender: TObject);
+var
+  TotalW: Integer;
 begin
-  ScheduleRecalcLayout;
+  { Store new proportions after user drags a splitter }
+  TotalW := SourcePanel.Width + ResourcePanel.Width +
+    (SplitPanel.ClientWidth - SourcePanel.Width - ResourcePanel.Width -
+     Splitter1.Width - Splitter2.Width);
+  if TotalW > 0 then
+  begin
+    FSourceProportion := SourcePanel.Width / TotalW;
+    FResourceProportion := ResourcePanel.Width / TotalW;
+  end;
+  RecalcAllChunkLayouts;
 end;
 
 procedure TProjectEditWindow.btnMenuClick(Sender: TObject);
@@ -1796,16 +1564,15 @@ begin
   if CB.Checked then
   begin
     FProject.MarkFinished(CB.Hint, CB.HelpKeyword);
-    { Disable edit for this chunk }
     for I := 0 to Length(FChunkPanels) - 1 do
       if FChunkPanels[I].FFinishedCheck = CB then
       begin
         if FChunkPanels[I].FEditing then
           FChunkPanels[I].SetEditing(False);
         FChunkPanels[I].FEditButton.Enabled := False;
-        FChunkPanels[I].FTransDisplay.Font.Color := clGreen;
+        FChunkPanels[I].FIsFinished := True;
+        FChunkPanels[I].RefreshTransHtml;
         FChunkPanels[I].UpdateFinishedVisuals;
-        FChunkPanels[I].FTransDisplay.Invalidate;
         Break;
       end;
   end
@@ -1816,9 +1583,9 @@ begin
       if FChunkPanels[I].FFinishedCheck = CB then
       begin
         FChunkPanels[I].FEditButton.Enabled := True;
-        FChunkPanels[I].FTransDisplay.Font.Color := clBlack;
+        FChunkPanels[I].FIsFinished := False;
+        FChunkPanels[I].RefreshTransHtml;
         FChunkPanels[I].UpdateFinishedVisuals;
-        FChunkPanels[I].FTransDisplay.Invalidate;
         Break;
       end;
   end;
@@ -2114,7 +1881,7 @@ constructor TChunkPanel.Create(AOwnerForm: TProjectEditWindow;
   const ASourceText, ATransText, AChapterID, AChunkName, AVerseLabel: string;
   AStartVerse, AEndVerse: Integer; AFinished: Boolean; AProject: TProject);
 var
-  PanelHeight, SourceH, TransH: Integer;
+  PanelHeight: Integer;
   HeaderHeight, FooterHeight, BodyTop: Integer;
   HeaderLabel: TLabel;
 begin
@@ -2124,18 +1891,24 @@ begin
   FChunkName := AChunkName;
   FProject := AProject;
   FEditing := False;
+  FSourceText := ASourceText;
   FTransText := ATransText;
   FStartVerse := AStartVerse;
   FEndVerse := AEndVerse;
+  FSourceBadgeColor := $00B5652D;
+  FTransBadgeColor := $009A8A00;
+  FIsFinished := AFinished;
   HeaderHeight := 28;
   FooterHeight := 34;
   BodyTop := HeaderHeight + 2;
+  PanelHeight := 120; { initial estimate, RecalcLayout will fix }
 
   { Source panel — alTop stacks by Top value, so set high to append at bottom }
   FSourcePanel := TPanel.Create(ASourceParent);
   FSourcePanel.Parent := ASourceParent;
   FSourcePanel.Top := ASourceParent.ControlCount * 100;
   FSourcePanel.Align := alTop;
+  FSourcePanel.Height := PanelHeight;
   FSourcePanel.BorderSpacing.Bottom := 10;
   FSourcePanel.BevelOuter := bvLowered;
   FSourcePanel.Color := clWhite;
@@ -2151,85 +1924,60 @@ begin
   HeaderLabel.Font.Color := $8A8A8A;
   HeaderLabel.OnClick := @AOwnerForm.OnChunkPanelClick;
 
-  { Source verse display }
-  FSourceDisplay := TVerseDisplay.Create(FSourcePanel);
-  FSourceDisplay.Parent := FSourcePanel;
-  FSourceDisplay.Left := 8;
-  FSourceDisplay.Top := BodyTop;
-  FSourceDisplay.Width := ASourceParent.ClientWidth - 16;
-  FSourceDisplay.Color := clWhite;
-  FSourceDisplay.Font.Name := 'Roboto';
-  FSourceDisplay.Font.Height := -13;
-  FSourceDisplay.BadgeColor := $00B5652D;
-  FSourceDisplay.Text := ASourceText;
-  FSourceDisplay.OnClick := @AOwnerForm.OnChunkPanelClick;
+  { Source HTML display }
+  FSourceHtml := TIpHtmlPanel.Create(FSourcePanel);
+  FSourceHtml.Parent := FSourcePanel;
+  FSourceHtml.Left := 2;
+  FSourceHtml.Top := BodyTop;
+  FSourceHtml.Anchors := [akTop, akLeft, akRight, akBottom];
+  FSourceHtml.Width := FSourcePanel.ClientWidth - 4;
+  FSourceHtml.Height := PanelHeight - BodyTop - 2;
+  FSourceHtml.DefaultTypeFace := 'Roboto';
+  FSourceHtml.DefaultFontSize := 10;
+  FSourceHtml.BgColor := clWhite;
+  FSourceHtml.BorderStyle := bsNone;
+  FSourceHtml.OnClick := @AOwnerForm.OnChunkPanelClick;
   FSourcePanel.OnClick := @AOwnerForm.OnChunkPanelClick;
-
-  { Calculate source height — use parent width since Align hasn't been applied yet }
-  SourceH := FSourceDisplay.CalcNeededHeight(ASourceParent.ClientWidth - 16) + BodyTop + 8;
-  if SourceH < 50 then
-    SourceH := 50;
-  FSourceDisplay.Height := SourceH - BodyTop - 8;
-  FSourcePanel.Height := SourceH;
+  RefreshSourceHtml;
 
   { Translation panel — alTop stacks by Top value, so set high to append at bottom }
   FTransPanel := TPanel.Create(ATransParent);
   FTransPanel.Parent := ATransParent;
   FTransPanel.Top := ATransParent.ControlCount * 100;
   FTransPanel.Align := alTop;
+  FTransPanel.Height := PanelHeight;
   FTransPanel.BorderSpacing.Bottom := 10;
   FTransPanel.BevelOuter := bvLowered;
   FTransPanel.Color := clWhite;
 
-  { Translation verse display (read-only view) }
-  FTransDisplay := TVerseDisplay.Create(FTransPanel);
-  FTransDisplay.Parent := FTransPanel;
-  FTransDisplay.Left := 8;
-  FTransDisplay.Top := BodyTop;
-  FTransDisplay.Width := ATransParent.ClientWidth - 16;
-  FTransDisplay.Color := clWhite;
-  FTransDisplay.Font.Name := 'Roboto';
-  FTransDisplay.Font.Height := -13;
-  FTransDisplay.BadgeColor := $009A8A00;
-  if ATransText <> '' then
-    FTransDisplay.Text := ATransText
-  else
-  begin
-    FTransDisplay.Text := '';
-    FTransDisplay.Font.Color := clGray;
-  end;
-  FTransDisplay.OnClick := @AOwnerForm.OnChunkPanelClick;
+  { Translation HTML display (read-only view) }
+  FTransHtml := TIpHtmlPanel.Create(FTransPanel);
+  FTransHtml.Parent := FTransPanel;
+  FTransHtml.Left := 2;
+  FTransHtml.Top := BodyTop;
+  FTransHtml.Anchors := [akTop, akLeft, akRight, akBottom];
+  FTransHtml.Width := FTransPanel.ClientWidth - 4;
+  FTransHtml.Height := PanelHeight - BodyTop - FooterHeight - 2;
+  FTransHtml.DefaultTypeFace := 'Roboto';
+  FTransHtml.DefaultFontSize := 10;
+  FTransHtml.BgColor := clWhite;
+  FTransHtml.BorderStyle := bsNone;
+  FTransHtml.OnClick := @AOwnerForm.OnChunkPanelClick;
   FTransPanel.OnClick := @AOwnerForm.OnChunkPanelClick;
-
-  { Calculate translation height — use parent width since Align hasn't been applied yet }
-  if ATransText <> '' then
-    TransH := FTransDisplay.CalcNeededHeight(ATransParent.ClientWidth - 16)
-  else
-    TransH := 30;
-  if TransH < 30 then
-    TransH := 30;
-  FTransDisplay.Height := TransH;
-
-  { Use the taller of source/trans for both panels }
-  PanelHeight := SourceH;
-  if TransH + BodyTop + FooterHeight + 4 > PanelHeight then
-    PanelHeight := TransH + BodyTop + FooterHeight + 4;
-  FSourcePanel.Height := PanelHeight;
-  FSourceDisplay.Height := PanelHeight - BodyTop - 8;
-  FTransPanel.Height := PanelHeight;
-  FTransDisplay.Height := PanelHeight - BodyTop - FooterHeight - 6;
+  RefreshTransHtml;
 
   { Edit memo (hidden initially) }
   FTransMemo := TMemo.Create(FTransPanel);
   FTransMemo.Parent := FTransPanel;
   FTransMemo.Left := 8;
   FTransMemo.Top := BodyTop;
-  FTransMemo.Width := FTransPanel.Width - 16;
+  FTransMemo.Anchors := [akTop, akLeft, akRight, akBottom];
+  FTransMemo.Width := FTransPanel.ClientWidth - 16;
   FTransMemo.Height := PanelHeight - BodyTop - FooterHeight - 6;
-  FTransMemo.Anchors := [akTop, akLeft, akBottom];
   FTransMemo.Text := ATransText;
   FTransMemo.Font.Name := 'Roboto';
   FTransMemo.Font.Height := -13;
+  FTransMemo.WordWrap := True;
   FTransMemo.ScrollBars := ssAutoVertical;
   FTransMemo.Visible := False;
   FTransMemo.OnExit := @AOwnerForm.OnChunkMemoExit;
@@ -2299,13 +2047,9 @@ begin
 
   UpdateFinishedVisuals;
 
-  { If finished, disable editing and use green text }
+  { If finished, disable editing }
   if AFinished then
-  begin
     FEditButton.Enabled := False;
-    FTransDisplay.Font.Color := clGreen;
-    FTransDisplay.Invalidate;
-  end;
 
   SetSelected(False);
 end;
@@ -2317,30 +2061,49 @@ begin
   inherited Destroy;
 end;
 
+procedure TChunkPanel.RefreshSourceHtml;
+var
+  Body: string;
+begin
+  Body := USFMToHtml(FSourceText, FSourceBadgeColor, 'black');
+  FSourceHtml.SetHtmlFromStr(WrapInHtmlDoc(Body, 'Roboto', 10, clWhite));
+end;
+
+procedure TChunkPanel.RefreshTransHtml;
+var
+  Body, TextColor: string;
+begin
+  if FIsFinished then
+    TextColor := 'green'
+  else if FTransText = '' then
+    TextColor := 'gray'
+  else
+    TextColor := 'black';
+  Body := USFMToHtml(FTransText, FTransBadgeColor, TextColor);
+  if Body = '' then
+    Body := '&nbsp;';
+  FTransHtml.SetHtmlFromStr(WrapInHtmlDoc(Body, 'Roboto', 10, clWhite));
+end;
+
 procedure TChunkPanel.RecalcLayout;
 var
-  SourceW, TransW, SourceH, TransH, PanelHeight: Integer;
+  SourceH, TransH, PanelHeight: Integer;
   HeaderHeight, FooterHeight, BodyTop: Integer;
+  ContentSize: TSize;
 begin
   HeaderHeight := 28;
   FooterHeight := 34;
   BodyTop := HeaderHeight + 2;
 
-  { Use panel's current client width for display sizing }
-  SourceW := FSourcePanel.ClientWidth - 16;
-  TransW := FTransPanel.ClientWidth - 16;
-  if SourceW < 40 then SourceW := 40;
-  if TransW < 40 then TransW := 40;
-  FSourceDisplay.Width := SourceW;
-  FTransDisplay.Width := TransW;
-  FTransMemo.Width := TransW;
-
-  SourceH := FSourceDisplay.CalcNeededHeight(SourceW) + BodyTop + 8;
+  { Query rendered content height from HTML panels }
+  ContentSize := FSourceHtml.GetContentSize;
+  SourceH := ContentSize.cy + BodyTop + 8;
   if SourceH < 50 then
     SourceH := 50;
 
-  if FTransDisplay.FRawText <> '' then
-    TransH := FTransDisplay.CalcNeededHeight(TransW)
+  ContentSize := FTransHtml.GetContentSize;
+  if FTransText <> '' then
+    TransH := ContentSize.cy
   else
     TransH := 30;
   if TransH < 30 then
@@ -2352,13 +2115,7 @@ begin
     PanelHeight := TransH + BodyTop + FooterHeight + 4;
 
   FSourcePanel.Height := PanelHeight;
-  FSourceDisplay.Height := PanelHeight - BodyTop - 8;
   FTransPanel.Height := PanelHeight;
-  FTransDisplay.Height := PanelHeight - BodyTop - FooterHeight - 6;
-  FTransMemo.Height := PanelHeight - BodyTop - FooterHeight - 6;
-
-  FSourceDisplay.Invalidate;
-  FTransDisplay.Invalidate;
 end;
 
 procedure TChunkPanel.SetEditing(AEdit: Boolean);
@@ -2367,7 +2124,7 @@ begin
     Exit;
 
   FEditing := AEdit;
-  FTransDisplay.Visible := not AEdit;
+  FTransHtml.Visible := not AEdit;
   FTransMemo.Visible := AEdit;
 
   if AEdit then
@@ -2381,7 +2138,6 @@ begin
   begin
     SaveContent;
     FEditButton.Caption := #9998;
-    FTransDisplay.Color := clWhite;
   end;
 end;
 
@@ -2390,11 +2146,7 @@ begin
   if FEditing then
   begin
     FTransText := FTransMemo.Text;
-    FTransDisplay.Text := FTransText;
-    if FTransText <> '' then
-      FTransDisplay.Font.Color := clBlack
-    else
-      FTransDisplay.Font.Color := clGray;
+    RefreshTransHtml;
   end;
 end;
 
@@ -2431,7 +2183,7 @@ end;
 function TChunkPanel.OwnsControl(AObj: TObject): Boolean;
 begin
   Result := (AObj = FSourcePanel) or (AObj = FTransPanel) or
-            (AObj = FSourceDisplay) or (AObj = FTransDisplay) or
+            (AObj = FSourceHtml) or (AObj = FTransHtml) or
             (AObj = FTransMemo) or (AObj = FFinishedToggleBtn) or
             (AObj = FEditButton);
 end;
