@@ -169,6 +169,12 @@ type
     procedure UpdatePaneHeaders;
     procedure ApplyTheme;
     procedure btnChangeSourceClick(Sender: TObject);
+    procedure SplitterMoved(Sender: TObject);
+    procedure RecalcAllChunkLayouts;
+    procedure ScheduleRecalcLayout;
+    procedure RecalcLayoutTimerFire(Sender: TObject);
+  private
+    FRecalcTimer: TTimer;
   private
     { Loading splash }
     FLoadingSplash: TForm;
@@ -211,6 +217,7 @@ type
     destructor Destroy; override;
     procedure SetEditing(AEdit: Boolean);
     procedure SaveContent;
+    procedure RecalcLayout;
     procedure UpdateFinishedVisuals;
     procedure SetSelected(ASelected: Boolean);
     function OwnsControl(AObj: TObject): Boolean;
@@ -652,6 +659,8 @@ begin
   btnTabWords.OnClick := @OnResourceTabClick;
   btnTabQuestions.OnClick := @OnResourceTabClick;
   btnChangeSource.OnClick := @btnChangeSourceClick;
+  Splitter1.OnMoved := @SplitterMoved;
+  Splitter2.OnMoved := @SplitterMoved;
 
   FScrollSyncTimer := TTimer.Create(Self);
   FScrollSyncTimer.Interval := 30;
@@ -662,10 +671,43 @@ begin
   UpdatePaneHeaders;
 end;
 
+procedure TProjectEditWindow.RecalcAllChunkLayouts;
+var
+  I: Integer;
+begin
+  for I := 0 to Length(FChunkPanels) - 1 do
+    FChunkPanels[I].RecalcLayout;
+end;
+
+procedure TProjectEditWindow.ScheduleRecalcLayout;
+begin
+  if FRecalcTimer = nil then
+  begin
+    FRecalcTimer := TTimer.Create(Self);
+    FRecalcTimer.Interval := 50;
+    FRecalcTimer.OnTimer := @RecalcLayoutTimerFire;
+  end;
+  { Restart the timer on each resize event so we only fire once after settling }
+  FRecalcTimer.Enabled := False;
+  FRecalcTimer.Enabled := True;
+end;
+
+procedure TProjectEditWindow.RecalcLayoutTimerFire(Sender: TObject);
+begin
+  FRecalcTimer.Enabled := False;
+  RecalcAllChunkLayouts;
+end;
+
 procedure TProjectEditWindow.FormResize(Sender: TObject);
 begin
   ApplyOrientationLayout(FLayoutDirection);
   UpdatePaneHeaders;
+  ScheduleRecalcLayout;
+end;
+
+procedure TProjectEditWindow.SplitterMoved(Sender: TObject);
+begin
+  ScheduleRecalcLayout;
 end;
 
 procedure TProjectEditWindow.btnMenuClick(Sender: TObject);
@@ -1584,6 +1626,9 @@ begin
       TransScrollBox.EnableAutoSizing;
     end;
 
+    { Recalculate chunk layout now that auto-sizing has set final widths }
+    RecalcAllChunkLayouts;
+
     UpdateChapterNav;
     UpdateStatus;
 
@@ -2112,7 +2157,6 @@ begin
   FSourceDisplay.Left := 8;
   FSourceDisplay.Top := BodyTop;
   FSourceDisplay.Width := ASourceParent.ClientWidth - 16;
-  FSourceDisplay.Anchors := [akTop, akLeft, akRight];
   FSourceDisplay.Color := clWhite;
   FSourceDisplay.Font.Name := 'Roboto';
   FSourceDisplay.Font.Height := -13;
@@ -2143,7 +2187,6 @@ begin
   FTransDisplay.Left := 8;
   FTransDisplay.Top := BodyTop;
   FTransDisplay.Width := ATransParent.ClientWidth - 16;
-  FTransDisplay.Anchors := [akTop, akLeft, akRight];
   FTransDisplay.Color := clWhite;
   FTransDisplay.Font.Name := 'Roboto';
   FTransDisplay.Font.Height := -13;
@@ -2183,7 +2226,7 @@ begin
   FTransMemo.Top := BodyTop;
   FTransMemo.Width := FTransPanel.Width - 16;
   FTransMemo.Height := PanelHeight - BodyTop - FooterHeight - 6;
-  FTransMemo.Anchors := [akTop, akLeft, akRight, akBottom];
+  FTransMemo.Anchors := [akTop, akLeft, akBottom];
   FTransMemo.Text := ATransText;
   FTransMemo.Font.Name := 'Roboto';
   FTransMemo.Font.Height := -13;
@@ -2272,6 +2315,50 @@ begin
   FreeAndNil(FSourcePanel);
   FreeAndNil(FTransPanel);
   inherited Destroy;
+end;
+
+procedure TChunkPanel.RecalcLayout;
+var
+  SourceW, TransW, SourceH, TransH, PanelHeight: Integer;
+  HeaderHeight, FooterHeight, BodyTop: Integer;
+begin
+  HeaderHeight := 28;
+  FooterHeight := 34;
+  BodyTop := HeaderHeight + 2;
+
+  { Use panel's current client width for display sizing }
+  SourceW := FSourcePanel.ClientWidth - 16;
+  TransW := FTransPanel.ClientWidth - 16;
+  if SourceW < 40 then SourceW := 40;
+  if TransW < 40 then TransW := 40;
+  FSourceDisplay.Width := SourceW;
+  FTransDisplay.Width := TransW;
+  FTransMemo.Width := TransW;
+
+  SourceH := FSourceDisplay.CalcNeededHeight(SourceW) + BodyTop + 8;
+  if SourceH < 50 then
+    SourceH := 50;
+
+  if FTransDisplay.FRawText <> '' then
+    TransH := FTransDisplay.CalcNeededHeight(TransW)
+  else
+    TransH := 30;
+  if TransH < 30 then
+    TransH := 30;
+
+  { Use the taller of source/trans for both panels }
+  PanelHeight := SourceH;
+  if TransH + BodyTop + FooterHeight + 4 > PanelHeight then
+    PanelHeight := TransH + BodyTop + FooterHeight + 4;
+
+  FSourcePanel.Height := PanelHeight;
+  FSourceDisplay.Height := PanelHeight - BodyTop - 8;
+  FTransPanel.Height := PanelHeight;
+  FTransDisplay.Height := PanelHeight - BodyTop - FooterHeight - 6;
+  FTransMemo.Height := PanelHeight - BodyTop - FooterHeight - 6;
+
+  FSourceDisplay.Invalidate;
+  FTransDisplay.Invalidate;
 end;
 
 procedure TChunkPanel.SetEditing(AEdit: Boolean);
