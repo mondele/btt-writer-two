@@ -132,66 +132,132 @@ object ProjectEditWindow: TProjectEditWindow
     ClientWidth = 1044
     ParentBackground = False
     TabOrder = 2
+    object PaneHeaderBar: TPanel
+      Left = 0
+      Height = 36
+      Top = 0
+      Width = 1044
+      Align = alTop
+      BevelOuter = bvNone
+      ClientHeight = 36
+      ClientWidth = 1044
+      Color = 15921906
+      ParentBackground = False
+      ParentColor = False
+      TabOrder = 0
+      object lblSourceHeader: TLabel
+        Left = 8
+        Height = 16
+        Top = 2
+        Width = 80
+        Caption = 'Source Text'
+        Font.Height = -13
+        Font.Style = [fsBold]
+        ParentColor = False
+        ParentFont = False
+      end
+      object SourceLangHeader: TLabel
+        Left = 8
+        Height = 15
+        Top = 19
+        Width = 120
+        Caption = 'English ULB'
+        Font.Color = 7303023
+        Font.Height = -11
+        ParentColor = False
+        ParentFont = False
+      end
+      object btnChangeSource: TButton
+        Left = 250
+        Height = 20
+        Top = 8
+        Width = 70
+        Caption = 'Change'
+        Font.Height = -10
+        ParentFont = False
+        TabOrder = 0
+      end
+      object lblTransHeader: TLabel
+        Left = 370
+        Height = 16
+        Top = 2
+        Width = 80
+        Caption = 'Translation'
+        Font.Height = -13
+        Font.Style = [fsBold]
+        ParentColor = False
+        ParentFont = False
+      end
+      object lblTransLangHeader: TLabel
+        Left = 370
+        Height = 15
+        Top = 19
+        Width = 120
+        Caption = 'Language'
+        Font.Color = 7303023
+        Font.Height = -11
+        ParentColor = False
+        ParentFont = False
+      end
+      object btnTabNotes: TButton
+        Left = 740
+        Height = 24
+        Top = 6
+        Width = 84
+        Caption = 'Notes'
+        Enabled = False
+        TabOrder = 1
+      end
+      object btnTabWords: TButton
+        Left = 828
+        Height = 24
+        Top = 6
+        Width = 84
+        Caption = 'Words'
+        Enabled = False
+        TabOrder = 2
+      end
+      object btnTabQuestions: TButton
+        Left = 916
+        Height = 24
+        Top = 6
+        Width = 98
+        Caption = 'Questions'
+        Enabled = False
+        TabOrder = 3
+      end
+    end
     object Splitter1: TSplitter
       Left = 360
-      Height = 630
-      Top = 0
+      Height = 594
+      Top = 36
       Width = 5
     end
     object Splitter2: TSplitter
       Left = 719
-      Height = 630
-      Top = 0
+      Height = 594
+      Top = 36
       Width = 5
       Align = alRight
       ResizeAnchor = akRight
     end
     object SourcePanel: TPanel
       Left = 0
-      Height = 630
-      Top = 0
+      Height = 594
+      Top = 36
       Width = 360
       Align = alLeft
       BevelOuter = bvNone
-      ClientHeight = 630
+      ClientHeight = 594
       ClientWidth = 360
       Color = 15263976
       ParentBackground = False
       ParentColor = False
-      TabOrder = 0
-      object lblSourceHeader: TLabel
-        Left = 0
-        Height = 16
-        Top = 0
-        Width = 360
-        Align = alTop
-        Caption = 'Source Text'
-        Color = clWhite
-        Font.Height = -13
-        Font.Style = [fsBold]
-        Layout = tlCenter
-        ParentColor = False
-        ParentFont = False
-      end
-      object SourceLangHeader: TLabel
-        Left = 0
-        Height = 15
-        Top = 16
-        Width = 360
-        Align = alTop
-        Caption = 'Plateau Malagasy ULB'
-        Color = 15921906
-        Font.Color = 7303023
-        Font.Height = -12
-        Font.Style = [fsBold]
-        Layout = tlCenter
-        ParentColor = False
-        ParentFont = False
-      end
+      TabOrder = 1
       object SourceScrollBox: TScrollBox
         Left = 0
-        Height = 599
-        Top = 31
+        Height = 594
+        Top = 0
         Width = 360
         HorzScrollBar.Page = 1
         VertScrollBar.Page = 1
@@ -203,35 +269,21 @@ object ProjectEditWindow: TProjectEditWindow
     end
     object TransPanel: TPanel
       Left = 365
-      Height = 630
-      Top = 0
+      Height = 594
+      Top = 36
       Width = 354
       Align = alClient
       BevelOuter = bvNone
-      ClientHeight = 630
+      ClientHeight = 594
       ClientWidth = 354
       Color = 15395562
       ParentBackground = False
       ParentColor = False
-      TabOrder = 1
-      object lblTransHeader: TLabel
-        Left = 0
-        Height = 16
-        Top = 0
-        Width = 354
-        Align = alTop
-        Caption = 'Translation'
-        Color = clWhite
-        Font.Height = -13
-        Font.Style = [fsBold]
-        Layout = tlCenter
-        ParentColor = False
-        ParentFont = False
-      end
+      TabOrder = 2
       object TransScrollBox: TScrollBox
         Left = 0
-        Height = 614
-        Top = 16
+        Height = 594
+        Top = 0
         Width = 354
         HorzScrollBar.Page = 1
         VertScrollBar.Page = 1
@@ -243,62 +295,21 @@ object ProjectEditWindow: TProjectEditWindow
     end
     object ResourcePanel: TPanel
       Left = 724
-      Height = 630
-      Top = 0
+      Height = 594
+      Top = 36
       Width = 320
       Align = alRight
       BevelOuter = bvNone
-      ClientHeight = 630
+      ClientHeight = 594
       ClientWidth = 320
       Color = 15263976
       ParentBackground = False
       ParentColor = False
-      TabOrder = 2
-      object ResourceTabsPanel: TPanel
-        Left = 0
-        Height = 32
-        Top = 0
-        Width = 320
-        Align = alTop
-        BevelOuter = bvNone
-        ClientHeight = 32
-        ClientWidth = 320
-        Color = clWhite
-        ParentBackground = False
-        ParentColor = False
-        TabOrder = 0
-        object btnTabNotes: TButton
-          Left = 8
-          Height = 24
-          Top = 4
-          Width = 84
-          Caption = 'Notes'
-          Enabled = False
-          TabOrder = 0
-        end
-        object btnTabWords: TButton
-          Left = 96
-          Height = 24
-          Top = 4
-          Width = 84
-          Caption = 'Words'
-          Enabled = False
-          TabOrder = 1
-        end
-        object btnTabQuestions: TButton
-          Left = 184
-          Height = 24
-          Top = 4
-          Width = 98
-          Caption = 'Questions'
-          Enabled = False
-          TabOrder = 2
-        end
-      end
+      TabOrder = 3
       object ResourceMemo: TMemo
         Left = 0
-        Height = 598
-        Top = 32
+        Height = 594
+        Top = 0
         Width = 320
         Align = alClient
         BorderStyle = bsNone
@@ -311,7 +322,7 @@ object ProjectEditWindow: TProjectEditWindow
         ParentFont = False
         ReadOnly = True
         ScrollBars = ssAutoVertical
-        TabOrder = 1
+        TabOrder = 0
       end
     end
   end

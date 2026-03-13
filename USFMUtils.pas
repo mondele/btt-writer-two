@@ -23,6 +23,23 @@ function ParseVerseNumbers(const Text: string): TStringList;
   and strips <para> tags. }
 function UsxToPlainText(const UsxText: string): string;
 
+type
+  TUSFMVerse = record
+    Chapter: Integer;
+    Verse: Integer;
+    Content: string;   { raw text including \v marker }
+  end;
+  TUSFMVerseArray = array of TUSFMVerse;
+
+  TUSFMParseResult = record
+    BookID: string;      { from \id line }
+    BookTitle: string;   { from \h or \mt }
+    Verses: TUSFMVerseArray;
+  end;
+
+function ParseUSFMFile(const FilePath: string; out ParseResult: TUSFMParseResult;
+  out ErrorMsg: string): Boolean;
+
 implementation
 
 function FindVerseMarkerPos(const Text: string; VerseNum: Integer): Integer;
@@ -219,6 +236,130 @@ begin
   until False;
 
   Result := Trim(S);
+end;
+
+function ParseUSFMFile(const FilePath: string; out ParseResult: TUSFMParseResult;
+  out ErrorMsg: string): Boolean;
+var
+  SL: TStringList;
+  I, CurChapter, CurVerse: Integer;
+  Line, Trimmed, Token, Rest: string;
+  SpacePos: Integer;
+  VerseCount: Integer;
+begin
+  Result := False;
+  ParseResult := Default(TUSFMParseResult);
+  ErrorMsg := '';
+
+  if not FileExists(FilePath) then
+  begin
+    ErrorMsg := 'File not found: ' + FilePath;
+    Exit;
+  end;
+
+  SL := TStringList.Create;
+  try
+    SL.LoadFromFile(FilePath);
+    CurChapter := 0;
+    CurVerse := 0;
+    VerseCount := 0;
+    SetLength(ParseResult.Verses, 0);
+
+    for I := 0 to SL.Count - 1 do
+    begin
+      Line := SL[I];
+      Trimmed := Trim(Line);
+      if Trimmed = '' then
+        Continue;
+
+      { Check for markers }
+      if (Length(Trimmed) > 1) and (Trimmed[1] = '\') then
+      begin
+        { Extract marker token }
+        SpacePos := Pos(' ', Trimmed);
+        if SpacePos > 0 then
+        begin
+          Token := Copy(Trimmed, 1, SpacePos - 1);
+          Rest := Trim(Copy(Trimmed, SpacePos + 1, Length(Trimmed)));
+        end
+        else
+        begin
+          Token := Trimmed;
+          Rest := '';
+        end;
+
+        if Token = '\id' then
+        begin
+          { \id BOOK description }
+          SpacePos := Pos(' ', Rest);
+          if SpacePos > 0 then
+            ParseResult.BookID := Copy(Rest, 1, SpacePos - 1)
+          else
+            ParseResult.BookID := Rest;
+          Continue;
+        end
+        else if Token = '\h' then
+        begin
+          if ParseResult.BookTitle = '' then
+            ParseResult.BookTitle := Rest;
+          Continue;
+        end
+        else if Token = '\mt' then
+        begin
+          if ParseResult.BookTitle = '' then
+            ParseResult.BookTitle := Rest;
+          Continue;
+        end
+        else if Token = '\c' then
+        begin
+          CurChapter := StrToIntDef(Rest, CurChapter + 1);
+          CurVerse := 0;
+          Continue;
+        end
+        else if Token = '\v' then
+        begin
+          { \v NUM text... }
+          SpacePos := Pos(' ', Rest);
+          if SpacePos > 0 then
+          begin
+            CurVerse := StrToIntDef(Copy(Rest, 1, SpacePos - 1), CurVerse + 1);
+            Rest := Trimmed; { keep the full \v line }
+          end
+          else
+          begin
+            CurVerse := StrToIntDef(Rest, CurVerse + 1);
+            Rest := Trimmed;
+          end;
+
+          Inc(VerseCount);
+          SetLength(ParseResult.Verses, VerseCount);
+          ParseResult.Verses[VerseCount - 1].Chapter := CurChapter;
+          ParseResult.Verses[VerseCount - 1].Verse := CurVerse;
+          ParseResult.Verses[VerseCount - 1].Content := Rest;
+          Continue;
+        end
+        else if (Token = '\p') or (Token = '\s') or (Token = '\s5') or
+                (Token = '\d') or (Token = '\ide') or (Token = '\toc1') or
+                (Token = '\toc2') or (Token = '\toc3') or (Token = '\mt1') or
+                (Token = '\mt2') then
+        begin
+          { Known structural markers — skip }
+          Continue;
+        end;
+      end;
+
+      { Non-marker line or continuation — append to last verse if any }
+      if VerseCount > 0 then
+        ParseResult.Verses[VerseCount - 1].Content :=
+          ParseResult.Verses[VerseCount - 1].Content + ' ' + Trimmed;
+    end;
+
+    Result := ParseResult.BookID <> '';
+    if not Result then
+      ErrorMsg := 'No \id marker found in USFM file.';
+  finally
+    SL.Free;
+  end;
 end;
 
 end.

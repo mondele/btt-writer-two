@@ -34,13 +34,19 @@ type
 
   TSourceTextOptionList = array of TSourceTextOption;
 
+type
+  TProjectTypeID = (ptText, ptNotes, ptQuestions);
+
 function ListSourceTextOptions: TSourceTextOptionList;
 function ListBooksFromIndex: TBookOptionList;
 function ListTargetLanguagesFromIndex: TTargetLanguageOptionList;
 function ListSourceTextOptionsForBookFromIndex(const BookCode: string): TSourceTextOptionList;
 function PromptForTargetLanguage(out LangCode, LangName: string): Boolean;
 function PromptForBook(out BookCode, BookName: string): Boolean;
+function PromptForProjectType(const TargetLangCode, BookCode: string;
+  out ProjType: TProjectTypeID): Boolean;
 function PromptForSourceText(const BookCode: string; out Opt: TSourceTextOption): Boolean;
+function TextProjectExistsFor(const TargetLangCode, BookCode: string): Boolean;
 function EnsureSourceTextPresent(const SourceOpt: TSourceTextOption;
   out SourceDir, ErrorMsg: string): Boolean;
 function IsCanonicalBibleBookCode(const BookCode: string): Boolean;
@@ -48,8 +54,8 @@ function CanonicalBookName(const BookCode: string): string;
 function FindSourceTextOption(const SourceLangCode, BookCode, ResourceID: string;
   out Opt: TSourceTextOption): Boolean;
 function CreateProjectFromSource(const TargetLangCode, TargetLangName: string;
-  const SourceOpt: TSourceTextOption; out ProjectDir: string;
-  out ErrorMsg: string): Boolean;
+  const SourceOpt: TSourceTextOption; AProjType: TProjectTypeID;
+  out ProjectDir: string; out ErrorMsg: string): Boolean;
 function CommitProjectChanges(const ProjectDir, CommitMsg: string;
   out ErrorMsg: string): Boolean;
 
@@ -57,7 +63,7 @@ implementation
 
 uses
   Process, jsonparser, DataPaths, Forms, Controls, StdCtrls, ExtCtrls,
-  Dialogs, LCLType, ComCtrls;
+  Dialogs, LCLType, ComCtrls, SourceExtractor, IndexDatabase, AppLog, GitUtils;
 
 const
   NON_GL_RESOURCE_ID = 'reg';
@@ -83,6 +89,12 @@ resourcestring
   rsSelectSourceText = 'Select Source Text';
   rsPleaseSelectSourceText = 'Please select a source text.';
   rsNoSourceTextsForBookFmt = 'No source texts found for book "%s" in index.sqlite. (Excluded: tn, tq)';
+  rsSelectProjectType = 'Select Project Type';
+  rsTypeText = 'Text';
+  rsTypeNotes = 'Notes (translationNotes)';
+  rsTypeQuestions = 'Questions (translationQuestions)';
+  rsNotesRequireText = 'A text translation project must exist for %s in %s before creating a Notes or Questions project.';
+  rsPleaseSelectProjectType = 'Please select a project type.';
 
 type
   TCanonicalBook = record
@@ -315,88 +327,6 @@ begin
   end;
 end;
 
-function RunCommandCapture(const Exe: string; const Args: array of string;
-  const WorkDir: string; out OutputText, ErrorText: string; out ExitCode: Integer): Boolean;
-var
-  P: TProcess;
-  OutS, ErrS: TStringStream;
-  I: Integer;
-  Buf: array[0..4095] of Byte;
-  N: LongInt;
-begin
-  Result := False;
-  OutputText := '';
-  ErrorText := '';
-  ExitCode := -1;
-
-  P := TProcess.Create(nil);
-  OutS := TStringStream.Create('');
-  ErrS := TStringStream.Create('');
-  try
-    P.Executable := Exe;
-    if WorkDir <> '' then
-      P.CurrentDirectory := WorkDir;
-    P.Options := [poUsePipes];
-    for I := 0 to High(Args) do
-      P.Parameters.Add(Args[I]);
-    try
-      P.Execute;
-    except
-      on E: Exception do
-      begin
-        ErrorText := E.Message;
-        Exit(False);
-      end;
-    end;
-    while P.Running do
-    begin
-      while P.Output.NumBytesAvailable > 0 do
-      begin
-        N := P.Output.Read(Buf, SizeOf(Buf));
-        if N > 0 then
-          OutS.WriteBuffer(Buf, N);
-      end;
-      while P.Stderr.NumBytesAvailable > 0 do
-      begin
-        N := P.Stderr.Read(Buf, SizeOf(Buf));
-        if N > 0 then
-          ErrS.WriteBuffer(Buf, N);
-      end;
-      Sleep(5);
-    end;
-    while P.Output.NumBytesAvailable > 0 do
-    begin
-      N := P.Output.Read(Buf, SizeOf(Buf));
-      if N > 0 then
-        OutS.WriteBuffer(Buf, N);
-    end;
-    while P.Stderr.NumBytesAvailable > 0 do
-    begin
-      N := P.Stderr.Read(Buf, SizeOf(Buf));
-      if N > 0 then
-        ErrS.WriteBuffer(Buf, N);
-    end;
-    OutputText := OutS.DataString;
-    ErrorText := ErrS.DataString;
-    ExitCode := P.ExitStatus;
-    Result := True;
-  finally
-    ErrS.Free;
-    OutS.Free;
-    P.Free;
-  end;
-end;
-
-function GetIndexSQLitePath: string;
-begin
-  Result := IncludeTrailingPathDelimiter(GetDataPath) + 'library' + DirectorySeparator + 'index.sqlite';
-end;
-
-function ShellQuote(const S: string): string;
-begin
-  Result := '''' + StringReplace(S, '''', '''"''"''', [rfReplaceAll]) + '''';
-end;
-
 function ResolveInstalledSourceDir(const SourceOpt: TSourceTextOption): string;
 var
   Match: TSourceTextOption;
@@ -415,8 +345,7 @@ end;
 function EnsureSourceTextPresent(const SourceOpt: TSourceTextOption;
   out SourceDir, ErrorMsg: string): Boolean;
 var
-  ZipPath, RelEntry, EntryName, DestRoot, DestDir, Cmd, OutText, ErrText, Detail: string;
-  ExitCode: Integer;
+  ZipPath, DestRoot, DestDir, TsrcSlug: string;
 begin
   Result := False;
   SourceDir := '';
@@ -426,33 +355,25 @@ begin
   if SourceDir <> '' then
     Exit(True);
 
-  ZipPath := GetBundledResourceContainersZipPath;
-
-  if (ZipPath = '') or (not FileExists(ZipPath)) then
+  { Find the bundled zip — uses SourceExtractor's FindBundledZipPath }
+  ZipPath := SourceExtractor.FindBundledZipPath;
+  if ZipPath = '' then
   begin
-    ErrorMsg := rsSourceNotInstalledAndNoBundle;
-    Exit(False);
+    { Fall back to DataPaths install path }
+    ZipPath := GetBundledResourceContainersZipPath;
+    if (ZipPath = '') or (not FileExists(ZipPath)) then
+    begin
+      ErrorMsg := rsSourceNotInstalledAndNoBundle;
+      Exit(False);
+    end;
   end;
 
-  DestRoot := GetLibraryPath;
-  DestDir := IncludeTrailingPathDelimiter(DestRoot) +
-    LowerCase(Trim(SourceOpt.SourceLangCode)) + '_' +
+  TsrcSlug := LowerCase(Trim(SourceOpt.SourceLangCode)) + '_' +
     LowerCase(Trim(SourceOpt.BookCode)) + '_' +
     LowerCase(Trim(SourceOpt.ResourceID));
-  EntryName := ExtractFileName(DestDir) + '.tsrc';
-  RelEntry := 'resource_containers/' + EntryName;
 
-  if not RunCommandCapture('unzip', ['-Z1', ZipPath, RelEntry], '',
-    OutText, ErrText, ExitCode) then
-  begin
-    ErrorMsg := 'Could not inspect bundled source archive.';
-    Exit(False);
-  end;
-  if (ExitCode <> 0) or (Trim(OutText) = '') then
-  begin
-    ErrorMsg := 'Bundled source text not found: ' + EntryName;
-    Exit(False);
-  end;
+  DestRoot := GetLibraryPath;
+  DestDir := IncludeTrailingPathDelimiter(DestRoot) + TsrcSlug;
 
   if not ForceDirectories(DestDir) then
   begin
@@ -460,28 +381,11 @@ begin
     Exit(False);
   end;
 
-  Cmd := 'set -e; unzip -p ' + ShellQuote(ZipPath) + ' ' + ShellQuote(RelEntry) +
-    ' | bzip2 -dc | tar -xf - -C ' + ShellQuote(DestDir);
+  LogFmt(llInfo, 'Extracting source text: %s → %s', [TsrcSlug, DestDir]);
 
-  if not RunCommandCapture('bash', ['-lc', Cmd], '', OutText, ErrText, ExitCode) then
+  if not ExtractTsrc(ZipPath, TsrcSlug, DestDir) then
   begin
-    ErrorMsg := 'Failed to extract bundled source text ' + EntryName + '.';
-    Exit(False);
-  end;
-  if ExitCode <> 0 then
-  begin
-    Detail := Trim(ErrText);
-    if Detail = '' then
-      Detail := Trim(OutText);
-    ErrorMsg := 'Failed to extract bundled source text ' + EntryName + '.';
-    if Detail <> '' then
-      ErrorMsg := ErrorMsg + ' ' + Detail;
-    Exit(False);
-  end;
-
-  if not FileExists(IncludeTrailingPathDelimiter(DestDir) + 'package.json') then
-  begin
-    ErrorMsg := 'Extracted source text is incomplete: package.json missing in ' + DestDir;
+    ErrorMsg := 'Failed to extract bundled source text: ' + TsrcSlug + '.tsrc';
     Exit(False);
   end;
 
@@ -526,86 +430,59 @@ end;
 
 function ListTargetLanguagesFromIndex: TTargetLanguageOptionList;
 var
-  OutText, ErrText, Line: string;
-  ExitCode, Count, P: Integer;
-  Lines: TStringList;
-  Opt: TTargetLanguageOption;
+  DB: TIndexDatabase;
+  Langs: TTargetLanguageArray;
+  I: Integer;
 begin
   SetLength(Result, 0);
-  if not FileExists(GetIndexSQLitePath) then
+  DB := OpenIndexDatabase;
+  if DB = nil then
     Exit;
-
-  if not RunCommandCapture('sqlite3',
-    [GetIndexSQLitePath, 'SELECT slug || char(9) || name FROM target_language ORDER BY slug;'],
-    '', OutText, ErrText, ExitCode) then
-    Exit;
-  if ExitCode <> 0 then
-    Exit;
-
-  Lines := TStringList.Create;
   try
-    Lines.Text := StringReplace(OutText, #13, '', [rfReplaceAll]);
-    Count := 0;
-    for P := 0 to Lines.Count - 1 do
+    Langs := DB.ListTargetLanguages;
+    SetLength(Result, Length(Langs));
+    for I := 0 to High(Langs) do
     begin
-      Line := Trim(Lines[P]);
-      if Line = '' then
-        Continue;
-      Opt.Code := Copy(Line, 1, Pos(#9, Line) - 1);
-      Opt.Name := Copy(Line, Pos(#9, Line) + 1, MaxInt);
-      if (Opt.Code = '') or (Opt.Name = '') then
-        Continue;
-      Inc(Count);
-      SetLength(Result, Count);
-      Result[Count - 1] := Opt;
+      Result[I].Code := Langs[I].Slug;
+      Result[I].Name := Langs[I].Name;
     end;
   finally
-    Lines.Free;
+    DB.Free;
   end;
 end;
 
 function ListBooksFromIndex: TBookOptionList;
 var
-  OutText, ErrText, Code: string;
-  ExitCode, Count, I, P: Integer;
+  DB: TIndexDatabase;
+  SrcLangs: TSourceLanguageArray;
+  Books: TBookInfoArray;
   Available: array[0..65] of Boolean;
-  Lines: TStringList;
+  I, J, Count: Integer;
+  Code: string;
 begin
   SetLength(Result, 0);
-  if not FileExists(GetIndexSQLitePath) then
+  DB := OpenIndexDatabase;
+  if DB = nil then
     Exit;
-
-  if not RunCommandCapture('sqlite3',
-    [GetIndexSQLitePath,
-     'SELECT p.slug || char(9) || p.name ' +
-     'FROM project p ' +
-     'JOIN resource r ON r.project_id = p.id ' +
-     'WHERE r.type = ''book'' ' +
-     'AND lower(r.slug) NOT IN (''tn'', ''tq'') ' +
-     'GROUP BY p.slug ' +
-     'ORDER BY p.slug;'],
-    '', OutText, ErrText, ExitCode) then
-    Exit;
-  if ExitCode <> 0 then
-    Exit;
-
-  for I := 0 to High(Available) do
-    Available[I] := False;
-
-  Lines := TStringList.Create;
   try
-    Lines.Text := StringReplace(OutText, #13, '', [rfReplaceAll]);
-    for P := 0 to Lines.Count - 1 do
+    { Get all books across all source languages }
+    SrcLangs := DB.ListSourceLanguages;
+    for I := 0 to High(Available) do
+      Available[I] := False;
+
+    for I := 0 to High(SrcLangs) do
     begin
-      Code := LowerCase(Trim(Lines[P]));
-      if Code = '' then
-        Continue;
-      for I := 0 to High(CANON_BOOKS) do
-        if Code = CANON_BOOKS[I].Code then
-        begin
-          Available[I] := True;
-          Break;
-        end;
+      Books := DB.ListBooks(SrcLangs[I].Slug, '');
+      for J := 0 to High(Books) do
+      begin
+        Code := LowerCase(Trim(Books[J].Slug));
+        for Count := 0 to High(CANON_BOOKS) do
+          if Code = CANON_BOOKS[Count].Code then
+          begin
+            Available[Count] := True;
+            Break;
+          end;
+      end;
     end;
 
     Count := 0;
@@ -627,62 +504,38 @@ begin
       end;
     end;
   finally
-    Lines.Free;
+    DB.Free;
   end;
 end;
 
 function ListSourceTextOptionsForBookFromIndex(const BookCode: string): TSourceTextOptionList;
 var
-  OutText, ErrText, Line, QBook: string;
-  ExitCode, I, Count: Integer;
-  Lines, Parts: TStringList;
+  DB: TIndexDatabase;
+  Resources: TResourceInfoArray;
+  I, Count: Integer;
   Opt: TSourceTextOption;
+  BookName: string;
 begin
   SetLength(Result, 0);
-  if not FileExists(GetIndexSQLitePath) then
+  if Trim(BookCode) = '' then
     Exit;
 
-  QBook := StringReplace(LowerCase(Trim(BookCode)), '''', '''''', [rfReplaceAll]);
-  if QBook = '' then
+  DB := OpenIndexDatabase;
+  if DB = nil then
     Exit;
-
-  if not RunCommandCapture('sqlite3',
-    [GetIndexSQLitePath,
-     'SELECT sl.slug || char(9) || sl.name || char(9) || p.slug || char(9) || p.name || char(9) || r.slug || char(9) || r.name ' +
-     'FROM resource r ' +
-     'JOIN project p ON p.id = r.project_id ' +
-     'JOIN source_language sl ON sl.id = p.source_language_id ' +
-     'WHERE lower(p.slug) = ''' + QBook + ''' ' +
-     'AND r.type = ''book'' ' +
-     'AND lower(r.slug) NOT IN (''tn'', ''tq'') ' +
-     'ORDER BY sl.slug, r.slug;'],
-    '', OutText, ErrText, ExitCode) then
-    Exit;
-  if ExitCode <> 0 then
-    Exit;
-
-  Lines := TStringList.Create;
-  Parts := TStringList.Create;
   try
-    Parts.StrictDelimiter := True;
-    Parts.Delimiter := #9;
-    Lines.Text := StringReplace(OutText, #13, '', [rfReplaceAll]);
-    Count := 0;
-    for I := 0 to Lines.Count - 1 do
-    begin
-      Line := Trim(Lines[I]);
-      if Line = '' then
-        Continue;
-      Parts.DelimitedText := Line;
-      if Parts.Count < 6 then
-        Continue;
+    Resources := DB.ListSourceTexts(LowerCase(Trim(BookCode)));
+    BookName := CanonicalBookName(BookCode);
 
-      Opt.SourceLangCode := Parts[0];
-      Opt.SourceLangName := Parts[1];
-      Opt.BookCode := Parts[2];
-      Opt.BookName := Parts[3];
-      Opt.ResourceID := Parts[4];
-      Opt.ResourceName := Parts[5];
+    Count := 0;
+    for I := 0 to High(Resources) do
+    begin
+      Opt.SourceLangCode := Resources[I].SourceLangSlug;
+      Opt.SourceLangName := Resources[I].SourceLangName;
+      Opt.BookCode := LowerCase(Trim(BookCode));
+      Opt.BookName := BookName;
+      Opt.ResourceID := Resources[I].Slug;
+      Opt.ResourceName := Resources[I].Name;
       Opt.SourceDir := '';
 
       Inc(Count);
@@ -690,8 +543,7 @@ begin
       Result[Count - 1] := Opt;
     end;
   finally
-    Parts.Free;
-    Lines.Free;
+    DB.Free;
   end;
 end;
 
@@ -1088,6 +940,137 @@ begin
   end;
 end;
 
+function TextProjectExistsFor(const TargetLangCode, BookCode: string): Boolean;
+var
+  BasePath, DirPath, DirName: string;
+  SR: TSearchRec;
+  Parts: TStringArray;
+begin
+  Result := False;
+  BasePath := GetTargetTranslationsPath;
+  if not DirectoryExists(BasePath) then
+    Exit;
+
+  { Look for {langCode}_{bookCode}_text_* directories }
+  if FindFirst(BasePath + '*', faDirectory, SR) <> 0 then
+    Exit;
+  try
+    repeat
+      if (SR.Name = '.') or (SR.Name = '..') then
+        Continue;
+      if (SR.Attr and faDirectory) = 0 then
+        Continue;
+      DirName := SR.Name;
+      Parts := string(DirName).Split('_');
+      { Format: langCode_bookCode_text_resourceType }
+      if Length(Parts) >= 3 then
+        if (CompareText(Parts[0], TargetLangCode) = 0) and
+           (CompareText(Parts[1], BookCode) = 0) and
+           (CompareText(Parts[2], 'text') = 0) then
+        begin
+          { Verify manifest exists }
+          DirPath := IncludeTrailingPathDelimiter(BasePath + DirName);
+          if FileExists(DirPath + 'manifest.json') then
+            Exit(True);
+        end;
+    until FindNext(SR) <> 0;
+  finally
+    FindClose(SR);
+  end;
+end;
+
+function PromptForProjectType(const TargetLangCode, BookCode: string;
+  out ProjType: TProjectTypeID): Boolean;
+var
+  F: TForm;
+  Lst: TListBox;
+  BtnOK, BtnCancel: TButton;
+  HasText: Boolean;
+  BookName: string;
+begin
+  Result := False;
+  ProjType := ptText;
+
+  HasText := TextProjectExistsFor(TargetLangCode, BookCode);
+  BookName := CanonicalBookName(BookCode);
+  if BookName = '' then
+    BookName := BookCode;
+
+  F := TForm.Create(nil);
+  try
+    F.Position := poScreenCenter;
+    F.Width := 420;
+    F.Height := 280;
+    F.BorderIcons := [biSystemMenu];
+    F.Caption := rsSelectProjectType;
+
+    Lst := TListBox.Create(F);
+    Lst.Parent := F;
+    Lst.Left := 12;
+    Lst.Top := 12;
+    Lst.Width := 396;
+    Lst.Height := 190;
+    Lst.Anchors := [akTop, akLeft, akRight, akBottom];
+
+    Lst.Items.Add(rsTypeText);
+    Lst.Items.Add(rsTypeNotes);
+    Lst.Items.Add(rsTypeQuestions);
+    Lst.ItemIndex := 0;
+
+    BtnOK := TButton.Create(F);
+    BtnOK.Parent := F;
+    BtnOK.Left := 236;
+    BtnOK.Top := 214;
+    BtnOK.Width := 80;
+    BtnOK.Caption := rsOK;
+    BtnOK.Default := True;
+    BtnOK.ModalResult := mrOK;
+    BtnOK.Anchors := [akRight, akBottom];
+
+    BtnCancel := TButton.Create(F);
+    BtnCancel.Parent := F;
+    BtnCancel.Left := 328;
+    BtnCancel.Top := 214;
+    BtnCancel.Width := 80;
+    BtnCancel.Caption := rsCancel;
+    BtnCancel.ModalResult := mrCancel;
+    BtnCancel.Anchors := [akRight, akBottom];
+
+    if F.ShowModal <> mrOK then
+      Exit;
+
+    case Lst.ItemIndex of
+      0: ProjType := ptText;
+      1: begin
+        if not HasText then
+        begin
+          MessageDlg(Format(rsNotesRequireText, [BookName, TargetLangCode]),
+            mtWarning, [mbOK], 0);
+          Exit;
+        end;
+        ProjType := ptNotes;
+      end;
+      2: begin
+        if not HasText then
+        begin
+          MessageDlg(Format(rsNotesRequireText, [BookName, TargetLangCode]),
+            mtWarning, [mbOK], 0);
+          Exit;
+        end;
+        ProjType := ptQuestions;
+      end;
+    else
+      begin
+        MessageDlg(rsPleaseSelectProjectType, mtWarning, [mbOK], 0);
+        Exit;
+      end;
+    end;
+    Result := True;
+  finally
+    F.Free;
+  end;
+end;
+
 constructor TSourcePickerForm.CreatePicker(AOwner: TComponent;
   const AAll: TSourceTextOptionList);
 var
@@ -1327,16 +1310,49 @@ begin
     Result := '';
 end;
 
+function ProjectTypeToManifest(AProjType: TProjectTypeID;
+  out TypeID, TypeName, ResourceID, ResourceName, Format: string): Boolean;
+begin
+  Result := True;
+  case AProjType of
+    ptNotes: begin
+      TypeID := 'tn';
+      TypeName := 'Notes';
+      ResourceID := 'tn';
+      ResourceName := 'translationNotes';
+      Format := 'json';
+    end;
+    ptQuestions: begin
+      TypeID := 'tq';
+      TypeName := 'Questions';
+      ResourceID := 'tq';
+      ResourceName := 'translationQuestions';
+      Format := 'json';
+    end;
+  else
+    begin
+      TypeID := PROJECT_TYPE_ID;
+      TypeName := PROJECT_TYPE_NAME;
+      ResourceID := NON_GL_RESOURCE_ID;
+      ResourceName := NON_GL_RESOURCE_NAME;
+      Format := 'usfm';
+    end;
+  end;
+end;
+
 function BuildManifestJSON(const TargetLangCode, TargetLangName: string;
-  const SourceOpt: TSourceTextOption): TJSONObject;
+  const SourceOpt: TSourceTextOption; AProjType: TProjectTypeID): TJSONObject;
 var
   TargetObj, ProjectObj, TypeObj, ResourceObj, GeneratorObj, SourceObj: TJSONObject;
   SourcesArr, TranslatorsArr, FinishedArr: TJSONArray;
   ProjectName: string;
+  MTypeID, MTypeName, MResID, MResName, MFormat: string;
 begin
+  ProjectTypeToManifest(AProjType, MTypeID, MTypeName, MResID, MResName, MFormat);
+
   Result := TJSONObject.Create;
   Result.Add('package_version', 8);
-  Result.Add('format', 'usfm');
+  Result.Add('format', MFormat);
 
   GeneratorObj := TJSONObject.Create;
   GeneratorObj.Add('name', 'btt-writer-two');
@@ -1363,13 +1379,13 @@ begin
   Result.Add('project', ProjectObj);
 
   TypeObj := TJSONObject.Create;
-  TypeObj.Add('id', PROJECT_TYPE_ID);
-  TypeObj.Add('name', PROJECT_TYPE_NAME);
+  TypeObj.Add('id', MTypeID);
+  TypeObj.Add('name', MTypeName);
   Result.Add('type', TypeObj);
 
   ResourceObj := TJSONObject.Create;
-  ResourceObj.Add('id', NON_GL_RESOURCE_ID);
-  ResourceObj.Add('name', NON_GL_RESOURCE_NAME);
+  ResourceObj.Add('id', MResID);
+  ResourceObj.Add('name', MResName);
   Result.Add('resource', ResourceObj);
 
   SourcesArr := TJSONArray.Create;
@@ -1391,10 +1407,11 @@ begin
 end;
 
 function CreateProjectFromSource(const TargetLangCode, TargetLangName: string;
-  const SourceOpt: TSourceTextOption; out ProjectDir: string;
-  out ErrorMsg: string): Boolean;
+  const SourceOpt: TSourceTextOption; AProjType: TProjectTypeID;
+  out ProjectDir: string; out ErrorMsg: string): Boolean;
 var
   DirName, FullDir, ManifestPath, LicenseSrc, LicenseDst, SourceDir: string;
+  MTypeID, MTypeName, MResID, MResName, MFormat: string;
   Manifest: TJSONObject;
   SL: TStringList;
   GitErr: string;
@@ -1406,8 +1423,9 @@ begin
   if not EnsureSourceTextPresent(SourceOpt, SourceDir, ErrorMsg) then
     Exit(False);
 
+  ProjectTypeToManifest(AProjType, MTypeID, MTypeName, MResID, MResName, MFormat);
   DirName := TargetLangCode + '_' + SourceOpt.BookCode + '_' +
-    PROJECT_TYPE_ID + '_' + NON_GL_RESOURCE_ID;
+    MTypeID + '_' + MResID;
   FullDir := IncludeTrailingPathDelimiter(GetTargetTranslationsPath) + DirName;
   if DirectoryExists(FullDir) then
   begin
@@ -1421,7 +1439,7 @@ begin
     Exit;
   end;
 
-  Manifest := BuildManifestJSON(TargetLangCode, TargetLangName, SourceOpt);
+  Manifest := BuildManifestJSON(TargetLangCode, TargetLangName, SourceOpt, AProjType);
   try
     ManifestPath := IncludeTrailingPathDelimiter(FullDir) + 'manifest.json';
     SL := TStringList.Create;

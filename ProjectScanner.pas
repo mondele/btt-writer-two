@@ -107,8 +107,11 @@ begin
 end;
 
 function IsSupportedProject(const Summary: TProjectSummary): Boolean;
+var
+  ResType: string;
 begin
-  if LowerCase(Trim(Summary.ResourceType)) = 'tw' then
+  ResType := LowerCase(Trim(Summary.ResourceType));
+  if (ResType = 'tw') or (ResType = 'tn') or (ResType = 'tq') then
     Exit(True);
   Result := (Summary.BookCode <> '') and IsCanonicalBibleBookCode(Summary.BookCode);
 end;

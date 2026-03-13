@@ -63,7 +63,7 @@ end;
 
 function TChapter.MergeAllContent: string;
 var
-  I, StartVerse, NextVerse: Integer;
+  I, StartVerse: Integer;
   ChunkText: string;
 begin
   Result := '';
@@ -85,16 +85,6 @@ begin
         ChunkText := '\v ' + IntToStr(StartVerse) + ' ' + ChunkText
       else
         ChunkText := '\v ' + IntToStr(StartVerse) + ' ';
-
-      if (I < FChunks.Count - 1) and
-         TryStrToInt(FChunks[I + 1].Name, NextVerse) and
-         (NextVerse > StartVerse) then
-      begin
-        if Verbose then
-          WriteLn(Format('[VerseInference] chapter=%s chunk=%s endBoundaryVerse=%d',
-            [FID, FChunks[I].Name, NextVerse]));
-        ChunkText := ChunkText + LineEnding + '\v ' + IntToStr(NextVerse) + ' ';
-      end;
     end;
 
     Result := Result + ChunkText;

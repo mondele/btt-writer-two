@@ -6,10 +6,12 @@ interface
 
 uses
   Classes, SysUtils, Forms, Controls, Graphics, Dialogs,
-  ExtCtrls, StdCtrls, Buttons,
+  ExtCtrls, StdCtrls, Buttons, ComCtrls,
+  fpjson, jsonparser,
   ProjectManager, ResourceContainer, ProjectScanner,
   BibleBook, BibleChapter, BibleChunk, USFMUtils, DataPaths, ProjectCreator,
-  AppSettings, SettingsForm, ThemePalette, UIFonts;
+  AppSettings, SettingsForm, ThemePalette, UIFonts, AppLog,
+  IndexDatabase, SourceExtractor;
 
 resourcestring
   rsErrorOpeningChapterPrefix = 'Error opening chapter: ';
@@ -32,6 +34,10 @@ resourcestring
   rsStatusChapterFmt = 'Chapter %s of %d | %d/%d chunks finished';
   rsSavedAtPrefix = 'Saved at ';
   rsFinishedToggleLabel = 'Mark chunk as done';
+  rsLoadingProject = 'Loading project...';
+  rsLoadingSourceText = 'Loading source text...';
+  rsLoadingTranslation = 'Loading translation...';
+  rsLoadingChapter = 'Loading chapter...';
 
 type
   TResourceTab = (rtNotes, rtWords, rtQuestions);
@@ -90,20 +96,22 @@ type
     StatusPanel: TPanel;
     lblStatus: TLabel;
     SplitPanel: TPanel;
-    Splitter1: TSplitter;
-    Splitter2: TSplitter;
-    SourcePanel: TPanel;
-    SourceLangHeader: TLabel;
+    PaneHeaderBar: TPanel;
     lblSourceHeader: TLabel;
-    SourceScrollBox: TScrollBox;
-    TransPanel: TPanel;
+    SourceLangHeader: TLabel;
+    btnChangeSource: TButton;
     lblTransHeader: TLabel;
-    TransScrollBox: TScrollBox;
-    ResourcePanel: TPanel;
-    ResourceTabsPanel: TPanel;
+    lblTransLangHeader: TLabel;
     btnTabNotes: TButton;
     btnTabWords: TButton;
     btnTabQuestions: TButton;
+    Splitter1: TSplitter;
+    Splitter2: TSplitter;
+    SourcePanel: TPanel;
+    SourceScrollBox: TScrollBox;
+    TransPanel: TPanel;
+    TransScrollBox: TScrollBox;
+    ResourcePanel: TPanel;
     ResourceMemo: TMemo;
     AutoSaveTimer: TTimer;
     procedure FormCreate(Sender: TObject);
@@ -129,6 +137,10 @@ type
     FSelectedChunkIndex: Integer;
     FActiveResourceTab: TResourceTab;
     FLayoutDirection: string;
+    FSourceLangCode: string;
+    FSourceResourceType: string;
+    FBookCode: string;
+    FSummary: TProjectSummary;
 
     procedure ClearChunkPanels;
     procedure LoadChapter(AIndex: Integer);
@@ -154,7 +166,17 @@ type
     procedure CollectWordsResources(const ChapterID: string; ChunkStart, ChunkEnd: Integer;
       OutList: TStringList);
     procedure ApplyOrientationLayout(const Direction: string);
+    procedure UpdatePaneHeaders;
     procedure ApplyTheme;
+    procedure btnChangeSourceClick(Sender: TObject);
+  private
+    { Loading splash }
+    FLoadingSplash: TForm;
+    FLoadingLabel: TLabel;
+    FLoadingBar: TProgressBar;
+    procedure ShowLoadingSplash(const AText: string);
+    procedure UpdateLoadingSplash(const AText: string; AProgress: Integer);
+    procedure HideLoadingSplash;
   public
     procedure OpenProject(const APath: string; const ASummary: TProjectSummary);
   end;
@@ -599,6 +621,7 @@ end;
 
 procedure TProjectEditWindow.FormCreate(Sender: TObject);
 begin
+  LogFmt(llInfo, 'ProjectEditForm.FormCreate self=%p', [Pointer(Self)]);
   FProject := nil;
   FSourceRC := nil;
   FCurrentChapterIndex := -1;
@@ -619,6 +642,7 @@ begin
   btnTabNotes.OnClick := @OnResourceTabClick;
   btnTabWords.OnClick := @OnResourceTabClick;
   btnTabQuestions.OnClick := @OnResourceTabClick;
+  btnChangeSource.OnClick := @btnChangeSourceClick;
 
   FScrollSyncTimer := TTimer.Create(Self);
   FScrollSyncTimer.Interval := 30;
@@ -626,39 +650,47 @@ begin
   FScrollSyncTimer.Enabled := True;
   ApplyTheme;
   ApplyOrientationLayout(FLayoutDirection);
+  UpdatePaneHeaders;
 end;
 
 procedure TProjectEditWindow.FormResize(Sender: TObject);
 begin
   ApplyOrientationLayout(FLayoutDirection);
+  UpdatePaneHeaders;
 end;
 
 procedure TProjectEditWindow.btnMenuClick(Sender: TObject);
 var
-  Theme: TAppTheme;
+  OldTheme, NewTheme: TAppTheme;
+  OldSuite, NewSuite: string;
 begin
-  Theme := GetAppTheme;
-  if ShowThemeSettingsDialog(Theme) then
+  if ShowSettingsDialog(OldTheme, NewTheme, OldSuite, NewSuite) then
   begin
-    SetAppTheme(Theme, True);
-    ApplyTheme;
+    if NewTheme <> OldTheme then
+      ApplyTheme;
   end;
 end;
 
 procedure TProjectEditWindow.FormClose(Sender: TObject; var CloseAction: TCloseAction);
 begin
+  LogFmt(llInfo, 'ProjectEditForm.FormClose self=%p', [Pointer(Self)]);
   if FScrollSyncTimer <> nil then
     FScrollSyncTimer.Enabled := False;
   AutoSaveTimer.Enabled := False;
   try
+    LogInfo('ProjectEditForm.FormClose: saving current chapter');
     SaveCurrentChapter;
   except
-    { Ignore save failures during teardown to avoid app-level crashes. }
+    on E: Exception do
+      LogFmt(llWarn, 'ProjectEditForm.FormClose: save failed: %s', [E.Message]);
   end;
+  LogInfo('ProjectEditForm.FormClose: clearing chunk panels');
   ClearChunkPanels;
+  LogInfo('ProjectEditForm.FormClose: freeing FProject and FSourceRC');
   FreeAndNil(FProject);
   FreeAndNil(FSourceRC);
-  CloseAction := caFree;
+  LogInfo('ProjectEditForm.FormClose: done, setting caHide');
+  CloseAction := caHide;
 end;
 
 procedure TProjectEditWindow.btnBackClick(Sender: TObject);
@@ -814,16 +846,361 @@ begin
   end;
 end;
 
+function ReadSourceLanguageName(const SourceBaseDir: string): string;
+var
+  PkgPath: string;
+  SL: TStringList;
+  Data: TJSONData;
+  Obj: TJSONObject;
+  LangNode: TJSONData;
+begin
+  Result := '';
+  PkgPath := IncludeTrailingPathDelimiter(SourceBaseDir) + 'package.json';
+  if not FileExists(PkgPath) then
+    Exit;
+  SL := TStringList.Create;
+  try
+    SL.LoadFromFile(PkgPath);
+    Data := nil;
+    try
+      Data := GetJSON(SL.Text);
+      if Data is TJSONObject then
+      begin
+        Obj := TJSONObject(Data);
+        LangNode := Obj.FindPath('language.name');
+        if LangNode <> nil then
+          Result := LangNode.AsString;
+      end;
+    except
+      { ignore }
+    end;
+    Data.Free;
+  finally
+    SL.Free;
+  end;
+end;
+
+function PromptForSourceChange(const BookCode, CurrentLangCode, CurrentResourceType: string;
+  out SelectedSourceDir: string): Boolean;
+var
+  LibPath, DirName, FullPath, PkgFile: string;
+  SR: TSearchRec;
+  JsonData: TJSONData;
+  JsonObj, LangObj, ResObj: TJSONObject;
+  LangSlug, LangName, ResSlug, ResName, DisplayStr: string;
+  DisplayList, DirList: TStringList;
+  SL: TStringList;
+  Dlg: TForm;
+  ListBox: TListBox;
+  BtnPanel: TPanel;
+  BtnOK, BtnCancel: TButton;
+  I, J, SelIdx: Integer;
+  MatchPattern: string;
+  InstalledKeys: TStringList;
+  DB: TIndexDatabase;
+  Resources: TResourceInfoArray;
+  TsrcSlug, ZipPath, DestDir, ErrMsg: string;
+  SourceOpt: TSourceTextOption;
+begin
+  Result := False;
+  SelectedSourceDir := '';
+  LibPath := GetLibraryPath;
+  DisplayList := TStringList.Create;
+  DirList := TStringList.Create;
+  InstalledKeys := TStringList.Create;
+  try
+    MatchPattern := '_' + LowerCase(BookCode) + '_';
+
+    { First, scan installed source texts }
+    if FindFirst(LibPath + '*', faDirectory, SR) = 0 then
+    begin
+      try
+        repeat
+          if (SR.Attr and faDirectory) = 0 then
+            Continue;
+          if (SR.Name = '.') or (SR.Name = '..') then
+            Continue;
+          DirName := SR.Name;
+          if Pos(MatchPattern, LowerCase(DirName)) = 0 then
+            Continue;
+
+          FullPath := LibPath + DirName;
+          PkgFile := IncludeTrailingPathDelimiter(FullPath) + 'package.json';
+          if not FileExists(PkgFile) then
+            Continue;
+
+          LangSlug := ''; LangName := ''; ResSlug := ''; ResName := '';
+          SL := TStringList.Create;
+          try
+            SL.LoadFromFile(PkgFile);
+            JsonData := nil;
+            try
+              JsonData := GetJSON(SL.Text);
+              if JsonData is TJSONObject then
+              begin
+                JsonObj := TJSONObject(JsonData);
+                if JsonObj.Find('language') is TJSONObject then
+                begin
+                  LangObj := TJSONObject(JsonObj.Find('language'));
+                  LangSlug := LangObj.Get('slug', '');
+                  LangName := LangObj.Get('name', '');
+                end;
+                if JsonObj.Find('resource') is TJSONObject then
+                begin
+                  ResObj := TJSONObject(JsonObj.Find('resource'));
+                  ResSlug := ResObj.Get('slug', '');
+                  ResName := ResObj.Get('name', '');
+                end;
+              end;
+            except
+              { skip malformed JSON }
+            end;
+            JsonData.Free;
+          finally
+            SL.Free;
+          end;
+
+          DisplayStr := LangSlug + ' - ' + LangName + '  |  ' + ResSlug + ' - ' + ResName;
+          DisplayList.Add(DisplayStr);
+          DirList.Add(FullPath);
+          InstalledKeys.Add(LowerCase(LangSlug) + '_' + LowerCase(BookCode) + '_' + LowerCase(ResSlug));
+        until FindNext(SR) <> 0;
+      finally
+        FindClose(SR);
+      end;
+    end;
+
+    { Next, add available-but-not-installed sources from index database }
+    DB := IndexDatabase.OpenIndexDatabase;
+    if DB <> nil then
+    begin
+      try
+        Resources := DB.ListSourceTexts(LowerCase(BookCode));
+        for I := 0 to High(Resources) do
+        begin
+          TsrcSlug := LowerCase(Resources[I].SourceLangSlug) + '_' +
+            LowerCase(BookCode) + '_' + LowerCase(Resources[I].Slug);
+          if InstalledKeys.IndexOf(TsrcSlug) >= 0 then
+            Continue;  { already in the installed list }
+
+          DisplayStr := Resources[I].SourceLangSlug + ' - ' + Resources[I].SourceLangName +
+            '  |  ' + Resources[I].Slug + ' - ' + Resources[I].Name +
+            '  [not installed]';
+          DisplayList.Add(DisplayStr);
+          { Use a marker prefix so we know to extract on selection }
+          DirList.Add('extract:' + TsrcSlug);
+        end;
+      finally
+        DB.Free;
+      end;
+    end;
+
+    if DisplayList.Count = 0 then
+    begin
+      MessageDlg('No source texts found for "' + BookCode + '".',
+        mtInformation, [mbOK], 0);
+      Exit;
+    end;
+
+    { Sort both lists together }
+    for I := 0 to DisplayList.Count - 2 do
+      for J := I + 1 to DisplayList.Count - 1 do
+        if CompareText(DisplayList[I], DisplayList[J]) > 0 then
+        begin
+          DisplayList.Exchange(I, J);
+          DirList.Exchange(I, J);
+        end;
+
+    { Build dialog }
+    Dlg := TForm.CreateNew(nil);
+    try
+      Dlg.Caption := 'Select Source Text';
+      Dlg.Width := 600;
+      Dlg.Height := 450;
+      Dlg.Position := poScreenCenter;
+      Dlg.BorderStyle := bsDialog;
+
+      BtnPanel := TPanel.Create(Dlg);
+      BtnPanel.Parent := Dlg;
+      BtnPanel.Align := alBottom;
+      BtnPanel.Height := 45;
+      BtnPanel.BevelOuter := bvNone;
+
+      BtnOK := TButton.Create(Dlg);
+      BtnOK.Parent := BtnPanel;
+      BtnOK.Caption := 'OK';
+      BtnOK.ModalResult := mrOK;
+      BtnOK.Default := True;
+      BtnOK.Width := 80;
+      BtnOK.Left := 600 - 80 - 12 - 80 - 8;
+      BtnOK.Top := 8;
+
+      BtnCancel := TButton.Create(Dlg);
+      BtnCancel.Parent := BtnPanel;
+      BtnCancel.Caption := 'Cancel';
+      BtnCancel.ModalResult := mrCancel;
+      BtnCancel.Width := 80;
+      BtnCancel.Left := 600 - 80 - 12;
+      BtnCancel.Top := 8;
+
+      ListBox := TListBox.Create(Dlg);
+      ListBox.Parent := Dlg;
+      ListBox.Align := alClient;
+
+      for I := 0 to DisplayList.Count - 1 do
+        ListBox.Items.Add(DisplayList[I]);
+
+      { Pre-select current source }
+      SelIdx := -1;
+      for I := 0 to DirList.Count - 1 do
+      begin
+        DirName := ExtractFileName(DirList[I]);
+        if (Pos(LowerCase(CurrentLangCode) + '_', LowerCase(DirName)) = 1) and
+           (Pos('_' + LowerCase(CurrentResourceType), LowerCase(DirName)) > 0) then
+        begin
+          SelIdx := I;
+          Break;
+        end;
+      end;
+      if SelIdx >= 0 then
+        ListBox.ItemIndex := SelIdx
+      else if ListBox.Items.Count > 0 then
+        ListBox.ItemIndex := 0;
+
+      if Dlg.ShowModal = mrOK then
+        if ListBox.ItemIndex >= 0 then
+        begin
+          FullPath := DirList[ListBox.ItemIndex];
+
+          if Pos('extract:', FullPath) = 1 then
+          begin
+            { Need to extract this source text first }
+            TsrcSlug := Copy(FullPath, Length('extract:') + 1, MaxInt);
+            DestDir := IncludeTrailingPathDelimiter(LibPath) + TsrcSlug;
+
+            ZipPath := SourceExtractor.FindBundledZipPath;
+            if ZipPath = '' then
+              ZipPath := GetBundledResourceContainersZipPath;
+            if (ZipPath = '') or (not FileExists(ZipPath)) then
+            begin
+              MessageDlg('Bundled resource archive not found.', mtError, [mbOK], 0);
+              Exit;
+            end;
+
+            ForceDirectories(DestDir);
+            LogFmt(llInfo, 'Extracting source for change: %s', [TsrcSlug]);
+
+            if not SourceExtractor.ExtractTsrc(ZipPath, TsrcSlug, DestDir) then
+            begin
+              MessageDlg('Failed to extract source text: ' + TsrcSlug,
+                mtError, [mbOK], 0);
+              Exit;
+            end;
+
+            SelectedSourceDir := DestDir;
+          end
+          else
+            SelectedSourceDir := FullPath;
+
+          Result := True;
+        end;
+    finally
+      Dlg.Free;
+    end;
+  finally
+    InstalledKeys.Free;
+    DisplayList.Free;
+    DirList.Free;
+  end;
+end;
+
+procedure TProjectEditWindow.ShowLoadingSplash(const AText: string);
+var
+  Pal: TThemePalette;
+  ContentPanel: TPanel;
+begin
+  if FLoadingSplash <> nil then
+    Exit;
+
+  Pal := GetThemePalette(GetEffectiveTheme);
+
+  FLoadingSplash := TForm.Create(Self);
+  FLoadingSplash.BorderStyle := bsNone;
+  FLoadingSplash.BorderIcons := [];
+  FLoadingSplash.Position := poScreenCenter;
+  FLoadingSplash.Font.Name := 'Noto Sans';
+  FLoadingSplash.Color := Pal.PanelBG;
+  FLoadingSplash.ClientWidth := 380;
+  FLoadingSplash.ClientHeight := 100;
+
+  ContentPanel := TPanel.Create(FLoadingSplash);
+  ContentPanel.Parent := FLoadingSplash;
+  ContentPanel.Align := alClient;
+  ContentPanel.BevelOuter := bvNone;
+  ContentPanel.Color := Pal.PanelBG;
+  ContentPanel.ParentBackground := False;
+  ContentPanel.ParentColor := False;
+
+  FLoadingLabel := TLabel.Create(ContentPanel);
+  FLoadingLabel.Parent := ContentPanel;
+  FLoadingLabel.AutoSize := False;
+  FLoadingLabel.Alignment := taCenter;
+  FLoadingLabel.SetBounds(0, 20, 380, 24);
+  FLoadingLabel.Font.Height := -14;
+  FLoadingLabel.Font.Name := 'Noto Sans';
+  FLoadingLabel.Font.Color := Pal.TextPrimary;
+  FLoadingLabel.Caption := AText;
+
+  FLoadingBar := TProgressBar.Create(ContentPanel);
+  FLoadingBar.Parent := ContentPanel;
+  FLoadingBar.SetBounds(40, 58, 300, 22);
+  FLoadingBar.Min := 0;
+  FLoadingBar.Max := 100;
+  FLoadingBar.Position := 0;
+  FLoadingBar.Style := pbstNormal;
+
+  FLoadingSplash.Show;
+  FLoadingSplash.Update;
+end;
+
+procedure TProjectEditWindow.UpdateLoadingSplash(const AText: string;
+  AProgress: Integer);
+begin
+  if FLoadingSplash = nil then
+    Exit;
+  if FLoadingLabel <> nil then
+    FLoadingLabel.Caption := AText;
+  if FLoadingBar <> nil then
+    FLoadingBar.Position := AProgress;
+  FLoadingSplash.Update;
+end;
+
+procedure TProjectEditWindow.HideLoadingSplash;
+begin
+  if FLoadingSplash <> nil then
+  begin
+    FLoadingSplash.Hide;
+    FreeAndNil(FLoadingSplash);
+    FLoadingLabel := nil;
+    FLoadingBar := nil;
+  end;
+end;
+
 procedure TProjectEditWindow.OpenProject(const APath: string;
   const ASummary: TProjectSummary);
 var
   SourceOpt: TSourceTextOption;
   SourceBaseDir, SourceErr, SourceResourceID, Direction: string;
 begin
+  LogFmt(llInfo, 'ProjectEditForm.OpenProject self=%p path=%s book=%s',
+    [Pointer(Self), APath, ASummary.BookCode]);
+  ShowLoadingSplash(rsLoadingProject);
   try
     FProjectPath := APath;
+    FSummary := ASummary;
 
     { Load project manifest first so we can resolve exact source language/resource. }
+    UpdateLoadingSplash(rsLoadingProject, 10);
     FProject := TProject.Create(APath);
     SourceResourceID := FProject.GetSourceResourceType;
     if SourceResourceID = '' then
@@ -841,9 +1218,13 @@ begin
     SourceOpt.ResourceName := '';
     if SourceOpt.SourceLangCode = '' then
       SourceOpt.SourceLangCode := 'en';
+    FSourceLangCode := SourceOpt.SourceLangCode;
+    FSourceResourceType := SourceResourceID;
+    FBookCode := ASummary.BookCode;
 
     if not EnsureSourceTextPresent(SourceOpt, SourceBaseDir, SourceErr) then
     begin
+      HideLoadingSplash;
       ShowMessage(rsCannotPrepareSourceTextPrefix + ASummary.BookCode + rsCannotPrepareSourceTextMid +
         SourceErr);
       Close;
@@ -855,6 +1236,7 @@ begin
       FSourceContentDir := FindSourceContentDir(ASummary);
     if FSourceContentDir = '' then
     begin
+      HideLoadingSplash;
       ShowMessage(rsCannotFindSourceTextContentPrefix + ASummary.BookCode +
         rsCannotFindSourceTextContentSuffix);
       Close;
@@ -865,23 +1247,38 @@ begin
     FEnglishULBContentDir := FindEnglishULBContentDir(ASummary.BookCode);
 
     { Load source resource container }
+    UpdateLoadingSplash(rsLoadingSourceText, 30);
     FSourceRC := TResourceContainer.Create('', ASummary.BookCode, SourceResourceID, '');
     FSourceRC.Book.LoadFromToc(FSourceContentDir);
     FSourceRC.Book.LoadContent(FSourceContentDir, '.usx');
 
     { Load project content }
+    UpdateLoadingSplash(rsLoadingTranslation, 60);
     FProject.LoadContent(FSourceContentDir);
 
-    { Set up title }
+    { Set up title and headers }
     Caption := ASummary.BookName + ' - ' + ASummary.TargetLangName +
       ' (' + ASummary.TargetLangCode + ')';
     lblProjectTitle.Caption := Caption;
     lblSourceHeader.Caption := rsSourceTextHeader;
-    lblTransHeader.Caption := rsTranslationHeaderPrefix + ASummary.TargetLangCode + ')';
+    SourceLangHeader.Caption := ReadSourceLanguageName(SourceBaseDir) +
+      ' ' + UpperCase(SourceResourceID);
+    if Trim(SourceLangHeader.Caption) = UpperCase(SourceResourceID) then
+      SourceLangHeader.Caption := SourceOpt.SourceLangCode + ' ' + UpperCase(SourceResourceID);
+
+    if CanonicalBookName(ASummary.BookCode) <> '' then
+      lblTransHeader.Caption := CanonicalBookName(ASummary.BookCode)
+    else
+      lblTransHeader.Caption := ASummary.BookName;
+    lblTransLangHeader.Caption := ASummary.TargetLangName +
+      ' (' + ASummary.TargetLangCode + ')';
+
+    UpdatePaneHeaders;
 
     AutoSaveTimer.Enabled := True;
 
     { Load first chapter (skip 'front' if present) }
+    UpdateLoadingSplash(rsLoadingChapter, 85);
     if FSourceRC.Book.Chapters.Count > 0 then
     begin
       if (FSourceRC.Book.Chapters.Count > 1) and
@@ -890,9 +1287,12 @@ begin
       else
         LoadChapter(0);
     end;
+
+    HideLoadingSplash;
   except
     on E: Exception do
     begin
+      HideLoadingSplash;
       AutoSaveTimer.Enabled := False;
       raise Exception.Create(rsUnableToOpenProjectPrefix + ASummary.BookName +
         rsUnableToOpenProjectMid + E.Message);
@@ -934,65 +1334,125 @@ begin
   end;
 end;
 
+procedure TProjectEditWindow.UpdatePaneHeaders;
+var
+  SourceLeft, TransLeft, ResLeft: Integer;
+  TabGap: Integer;
+begin
+  { Position header labels above their respective panes }
+  SourceLeft := SourcePanel.Left + 8;
+  TransLeft := TransPanel.Left + 8;
+  ResLeft := ResourcePanel.Left;
+
+  lblSourceHeader.Left := SourceLeft;
+  lblSourceHeader.Top := 2;
+  SourceLangHeader.Left := SourceLeft;
+  SourceLangHeader.Top := 19;
+  btnChangeSource.Left := SourceLeft + lblSourceHeader.Width + 12;
+  btnChangeSource.Top := 2;
+  btnChangeSource.Height := 18;
+  btnChangeSource.Width := 60;
+  btnChangeSource.Font.Height := -10;
+
+  lblTransHeader.Left := TransLeft;
+  lblTransHeader.Top := 2;
+  lblTransLangHeader.Left := TransLeft;
+  lblTransLangHeader.Top := 19;
+
+  { Resource tabs aligned to resource pane }
+  TabGap := 4;
+  btnTabNotes.Left := ResLeft + TabGap;
+  btnTabNotes.Top := 6;
+  btnTabWords.Left := btnTabNotes.Left + btnTabNotes.Width + TabGap;
+  btnTabWords.Top := 6;
+  btnTabQuestions.Left := btnTabWords.Left + btnTabWords.Width + TabGap;
+  btnTabQuestions.Top := 6;
+end;
+
 procedure TProjectEditWindow.ApplyTheme;
 var
-  IsDark: Boolean;
   P: TThemePalette;
 begin
-  IsDark := GetAppTheme = atDark;
-  P := GetThemePalette(GetAppTheme);
-  if IsDark then
+  P := GetThemePalette(GetEffectiveTheme);
+
+  Color := P.WindowBg;
+  TopPanel.Color := P.HeaderBg;
+  StatusPanel.Color := P.HeaderBg;
+  LeftRail.Color := P.RailBg;
+  SplitPanel.Color := P.ContentBg;
+  PaneHeaderBar.Color := P.PrimaryLight;
+  PaneHeaderBar.ParentBackground := False;
+  PaneHeaderBar.ParentColor := False;
+  SourcePanel.Color := P.SecondaryPanelBg;
+  TransPanel.Color := P.PanelBg;
+  ResourcePanel.Color := P.SecondaryPanelBg;
+  ResourceMemo.Color := P.MemoBg;
+  ResourceMemo.Font.Color := P.TextSecondary;
+  lblProjectTitle.Font.Color := P.HeaderText;
+  lblChapterNav.Font.Color := P.HeaderText;
+  lblChapterNum.Font.Color := P.HeaderText;
+  lblSourceHeader.Font.Color := P.TextPrimary;
+  SourceLangHeader.Font.Color := P.TextSecondary;
+  lblTransHeader.Font.Color := P.TextPrimary;
+  lblTransLangHeader.Font.Color := P.TextSecondary;
+  lblStatus.Font.Color := P.HeaderText;
+  btnMenu.Font.Color := P.RailText;
+end;
+
+procedure TProjectEditWindow.btnChangeSourceClick(Sender: TObject);
+var
+  NewSourceDir, NewContentDir, NewLangName, NewResType: string;
+  LangCode, BookCode, ResType: string;
+begin
+  if not PromptForSourceChange(FBookCode, FSourceLangCode, FSourceResourceType, NewSourceDir) then
+    Exit;
+
+  { Save current work before switching }
+  SaveCurrentChapter;
+
+  { Parse the selected directory name for lang/resource info }
+  if not TResourceContainer.ParseDirName(ExtractFileName(NewSourceDir),
+    LangCode, BookCode, ResType) then
+    Exit;
+
+  NewContentDir := IncludeTrailingPathDelimiter(NewSourceDir) + 'content';
+  if not DirectoryExists(NewContentDir) then
   begin
-    Color := P.WindowBg;
-    TopPanel.Color := P.HeaderBg;
-    StatusPanel.Color := P.HeaderBg;
-    LeftRail.Color := P.RailBg;
-    SplitPanel.Color := P.ContentBg;
-    SourcePanel.Color := P.SecondaryPanelBg;
-    TransPanel.Color := P.SecondaryPanelBg;
-    ResourcePanel.Color := P.SecondaryPanelBg;
-    ResourceTabsPanel.Color := P.ResourceTabBg;
-    ResourceMemo.Color := P.MemoBg;
-    ResourceMemo.Font.Color := P.TextSecondary;
-    SourceLangHeader.Color := P.PrimaryLight;
-    SourceLangHeader.Font.Color := P.TextSecondary;
-    lblProjectTitle.Font.Color := P.HeaderText;
-    lblChapterNav.Font.Color := P.HeaderText;
-    lblChapterNum.Font.Color := P.HeaderText;
-    lblSourceHeader.Font.Color := P.TextSecondary;
-    lblTransHeader.Font.Color := P.TextSecondary;
-    lblStatus.Font.Color := P.HeaderText;
-    btnMenu.Font.Color := P.RailText;
-  end
-  else
-  begin
-    Color := P.WindowBg;
-    TopPanel.Color := P.HeaderBg;
-    StatusPanel.Color := P.HeaderBg;
-    LeftRail.Color := P.RailBg;
-    SplitPanel.Color := P.ContentBg;
-    SourcePanel.Color := P.SecondaryPanelBg;
-    TransPanel.Color := P.PanelBg;
-    ResourcePanel.Color := P.SecondaryPanelBg;
-    ResourceTabsPanel.Color := P.ResourceTabBg;
-    ResourceMemo.Color := P.MemoBg;
-    ResourceMemo.Font.Color := P.TextSecondary;
-    SourceLangHeader.Color := P.PrimaryLight;
-    SourceLangHeader.Font.Color := P.TextSecondary;
-    lblProjectTitle.Font.Color := P.HeaderText;
-    lblChapterNav.Font.Color := P.HeaderText;
-    lblChapterNum.Font.Color := P.HeaderText;
-    lblSourceHeader.Font.Color := P.TextPrimary;
-    lblTransHeader.Font.Color := P.TextPrimary;
-    lblStatus.Font.Color := P.HeaderText;
-    btnMenu.Font.Color := P.RailText;
+    ShowMessage('Content directory not found in selected source.');
+    Exit;
   end;
+
+  { Update source }
+  FSourceLangCode := LangCode;
+  FSourceResourceType := ResType;
+  FSourceContentDir := NewContentDir;
+  FEnglishULBContentDir := FindEnglishULBContentDir(FBookCode);
+
+  FreeAndNil(FSourceRC);
+  FSourceRC := TResourceContainer.Create(LangCode, FBookCode, ResType, '');
+  FSourceRC.Book.LoadFromToc(FSourceContentDir);
+  FSourceRC.Book.LoadContent(FSourceContentDir, '.usx');
+
+  { Reload project content with new source chunking }
+  FProject.LoadContent(FSourceContentDir);
+
+  { Update header }
+  NewLangName := ReadSourceLanguageName(NewSourceDir);
+  if NewLangName = '' then
+    NewLangName := LangCode;
+  SourceLangHeader.Caption := NewLangName + ' ' + UpperCase(ResType);
+  UpdatePaneHeaders;
+
+  { Reload current chapter }
+  LoadChapter(FCurrentChapterIndex);
 end;
 
 procedure TProjectEditWindow.ClearChunkPanels;
 var
   I: Integer;
 begin
+  LogFmt(llInfo, 'ClearChunkPanels: %d panels, source controls=%d, trans controls=%d',
+    [Length(FChunkPanels), SourceScrollBox.ControlCount, TransScrollBox.ControlCount]);
   { Disable layout during bulk removal to prevent intermediate overflow }
   SourceScrollBox.DisableAutoSizing;
   TransScrollBox.DisableAutoSizing;
@@ -1001,6 +1461,8 @@ begin
       FChunkPanels[I].Free;
     SetLength(FChunkPanels, 0);
 
+    LogFmt(llDebug, 'ClearChunkPanels: after panel free, source orphans=%d, trans orphans=%d',
+      [SourceScrollBox.ControlCount, TransScrollBox.ControlCount]);
     { Safety: remove any orphaned controls }
     while SourceScrollBox.ControlCount > 0 do
       SourceScrollBox.Controls[0].Free;
