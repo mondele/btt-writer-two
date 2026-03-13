@@ -22,6 +22,33 @@ var
   StatusPanel: TPanel = nil;
   StatusLabel: TLabel = nil;
 
+procedure AssignSplashIcon(ATarget: TPicture);
+var
+  AppIcon: TIcon;
+begin
+  if ATarget = nil then
+    Exit;
+
+  if not Application.Icon.Empty then
+  begin
+    ATarget.Icon.Assign(Application.Icon);
+    Exit;
+  end;
+
+  AppIcon := TIcon.Create;
+  try
+    try
+      AppIcon.LoadFromResourceName(HInstance, 'MAINICON');
+      if not AppIcon.Empty then
+        ATarget.Icon.Assign(AppIcon);
+    except
+      { Leave the splash icon empty if the resource cannot be loaded. }
+    end;
+  finally
+    AppIcon.Free;
+  end;
+end;
+
 procedure ShowStartupSplash;
 var
   TopPanel: TPanel;
@@ -54,7 +81,7 @@ begin
   LogoImage.Stretch := True;
   LogoImage.Proportional := True;
   LogoImage.Center := True;
-  LogoImage.Picture.Icon.Assign(Application.Icon);
+  AssignSplashIcon(LogoImage.Picture);
 
   TitleLabel := TLabel.Create(TopPanel);
   TitleLabel.Parent := TopPanel;

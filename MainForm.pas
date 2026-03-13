@@ -11,7 +11,7 @@ uses
   Globals, ProjectScanner, ProjectEditForm, ProjectCreator, ProjectManager,
   TStudioPackage, SplashScreen, AppSettings, SettingsForm, ThemePalette, UIFonts,
   AppLog, UserProfile, LoginForm, GiteaClient, ImportForm, USFMExporter, GitUtils,
-  DataPaths, USFMUtils;
+  DataPaths, USFMUtils, BibleBook, BibleChapter;
 
 resourcestring
   rsProjectDetailsTitle = 'Project Details';
@@ -1708,6 +1708,91 @@ begin
   ScanAndDisplayProjects;
 end;
 
+{ Write parsed USFM verses into chunk files grouped by English ULB toc
+  boundaries. Falls back to per-verse files if no English ULB is available. }
+procedure WriteUSFMVersesToChunks(const ParseResult: TUSFMParseResult;
+  const ProjectDir, EnglishULBContentDir: string);
+var
+  ULBBook: TBook;
+  ULBChapter: TChapter;
+  I, J, ChapterNum, VerseNum, ChunkStart, NextChunkStart: Integer;
+  ChDir, ChunkPath, ChunkContent: string;
+  ChapterStr: string;
+  SL: TStringList;
+begin
+  ULBBook := nil;
+  if EnglishULBContentDir <> '' then
+  begin
+    ULBBook := TBook.Create('', 'ulb');
+    ULBBook.LoadFromToc(EnglishULBContentDir);
+  end;
+  try
+    for I := 0 to Length(ParseResult.Verses) - 1 do
+    begin
+      ChapterNum := ParseResult.Verses[I].Chapter;
+      VerseNum := ParseResult.Verses[I].Verse;
+      if ChapterNum <= 0 then
+        Continue;
+
+      ChapterStr := Format('%.2d', [ChapterNum]);
+      ChDir := IncludeTrailingPathDelimiter(ProjectDir) + ChapterStr;
+      ForceDirectories(ChDir);
+
+      { Find which chunk this verse belongs to using the English ULB toc }
+      ChunkStart := VerseNum;  { default: per-verse file }
+      if ULBBook <> nil then
+      begin
+        ULBChapter := ULBBook.GetChapter(ChapterStr);
+        if ULBChapter <> nil then
+        begin
+          { Walk the chunk list to find which chunk owns this verse.
+            Each chunk name is the starting verse; a verse belongs to
+            the chunk whose start is <= verse and whose next chunk start is > verse. }
+          ChunkStart := VerseNum;
+          for J := 0 to ULBChapter.Chunks.Count - 1 do
+          begin
+            if not TryStrToInt(ULBChapter.Chunks[J].Name, ChunkStart) then
+              Continue;
+            if J < ULBChapter.Chunks.Count - 1 then
+            begin
+              if TryStrToInt(ULBChapter.Chunks[J + 1].Name, NextChunkStart) then
+              begin
+                if (VerseNum >= ChunkStart) and (VerseNum < NextChunkStart) then
+                  Break;
+              end;
+            end
+            else
+            begin
+              { Last chunk — all remaining verses belong here }
+              if VerseNum >= ChunkStart then
+                Break;
+            end;
+          end;
+        end;
+      end;
+
+      ChunkPath := IncludeTrailingPathDelimiter(ChDir) +
+        Format('%.2d', [ChunkStart]) + '.txt';
+      ChunkContent := ParseResult.Verses[I].Content;
+
+      SL := TStringList.Create;
+      try
+        if FileExists(ChunkPath) then
+          SL.LoadFromFile(ChunkPath);
+        if Trim(SL.Text) = '' then
+          SL.Text := ChunkContent
+        else
+          SL.Text := SL.Text + ChunkContent;
+        SL.SaveToFile(ChunkPath);
+      finally
+        SL.Free;
+      end;
+    end;
+  finally
+    FreeAndNil(ULBBook);
+  end;
+end;
+
 procedure TMainWindow.DoImportUSFMFile;
 var
   OpenDlg: TOpenDialog;
@@ -1717,11 +1802,6 @@ var
   SourceOpt: TSourceTextOption;
   ProjType: TProjectTypeID;
   NewProjectDir, SourceDir: string;
-  Proj: TProject;
-  I, ChapterNum: Integer;
-  ChunkContent: string;
-  ChDir, ChunkPath: string;
-  SL: TStringList;
 begin
   OpenDlg := TOpenDialog.Create(nil);
   try
@@ -1760,39 +1840,10 @@ begin
       Exit;
     end;
 
-    { Now write the parsed USFM verses into the project's chunk files.
-      Group verses by chapter and write each verse content into
-      the appropriate chunk file. }
-    for I := 0 to Length(ParseResult.Verses) - 1 do
-    begin
-      ChapterNum := ParseResult.Verses[I].Chapter;
-      if ChapterNum <= 0 then
-        Continue;
-
-      ChDir := IncludeTrailingPathDelimiter(NewProjectDir) +
-        Format('%.2d', [ChapterNum]);
-      ForceDirectories(ChDir);
-
-      { Write verse content to a chunk file named by verse number }
-      ChunkPath := IncludeTrailingPathDelimiter(ChDir) +
-        Format('%.2d', [ParseResult.Verses[I].Verse]) + '.txt';
-
-      ChunkContent := ParseResult.Verses[I].Content;
-
-      { If file already exists (from project creation), append; otherwise create }
-      SL := TStringList.Create;
-      try
-        if FileExists(ChunkPath) then
-          SL.LoadFromFile(ChunkPath);
-        if Trim(SL.Text) = '' then
-          SL.Text := ChunkContent
-        else
-          SL.Text := SL.Text + LineEnding + ChunkContent;
-        SL.SaveToFile(ChunkPath);
-      finally
-        SL.Free;
-      end;
-    end;
+    { Write parsed verses into chunk files grouped by English ULB boundaries.
+      This ensures on-disk files match the canonical chunk structure. }
+    SourceDir := FindEnglishULBContentDir(BookCode);
+    WriteUSFMVersesToChunks(ParseResult, NewProjectDir, SourceDir);
 
     { Commit the imported content }
     CommitProjectChanges(NewProjectDir, 'Import from USFM', Err);

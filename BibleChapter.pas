@@ -31,6 +31,10 @@ type
     { Load chunk files from a directory. Looks for files named <chunkName><ext> }
     procedure LoadChunkFiles(const Dir, Ext: string);
 
+    { Scan a chapter directory for any .txt files not already in the chunk list
+      and load them (preserves on-disk content that doesn't match the source toc) }
+    procedure LoadExtraChunkFiles(const Dir, Ext: string);
+
     { Save only chunks that have been modified }
     procedure SaveDirtyChunks(const Dir, Ext: string);
 
@@ -170,9 +174,6 @@ begin
     else
       ChunkContent := Copy(MergedText, StartPos, Length(MergedText) - StartPos + 1);
 
-    if (Trim(ChunkContent) <> '') and (Pos('\v ', ChunkContent) = 0) then
-      ChunkContent := '\v ' + ChunkMap[I] + ' ' + Trim(ChunkContent);
-
     Chunk := TChunk.Create(ChunkMap[I]);
     Chunk.Content := ChunkContent;
     Result.Add(Chunk);
@@ -194,6 +195,64 @@ begin
     FilePath := IncludeTrailingPathDelimiter(Dir) + FID
                 + DirectorySeparator + FChunks[I].Name + Ext;
     FChunks[I].LoadFromFile(FilePath);
+  end;
+end;
+
+procedure TChapter.LoadExtraChunkFiles(const Dir, Ext: string);
+var
+  ChapterDir: string;
+  SR: TSearchRec;
+  ChunkName: string;
+  I: Integer;
+  Found: Boolean;
+  Extra: TChunk;
+  InsertPos, ChunkVerse, ExistingVerse: Integer;
+begin
+  ChapterDir := IncludeTrailingPathDelimiter(Dir) + FID;
+  if not DirectoryExists(ChapterDir) then
+    Exit;
+
+  if FindFirst(IncludeTrailingPathDelimiter(ChapterDir) + '*' + Ext,
+               faAnyFile and not faDirectory, SR) = 0 then
+  try
+    repeat
+      if (SR.Name = '.') or (SR.Name = '..') then
+        Continue;
+      ChunkName := ChangeFileExt(SR.Name, '');
+
+      { Check if this chunk is already in the list }
+      Found := False;
+      for I := 0 to FChunks.Count - 1 do
+        if FChunks[I].Name = ChunkName then
+        begin
+          Found := True;
+          Break;
+        end;
+
+      if not Found then
+      begin
+        Extra := TChunk.Create(ChunkName);
+        Extra.LoadFromFile(IncludeTrailingPathDelimiter(ChapterDir) +
+                           ChunkName + Ext);
+        { Insert in sorted verse order so MergeAllContent stays sequential }
+        if TryStrToInt(ChunkName, ChunkVerse) then
+        begin
+          InsertPos := FChunks.Count;
+          for I := 0 to FChunks.Count - 1 do
+            if TryStrToInt(FChunks[I].Name, ExistingVerse) and
+               (ExistingVerse > ChunkVerse) then
+            begin
+              InsertPos := I;
+              Break;
+            end;
+          FChunks.Insert(InsertPos, Extra);
+        end
+        else
+          FChunks.Add(Extra);
+      end;
+    until FindNext(SR) <> 0;
+  finally
+    FindClose(SR);
   end;
 end;
 

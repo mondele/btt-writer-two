@@ -169,7 +169,12 @@ var
   I: Integer;
 begin
   for I := 0 to FChapters.Count - 1 do
+  begin
     FChapters[I].LoadChunkFiles(ContentDir, Ext);
+    { Scan for on-disk chunk files not in the source toc so that content
+      stored under different chunk boundaries is not silently dropped. }
+    FChapters[I].LoadExtraChunkFiles(ContentDir, Ext);
+  end;
 end;
 
 procedure TBook.SaveAllDirty(const ContentDir, Ext: string);

@@ -104,6 +104,7 @@ type
     FSourceResourceType: string;
     FBookCode: string;
     FSummary: TProjectSummary;
+    FChapterDirty: Boolean;
 
     procedure ClearChunkPanels;
     procedure LoadChapter(AIndex: Integer);
@@ -113,6 +114,7 @@ type
     procedure OnChunkFinishedChange(Sender: TObject);
     procedure OnChunkFinishedToggleClick(Sender: TObject);
     procedure OnChunkMemoExit(Sender: TObject);
+    procedure OnChunkMemoChange(Sender: TObject);
     procedure OnChunkEditClick(Sender: TObject);
     procedure OnChunkPanelClick(Sender: TObject);
     procedure OnResourceTabClick(Sender: TObject);
@@ -1408,6 +1410,7 @@ begin
     FLastTransPos := 0;
     AttachWheelHandlers(SourceScrollBox);
     AttachWheelHandlers(TransScrollBox);
+    FChapterDirty := False;
     if Length(FChunkPanels) > 0 then
       SetSelectedChunkIndex(0)
     else
@@ -1439,6 +1442,8 @@ var
   EnglishChapter: TChapter;
   GitErr: string;
 begin
+  if not FChapterDirty then
+    Exit;
   if FProject = nil then
     Exit;
   if FSourceRC = nil then
@@ -1522,6 +1527,7 @@ begin
     FreeAndNil(SaveChunkMap);
   end;
 
+  FChapterDirty := False;
   CommitProjectChanges(FProject.ProjectDir,
     rsUpdateChapterPrefix + SourceChapter.ID, GitErr);
 end;
@@ -1561,6 +1567,7 @@ var
   I: Integer;
 begin
   CB := Sender as TCheckBox;
+  FChapterDirty := True;
   if CB.Checked then
   begin
     FProject.MarkFinished(CB.Hint, CB.HelpKeyword);
@@ -1606,8 +1613,16 @@ end;
 
 procedure TProjectEditWindow.OnChunkMemoExit(Sender: TObject);
 begin
-  SaveCurrentChapter;
-  lblStatus.Caption := rsSavedAtPrefix + TimeToStr(Now);
+  if FChapterDirty then
+  begin
+    SaveCurrentChapter;
+    lblStatus.Caption := rsSavedAtPrefix + TimeToStr(Now);
+  end;
+end;
+
+procedure TProjectEditWindow.OnChunkMemoChange(Sender: TObject);
+begin
+  FChapterDirty := True;
 end;
 
 procedure TProjectEditWindow.OnChunkEditClick(Sender: TObject);
@@ -1981,6 +1996,7 @@ begin
   FTransMemo.ScrollBars := ssAutoVertical;
   FTransMemo.Visible := False;
   FTransMemo.OnExit := @AOwnerForm.OnChunkMemoExit;
+  FTransMemo.OnChange := @AOwnerForm.OnChunkMemoChange;
   FTransMemo.OnClick := @AOwnerForm.OnChunkPanelClick;
 
   { Edit button }
