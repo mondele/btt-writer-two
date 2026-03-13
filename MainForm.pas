@@ -800,7 +800,7 @@ end;
 
 procedure TMainWindow.CreateProjectRow(const S: TProjectSummary; Idx: Integer);
 const
-  ROW_HEIGHT = 62;
+  ROW_HEIGHT = 68;
 var
   RowPanel: TPanel;
   IssueMarker: TShape;
@@ -853,7 +853,7 @@ begin
   lblName.Parent := RowPanel;
   lblName.Left := 30;
   lblName.Top := 20;
-  lblName.Font.Height := -15;
+  lblName.Font.Height := -19;
   lblName.Font.Style := [];
   lblName.Caption := ProjectDisplayName(S);
   lblName.OnClick := @ProjectRowClick;
@@ -869,7 +869,7 @@ begin
   lblType.Parent := RowPanel;
   lblType.Left := Round(RowWidth * 0.37);
   lblType.Top := 23;
-  lblType.Font.Height := -12;
+  lblType.Font.Height := -15;
   lblType.Cursor := crHandPoint;
   lblType.OnClick := @ProjectRowClick;
   lblType.Tag := Idx;
@@ -894,7 +894,7 @@ begin
   lblLang.Parent := RowPanel;
   lblLang.Left := Round(RowWidth * 0.53);
   lblLang.Top := 23;
-  lblLang.Font.Height := -12;
+  lblLang.Font.Height := -15;
   lblLang.Cursor := crHandPoint;
   lblLang.OnClick := @ProjectRowClick;
   lblLang.Tag := Idx;
@@ -926,7 +926,7 @@ begin
   btnInfo.SetBounds(RowWidth - 52, (ROW_HEIGHT - 24) div 2, 24, 24);
   btnInfo.Caption := 'i';
   btnInfo.Flat := True;
-  btnInfo.Font.Height := -12;
+  btnInfo.Font.Height := -14;
   btnInfo.Font.Color := P.TextInverse;
   btnInfo.Tag := Idx;
   btnInfo.OnClick := @InfoButtonClick;
@@ -1265,14 +1265,14 @@ begin
     lblWarning.Parent := F;
     lblWarning.Left := 40;
     lblWarning.Top := 42;
-    lblWarning.Font.Height := -11;
+    lblWarning.Font.Height := -14;
     lblWarning.Font.Color := Pal.TextSecondary;
     lblWarning.Caption := rsFeedbackWarning;
 
     Memo := TMemo.Create(F);
     Memo.Parent := F;
     Memo.SetBounds(24, 70, 410, 190);
-    Memo.Font.Height := -13;
+    Memo.Font.Height := -15;
     Memo.ScrollBars := ssAutoVertical;
     Memo.TextHint := rsFeedbackHint;
 

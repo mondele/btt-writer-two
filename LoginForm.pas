@@ -83,7 +83,7 @@ begin
     lblPrompt.AutoSize := True;
     lblPrompt.Left := 40;
     lblPrompt.Top := 24;
-    lblPrompt.Font.Height := -14;
+    lblPrompt.Font.Height := -18;
     lblPrompt.Font.Style := [fsBold];
     lblPrompt.Font.Color := Pal.TextPrimary;
     lblPrompt.Caption := rsProfilePrompt;
@@ -93,7 +93,7 @@ begin
     btnServer.Parent := F;
     btnServer.SetBounds(40, 70, 440, 36);
     btnServer.Caption := rsLoginToServer;
-    btnServer.Font.Height := -13;
+    btnServer.Font.Height := -15;
     btnServer.Font.Style := [fsBold];
     btnServer.ModalResult := mrYes;
 
@@ -101,7 +101,7 @@ begin
     lblServerDesc.Parent := F;
     lblServerDesc.Left := 60;
     lblServerDesc.Top := 110;
-    lblServerDesc.Font.Height := -11;
+    lblServerDesc.Font.Height := -15;
     lblServerDesc.Font.Color := Pal.TextSecondary;
     lblServerDesc.Caption := rsLoginToServerDesc;
 
@@ -110,7 +110,7 @@ begin
     btnCreate.Parent := F;
     btnCreate.SetBounds(40, 150, 440, 36);
     btnCreate.Caption := rsCreateAccount;
-    btnCreate.Font.Height := -13;
+    btnCreate.Font.Height := -15;
     btnCreate.Font.Style := [fsBold];
     btnCreate.ModalResult := mrNo;
 
@@ -118,7 +118,7 @@ begin
     lblCreateDesc.Parent := F;
     lblCreateDesc.Left := 60;
     lblCreateDesc.Top := 190;
-    lblCreateDesc.Font.Height := -11;
+    lblCreateDesc.Font.Height := -15;
     lblCreateDesc.Font.Color := Pal.TextSecondary;
     lblCreateDesc.Caption := rsCreateAccountDesc;
 
@@ -127,7 +127,7 @@ begin
     btnLocal.Parent := F;
     btnLocal.SetBounds(40, 230, 440, 36);
     btnLocal.Caption := rsLocalProfile;
-    btnLocal.Font.Height := -13;
+    btnLocal.Font.Height := -15;
     btnLocal.Font.Style := [fsBold];
     btnLocal.ModalResult := mrAll;
 
@@ -135,7 +135,7 @@ begin
     lblLocalDesc.Parent := F;
     lblLocalDesc.Left := 60;
     lblLocalDesc.Top := 270;
-    lblLocalDesc.Font.Height := -11;
+    lblLocalDesc.Font.Height := -15;
     lblLocalDesc.Font.Color := Pal.TextSecondary;
     lblLocalDesc.Caption := rsLocalProfileDesc;
 
@@ -215,7 +215,7 @@ begin
     lblWarning.Parent := F;
     lblWarning.Left := 40;
     lblWarning.Top := 56;
-    lblWarning.Font.Height := -11;
+    lblWarning.Font.Height := -15;
     lblWarning.Font.Color := Pal.TextSecondary;
     lblWarning.Caption := rsServerLoginWarning;
 
@@ -229,7 +229,7 @@ begin
     edUser := TEdit.Create(F);
     edUser.Parent := F;
     edUser.SetBounds(40, 110, 380, 28);
-    edUser.Font.Height := -13;
+    edUser.Font.Height := -15;
 
     lblPass := TLabel.Create(F);
     lblPass.Parent := F;
@@ -241,7 +241,7 @@ begin
     edPass := TEdit.Create(F);
     edPass.Parent := F;
     edPass.SetBounds(40, 168, 380, 28);
-    edPass.Font.Height := -13;
+    edPass.Font.Height := -15;
     edPass.EchoMode := emPassword;
 
     btnCreateLink := TLabel.Create(F);
@@ -249,7 +249,7 @@ begin
     btnCreateLink.Left := 40;
     btnCreateLink.Top := 228;
     btnCreateLink.Caption := rsCreateNewAccount;
-    btnCreateLink.Font.Height := -11;
+    btnCreateLink.Font.Height := -15;
     btnCreateLink.Font.Color := Pal.TextSecondary;
     btnCreateLink.Cursor := crHandPoint;
 
@@ -345,14 +345,14 @@ begin
     lblExplain.Parent := F;
     lblExplain.SetBounds(40, 60, 380, 60);
     lblExplain.WordWrap := True;
-    lblExplain.Font.Height := -12;
+    lblExplain.Font.Height := -14;
     lblExplain.Font.Color := Pal.TextSecondary;
     lblExplain.Caption := rsLocalExplanation;
 
     edName := TEdit.Create(F);
     edName.Parent := F;
     edName.SetBounds(40, 140, 380, 28);
-    edName.Font.Height := -13;
+    edName.Font.Height := -15;
     edName.TextHint := rsFullNameHint;
 
     btnServerLink := TLabel.Create(F);
@@ -360,7 +360,7 @@ begin
     btnServerLink.Left := 40;
     btnServerLink.Top := 208;
     btnServerLink.Caption := rsLoginWithServer;
-    btnServerLink.Font.Height := -11;
+    btnServerLink.Font.Height := -15;
     btnServerLink.Font.Color := Pal.TextSecondary;
     btnServerLink.Cursor := crHandPoint;
 

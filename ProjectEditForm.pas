@@ -252,30 +252,60 @@ begin
   Result := '#' + IntToHex(R, 2) + IntToHex(G, 2) + IntToHex(B, 2);
 end;
 
-function MatchUSFMMarker(const S: string; P: Integer; const Marker: string): Boolean;
-var
-  MLen: Integer;
+function SkipMarkerName(const S: string; P: Integer): Integer;
+{ Advance past a USFM marker name and optional trailing space.
+  P should point to the character after the backslash. }
 begin
-  Result := False;
-  MLen := Length(Marker);
-  if P + MLen > Length(S) then Exit;
-  if S[P] <> '\' then Exit;
-  if Copy(S, P + 1, MLen) <> Marker then Exit;
-  if P + MLen + 1 > Length(S) then
-    Result := True
-  else
-    Result := S[P + MLen + 1] in [' ', #10, #13];
+  Result := P;
+  while (Result <= Length(S)) and not (S[Result] in [' ', #9, #10, #13, '\']) do
+    Inc(Result);
+  if (Result <= Length(S)) and (S[Result] = ' ') then
+    Inc(Result);
 end;
 
 function USFMToHtml(const AText: string; ABadgeColor: TColor;
   const ATextColor: string): string;
-{ Convert USFM text to HTML with styled verse badges }
+{ Convert USFM text to HTML with styled verse badges, poetry indentation,
+  Selah, footnotes, section headings, and blank lines. }
 var
   S: string;
-  P, Start, EndP: Integer;
-  SegText, BadgeHex: string;
+  P, Start, EndP, Level: Integer;
+  SegText, BadgeHex, MarkerName: string;
 const
   FootnoteChar = '&#8224;'; { dagger U+2020 }
+
+  function PeekMarkerName: string;
+  { Extract the marker name starting at P (which points to the backslash). }
+  var
+    Q: Integer;
+  begin
+    Q := P + 1;
+    while (Q <= Length(S)) and not (S[Q] in [' ', #9, #10, #13, '\', '*']) do
+      Inc(Q);
+    Result := Copy(S, P + 1, Q - P - 1);
+  end;
+
+  procedure SkipToEndOfLine;
+  begin
+    while (P <= Length(S)) and not (S[P] in [#10, #13]) do
+      Inc(P);
+    if (P <= Length(S)) and (S[P] = #13) then Inc(P);
+    if (P <= Length(S)) and (S[P] = #10) then Inc(P);
+  end;
+
+  function ReadToEndOfLine: string;
+  begin
+    Start := P;
+    while (P <= Length(S)) and not (S[P] in [#10, #13, '\']) do
+      Inc(P);
+    Result := Trim(Copy(S, Start, P - Start));
+    if (P <= Length(S)) and (S[P] in [#10, #13]) then
+    begin
+      if (P <= Length(S)) and (S[P] = #13) then Inc(P);
+      if (P <= Length(S)) and (S[P] = #10) then Inc(P);
+    end;
+  end;
+
 begin
   Result := '';
   S := AText;
@@ -288,6 +318,7 @@ begin
   begin
     if S[P] <> '\' then
     begin
+      { Plain text }
       Start := P;
       while (P <= Length(S)) and (S[P] <> '\') do
         Inc(P);
@@ -296,88 +327,211 @@ begin
         Result := Result + '<span style="color:' + ATextColor + ';">' +
           HtmlEscape(SegText) + '</span>';
     end
-    else if MatchUSFMMarker(S, P, 'v') then
-    begin
-      P := P + 3;
-      Start := P;
-      while (P <= Length(S)) and (S[P] in ['0'..'9', '-']) do
-        Inc(P);
-      SegText := Copy(S, Start, P - Start);
-      Result := Result + ' <span style="background-color:' + BadgeHex +
-        '; color:white; padding:1px 5px; font-weight:bold;">' +
-        HtmlEscape(SegText) + '</span> ';
-      while (P <= Length(S)) and (S[P] in [' ', #9, #10, #13]) do
-        Inc(P);
-    end
-    else if MatchUSFMMarker(S, P, 'f') then
-    begin
-      EndP := Pos('\f*', S, P);
-      if EndP > 0 then
-        P := EndP + 3
-      else
-        P := Length(S) + 1;
-      Result := Result + ' <span style="background-color:#FF8040; color:white;' +
-        ' padding:1px 3px; font-weight:bold;">' + FootnoteChar + '</span> ';
-    end
-    else if MatchUSFMMarker(S, P, 'd') then
-    begin
-      P := P + 2;
-      if (P <= Length(S)) and (S[P] = ' ') then Inc(P);
-      Start := P;
-      while (P <= Length(S)) and not (S[P] in [#10, #13]) do
-        Inc(P);
-      SegText := Trim(Copy(S, Start, P - Start));
-      if SegText <> '' then
-        Result := Result + '<br><i style="color:#606060;">' +
-          HtmlEscape(SegText) + '</i><br>';
-      if (P <= Length(S)) and (S[P] = #13) then Inc(P);
-      if (P <= Length(S)) and (S[P] = #10) then Inc(P);
-    end
-    else if MatchUSFMMarker(S, P, 's') then
-    begin
-      P := P + 2;
-      if (P <= Length(S)) and (S[P] in ['1'..'5']) then Inc(P);
-      if (P <= Length(S)) and (S[P] = ' ') then Inc(P);
-      Start := P;
-      while (P <= Length(S)) and not (S[P] in [#10, #13]) do
-        Inc(P);
-      SegText := Trim(Copy(S, Start, P - Start));
-      if SegText <> '' then
-        Result := Result + '<br><b style="font-size:larger;">' +
-          HtmlEscape(SegText) + '</b><br>';
-      if (P <= Length(S)) and (S[P] = #13) then Inc(P);
-      if (P <= Length(S)) and (S[P] = #10) then Inc(P);
-    end
-    else if MatchUSFMMarker(S, P, 'q') or MatchUSFMMarker(S, P, 'q2') then
-    begin
-      P := P + 2;
-      if (P <= Length(S)) and (S[P] in ['1'..'4']) then Inc(P);
-      if (P <= Length(S)) and (S[P] = ' ') then Inc(P);
-      Result := Result + '<br>';
-    end
-    else if MatchUSFMMarker(S, P, 'p') then
-    begin
-      P := P + 2;
-      if (P <= Length(S)) and (S[P] = ' ') then Inc(P);
-      Result := Result + '<br>';
-    end
-    else if MatchUSFMMarker(S, P, 'c') then
-    begin
-      P := P + 2;
-      if (P <= Length(S)) and (S[P] = ' ') then Inc(P);
-      while (P <= Length(S)) and (S[P] in ['0'..'9']) do Inc(P);
-      if (P <= Length(S)) and (S[P] = ' ') then Inc(P);
-    end
     else
     begin
-      Start := P;
-      Inc(P);
-      while (P <= Length(S)) and (S[P] <> '\') and not (S[P] in [#10, #13]) do
-        Inc(P);
-      SegText := Copy(S, Start, P - Start);
-      if Trim(SegText) <> '' then
-        Result := Result + '<span style="color:' + ATextColor + ';">' +
-          HtmlEscape(SegText) + '</span>';
+      MarkerName := PeekMarkerName;
+
+      if MarkerName = 'v' then
+      begin
+        P := P + 3; { skip \v and space }
+        Start := P;
+        while (P <= Length(S)) and (S[P] in ['0'..'9', '-']) do
+          Inc(P);
+        SegText := Copy(S, Start, P - Start);
+        Result := Result + ' <span style="background-color:' + BadgeHex +
+          '; color:white; padding:1px 5px; font-weight:bold;' +
+          ' font-size:80%;">' + HtmlEscape(SegText) + '</span> ';
+        while (P <= Length(S)) and (S[P] in [' ', #9, #10, #13]) do
+          Inc(P);
+      end
+      else if MarkerName = 'f' then
+      begin
+        { Skip entire footnote content until \f* }
+        EndP := Pos('\f*', S, P);
+        if EndP > 0 then
+          P := EndP + 3
+        else
+          P := Length(S) + 1;
+        Result := Result + ' <span style="background-color:#FF8040; color:white;' +
+          ' padding:1px 3px; font-weight:bold; font-size:80%;">' +
+          FootnoteChar + '</span> ';
+      end
+      else if MarkerName = 'x' then
+      begin
+        { Skip cross-reference until \x* }
+        EndP := Pos('\x*', S, P);
+        if EndP > 0 then
+          P := EndP + 3
+        else
+          P := Length(S) + 1;
+      end
+      else if MarkerName = 'b' then
+      begin
+        { Blank line / stanza break }
+        P := P + 2; { skip \b }
+        if (P <= Length(S)) and (S[P] = ' ') then Inc(P);
+        Result := Result + '<p style="margin:0.3em 0;">&nbsp;</p>';
+        if (P <= Length(S)) and (S[P] in [#10, #13]) then SkipToEndOfLine;
+      end
+      else if MarkerName = 'd' then
+      begin
+        { Descriptive title (Psalms) — italic }
+        P := P + 2;
+        if (P <= Length(S)) and (S[P] = ' ') then Inc(P);
+        SegText := ReadToEndOfLine;
+        if SegText <> '' then
+          Result := Result + '<p style="font-style:italic; color:#606060;' +
+            ' margin:0 0 0.3em 0;">' + HtmlEscape(SegText) + '</p>';
+      end
+      else if MarkerName = 'r' then
+      begin
+        { Parallel passage reference — italic, muted }
+        P := P + 2;
+        if (P <= Length(S)) and (S[P] = ' ') then Inc(P);
+        SegText := ReadToEndOfLine;
+        if SegText <> '' then
+          Result := Result + '<p style="font-style:italic; color:#606060;' +
+            ' margin:0 0 0.3em 0;">' + HtmlEscape(SegText) + '</p>';
+      end
+      else if (MarkerName = 's') or (MarkerName = 's1') or
+              (MarkerName = 's2') or (MarkerName = 's3') or
+              (MarkerName = 's5') then
+      begin
+        { Section heading }
+        P := P + 1 + Length(MarkerName);
+        if (P <= Length(S)) and (S[P] = ' ') then Inc(P);
+        if MarkerName = 's5' then
+        begin
+          { unfoldingWord chunk boundary marker — don't render }
+          SkipToEndOfLine;
+        end
+        else
+        begin
+          SegText := ReadToEndOfLine;
+          if SegText <> '' then
+            Result := Result + '<p style="font-weight:bold; margin:0.5em 0 0.2em 0;">' +
+              HtmlEscape(SegText) + '</p>';
+        end;
+      end
+      else if (MarkerName = 'q') or (MarkerName = 'q1') or
+              (MarkerName = 'q2') or (MarkerName = 'q3') or
+              (MarkerName = 'q4') then
+      begin
+        { Poetry indentation }
+        P := P + 1 + Length(MarkerName);
+        if (P <= Length(S)) and (S[P] = ' ') then Inc(P);
+        if MarkerName = 'q3' then Level := 4
+        else if MarkerName = 'q4' then Level := 5
+        else if MarkerName = 'q2' then Level := 3
+        else Level := 2; { q, q1 }
+        Result := Result + '<br><span style="margin-left:' +
+          IntToStr(Level) + 'em; display:inline-block;"></span>';
+      end
+      else if MarkerName = 'p' then
+      begin
+        P := P + 2;
+        if (P <= Length(S)) and (S[P] = ' ') then Inc(P);
+        Result := Result + '<br>';
+      end
+      else if MarkerName = 'm' then
+      begin
+        { Margin/continuation paragraph — no indent }
+        P := P + 2;
+        if (P <= Length(S)) and (S[P] = ' ') then Inc(P);
+        Result := Result + '<br>';
+      end
+      else if (MarkerName = 'pi') or (MarkerName = 'pi1') then
+      begin
+        P := P + 1 + Length(MarkerName);
+        if (P <= Length(S)) and (S[P] = ' ') then Inc(P);
+        Result := Result + '<br><span style="margin-left:2em; display:inline-block;"></span>';
+      end
+      else if MarkerName = 'nb' then
+      begin
+        { No-break — suppress paragraph break }
+        P := P + 3;
+        if (P <= Length(S)) and (S[P] = ' ') then Inc(P);
+      end
+      else if MarkerName = 'c' then
+      begin
+        { Chapter marker — skip number }
+        P := P + 2;
+        if (P <= Length(S)) and (S[P] = ' ') then Inc(P);
+        while (P <= Length(S)) and (S[P] in ['0'..'9']) do Inc(P);
+        if (P <= Length(S)) and (S[P] = ' ') then Inc(P);
+      end
+      else if MarkerName = 'qs' then
+      begin
+        { Selah — italic, visually distinct }
+        P := P + 3;
+        if (P <= Length(S)) and (S[P] = ' ') then Inc(P);
+        Result := Result + '<span style="font-style:italic; color:#606060;">';
+      end
+      else if MarkerName = 'qs*' then
+      begin
+        P := P + 4;
+        Result := Result + '</span>';
+      end
+      else if MarkerName = 'tl' then
+      begin
+        { Transliterated word — italic }
+        P := P + 3;
+        if (P <= Length(S)) and (S[P] = ' ') then Inc(P);
+        Result := Result + '<span style="font-style:italic;">';
+      end
+      else if MarkerName = 'tl*' then
+      begin
+        P := P + 4;
+        Result := Result + '</span>';
+      end
+      else if MarkerName = 'nd' then
+      begin
+        { Name of deity — small caps }
+        P := P + 3;
+        if (P <= Length(S)) and (S[P] = ' ') then Inc(P);
+        Result := Result + '<span style="font-variant:small-caps;">';
+      end
+      else if MarkerName = 'nd*' then
+      begin
+        P := P + 4;
+        Result := Result + '</span>';
+      end
+      else if MarkerName = 'wj' then
+      begin
+        { Words of Jesus — red }
+        P := P + 3;
+        if (P <= Length(S)) and (S[P] = ' ') then Inc(P);
+        Result := Result + '<span style="color:#CC0000;">';
+      end
+      else if MarkerName = 'wj*' then
+      begin
+        P := P + 4;
+        Result := Result + '</span>';
+      end
+      else if MarkerName = 'add' then
+      begin
+        { Translator addition — italic }
+        P := P + 4;
+        if (P <= Length(S)) and (S[P] = ' ') then Inc(P);
+        Result := Result + '<span style="font-style:italic;">';
+      end
+      else if MarkerName = 'add*' then
+      begin
+        P := P + 5;
+        Result := Result + '</span>';
+      end
+      else if (Length(MarkerName) > 0) and (MarkerName[Length(MarkerName)] = '*') then
+      begin
+        { Generic closing marker — emit closing span }
+        P := P + 1 + Length(MarkerName);
+        Result := Result + '</span>';
+      end
+      else
+      begin
+        { Unknown marker — skip it, emit content as text }
+        P := P + 1 + Length(MarkerName);
+        if (P <= Length(S)) and (S[P] = ' ') then Inc(P);
+      end;
     end;
   end;
 end;
@@ -967,7 +1121,7 @@ begin
   FLoadingLabel.AutoSize := False;
   FLoadingLabel.Alignment := taCenter;
   FLoadingLabel.SetBounds(0, 20, 380, 24);
-  FLoadingLabel.Font.Height := -14;
+  FLoadingLabel.Font.Height := -16;
   FLoadingLabel.Font.Name := 'Noto Sans';
   FLoadingLabel.Font.Color := Pal.TextPrimary;
   FLoadingLabel.Caption := AText;
@@ -1173,7 +1327,7 @@ begin
   btnChangeSource.Top := 2;
   btnChangeSource.Height := 18;
   btnChangeSource.Width := 60;
-  btnChangeSource.Font.Height := -10;
+  btnChangeSource.Font.Height := -13;
 
   lblTransHeader.Left := TransLeft;
   lblTransHeader.Top := 2;
@@ -1357,7 +1511,8 @@ begin
         SourceChunk := SourceChapter.Chunks[I];
 
         { Convert USX source to plain text }
-        SourceText := UsxToPlainText(SourceChunk.Content);
+        { Pass raw USX to the chunk panel for direct HTML rendering }
+        SourceText := SourceChunk.Content;
 
         { Build verse label }
         NextChunkStart := 0;
@@ -1934,7 +2089,7 @@ begin
   HeaderLabel.Left := 10;
   HeaderLabel.Top := 6;
   HeaderLabel.Caption := AVerseLabel;
-  HeaderLabel.Font.Height := -11;
+  HeaderLabel.Font.Height := -15;
   HeaderLabel.Font.Style := [fsBold];
   HeaderLabel.Font.Color := $8A8A8A;
   HeaderLabel.OnClick := @AOwnerForm.OnChunkPanelClick;
@@ -1948,7 +2103,7 @@ begin
   FSourceHtml.Width := FSourcePanel.ClientWidth - 4;
   FSourceHtml.Height := PanelHeight - BodyTop - 2;
   FSourceHtml.DefaultTypeFace := 'Roboto';
-  FSourceHtml.DefaultFontSize := 10;
+  FSourceHtml.DefaultFontSize := 13;
   FSourceHtml.BgColor := clWhite;
   FSourceHtml.BorderStyle := bsNone;
   FSourceHtml.OnClick := @AOwnerForm.OnChunkPanelClick;
@@ -1974,7 +2129,7 @@ begin
   FTransHtml.Width := FTransPanel.ClientWidth - 4;
   FTransHtml.Height := PanelHeight - BodyTop - FooterHeight - 2;
   FTransHtml.DefaultTypeFace := 'Roboto';
-  FTransHtml.DefaultFontSize := 10;
+  FTransHtml.DefaultFontSize := 13;
   FTransHtml.BgColor := clWhite;
   FTransHtml.BorderStyle := bsNone;
   FTransHtml.OnClick := @AOwnerForm.OnChunkPanelClick;
@@ -1991,7 +2146,7 @@ begin
   FTransMemo.Height := PanelHeight - BodyTop - FooterHeight - 6;
   FTransMemo.Text := ATransText;
   FTransMemo.Font.Name := 'Roboto';
-  FTransMemo.Font.Height := -13;
+  FTransMemo.Font.Height := -17;
   FTransMemo.WordWrap := True;
   FTransMemo.ScrollBars := ssAutoVertical;
   FTransMemo.Visible := False;
@@ -2081,8 +2236,8 @@ procedure TChunkPanel.RefreshSourceHtml;
 var
   Body: string;
 begin
-  Body := USFMToHtml(FSourceText, FSourceBadgeColor, 'black');
-  FSourceHtml.SetHtmlFromStr(WrapInHtmlDoc(Body, 'Roboto', 10, clWhite));
+  Body := UsxToHtml(FSourceText, ColorToHtmlHex(FSourceBadgeColor));
+  FSourceHtml.SetHtmlFromStr(WrapInHtmlDoc(Body, 'Roboto', 13, clWhite));
 end;
 
 procedure TChunkPanel.RefreshTransHtml;
@@ -2098,7 +2253,7 @@ begin
   Body := USFMToHtml(FTransText, FTransBadgeColor, TextColor);
   if Body = '' then
     Body := '&nbsp;';
-  FTransHtml.SetHtmlFromStr(WrapInHtmlDoc(Body, 'Roboto', 10, clWhite));
+  FTransHtml.SetHtmlFromStr(WrapInHtmlDoc(Body, 'Roboto', 13, clWhite));
 end;
 
 procedure TChunkPanel.RecalcLayout;

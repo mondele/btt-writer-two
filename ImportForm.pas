@@ -74,7 +74,7 @@ begin
   Lbl.Parent := Result;
   Lbl.Left := 16;
   Lbl.Top := 12;
-  Lbl.Font.Height := -14;
+  Lbl.Font.Height := -16;
   Lbl.Caption := ACaption;
   Lbl.Tag := ATag;
   if AEnabled then

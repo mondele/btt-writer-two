@@ -110,7 +110,7 @@ begin
     Memo.ScrollBars := ssVertical;
     Memo.WordWrap := True;
     Memo.Font.Name := 'Noto Sans';
-    Memo.Font.Height := -13;
+    Memo.Font.Height := -15;
     Memo.Font.Color := Pal.TextPrimary;
     Memo.Color := Pal.MemoBg;
     Memo.Lines.Text := AText;
@@ -371,7 +371,7 @@ begin
       lblGatewayDesc.WordWrap := True;
       lblGatewayDesc.Caption := rsGatewayLangDesc;
       lblGatewayDesc.Font.Color := Pal.TextMuted;
-      lblGatewayDesc.Font.Height := -11;
+      lblGatewayDesc.Font.Height := -13;
 
       Y := Y + 64;
 
@@ -391,7 +391,7 @@ begin
       lblBlindEditDesc.WordWrap := True;
       lblBlindEditDesc.Caption := rsBlindEditDesc;
       lblBlindEditDesc.Font.Color := Pal.TextMuted;
-      lblBlindEditDesc.Font.Height := -11;
+      lblBlindEditDesc.Font.Height := -13;
 
       Y := Y + 64;
 

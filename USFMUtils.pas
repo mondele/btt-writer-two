@@ -23,6 +23,11 @@ function ParseVerseNumbers(const Text: string): TStringList;
   and strips <para> tags. }
 function UsxToPlainText(const UsxText: string): string;
 
+{ Convert USX markup to HTML with styled paragraphs, verse badges,
+  poetry indentation, Selah, footnotes, and section headings.
+  ABadgeColor is the verse number badge background color as #RRGGBB. }
+function UsxToHtml(const UsxText, ABadgeColor: string): string;
+
 type
   TUSFMVerse = record
     Chapter: Integer;
@@ -236,6 +241,202 @@ begin
   until False;
 
   Result := Trim(S);
+end;
+
+function UsxHtmlEscape(const S: string): string;
+var
+  I: Integer;
+begin
+  Result := '';
+  for I := 1 to Length(S) do
+    case S[I] of
+      '<': Result := Result + '&lt;';
+      '>': Result := Result + '&gt;';
+      '&': Result := Result + '&amp;';
+      '"': Result := Result + '&quot;';
+    else
+      Result := Result + S[I];
+    end;
+end;
+
+function ExtractXmlAttr(const Tag, AttrName: string): string;
+{ Extract value of an attribute from an XML tag string, e.g.
+  ExtractXmlAttr('<para style="q2">', 'style') = 'q2' }
+var
+  P, Q: Integer;
+  Search: string;
+begin
+  Result := '';
+  Search := AttrName + '="';
+  P := Pos(Search, Tag);
+  if P = 0 then Exit;
+  P := P + Length(Search);
+  Q := Pos('"', Tag, P);
+  if Q = 0 then Exit;
+  Result := Copy(Tag, P, Q - P);
+end;
+
+function UsxToHtml(const UsxText, ABadgeColor: string): string;
+{ Walk through USX fragment text, emitting HTML for each element.
+  Handles: <verse>, <para>, <char>, <note>, plain text. }
+var
+  S: string;
+  P, TagStart, TagEnd: Integer;
+  TagStr, TagName, Style, AttrVal: string;
+  SelfClosing: Boolean;
+  InPara: Boolean;
+  FootnoteChar: string;
+begin
+  Result := '';
+  S := UsxText;
+  P := 1;
+  InPara := False;
+  FootnoteChar := '&#8224;'; { dagger U+2020 }
+
+  while P <= Length(S) do
+  begin
+    if S[P] = '<' then
+    begin
+      { Find end of tag }
+      TagStart := P;
+      TagEnd := Pos('>', S, P);
+      if TagEnd = 0 then
+      begin
+        { Malformed — emit rest as text }
+        Result := Result + UsxHtmlEscape(Copy(S, P, Length(S) - P + 1));
+        Break;
+      end;
+      TagStr := Copy(S, TagStart, TagEnd - TagStart + 1);
+      SelfClosing := (TagEnd > 1) and (S[TagEnd - 1] = '/');
+      P := TagEnd + 1;
+
+      { Determine tag name }
+      if Pos('</', TagStr) = 1 then
+      begin
+        { Closing tag }
+        TagName := '';
+        if Pos('</para>', TagStr) = 1 then
+        begin
+          if InPara then
+          begin
+            Result := Result + '</p>';
+            InPara := False;
+          end;
+        end
+        else if Pos('</char>', TagStr) = 1 then
+          Result := Result + '</span>'
+        else if Pos('</note>', TagStr) = 1 then
+          { handled by note opening }
+        ;
+        Continue;
+      end;
+
+      { Opening/self-closing tag }
+      if Pos('<verse', TagStr) = 1 then
+      begin
+        AttrVal := ExtractXmlAttr(TagStr, 'number');
+        Result := Result + ' <span style="background-color:' + ABadgeColor +
+          '; color:white; padding:1px 5px; font-weight:bold; ' +
+          'font-size:80%;">' + UsxHtmlEscape(AttrVal) + '</span> ';
+      end
+      else if Pos('<para', TagStr) = 1 then
+      begin
+        Style := ExtractXmlAttr(TagStr, 'style');
+        if SelfClosing then
+        begin
+          { Self-closing para — typically <para style="b"/> }
+          if Style = 'b' then
+            Result := Result + '<p style="margin:0.3em 0;">&nbsp;</p>'
+          else if (Style = 'p') or (Style = 'm') then
+            Result := Result + '<br>';
+        end
+        else
+        begin
+          { Close any open para first }
+          if InPara then
+            Result := Result + '</p>';
+          InPara := True;
+
+          if Style = 'q1' then
+            Result := Result + '<p style="margin:0 0 0 2em;">'
+          else if Style = 'q2' then
+            Result := Result + '<p style="margin:0 0 0 3em;">'
+          else if Style = 'q3' then
+            Result := Result + '<p style="margin:0 0 0 4em;">'
+          else if Style = 'b' then
+          begin
+            Result := Result + '<p style="margin:0.3em 0;">&nbsp;</p>';
+            InPara := False;
+          end
+          else if Style = 's1' then
+            Result := Result + '<p style="font-weight:bold; margin:0.5em 0 0.2em 0;">'
+          else if Style = 's2' then
+            Result := Result + '<p style="font-weight:bold; font-size:90%; margin:0.4em 0 0.2em 0;">'
+          else if Style = 'r' then
+            Result := Result + '<p style="font-style:italic; color:#606060; margin:0 0 0.3em 0;">'
+          else if Style = 'd' then
+            Result := Result + '<p style="font-style:italic; color:#606060; margin:0 0 0.3em 0;">'
+          else if Style = 'm' then
+            Result := Result + '<p style="margin:0;">'
+          else if Style = 'pi1' then
+            Result := Result + '<p style="margin:0 0 0 2em; text-indent:1em;">'
+          else if Style = 'p' then
+            Result := Result + '<p style="text-indent:1em; margin:0;">'
+          else
+            Result := Result + '<p style="margin:0;">';
+        end;
+      end
+      else if Pos('<char', TagStr) = 1 then
+      begin
+        Style := ExtractXmlAttr(TagStr, 'style');
+        if Style = 'qs' then
+          Result := Result + '<span style="font-style:italic; color:#606060;">'
+        else if Style = 'tl' then
+          Result := Result + '<span style="font-style:italic;">'
+        else if Style = 'nd' then
+          Result := Result + '<span style="font-variant:small-caps;">'
+        else if Style = 'wj' then
+          Result := Result + '<span style="color:#CC0000;">'
+        else if Style = 'add' then
+          Result := Result + '<span style="font-style:italic;">'
+        else if Style = 'bk' then
+          Result := Result + '<span style="font-style:italic;">'
+        else if Style = 'sc' then
+          Result := Result + '<span style="font-variant:small-caps;">'
+        else
+          { Footnote-internal styles (ft, fr, fk, fq, fqa) are hidden
+            since we collapse footnotes to a dagger indicator }
+          Result := Result + '<span>';
+      end
+      else if Pos('<note', TagStr) = 1 then
+      begin
+        { Skip all content until </note> and show a footnote indicator }
+        TagEnd := Pos('</note>', S, P);
+        if TagEnd > 0 then
+          P := TagEnd + Length('</note>')
+        else
+          P := Length(S) + 1;
+        Result := Result + ' <span style="background-color:#FF8040; color:white;' +
+          ' padding:1px 3px; font-weight:bold; font-size:80%;">' +
+          FootnoteChar + '</span> ';
+      end;
+      { Ignore other tags (ref, etc.) }
+    end
+    else
+    begin
+      { Plain text — collect until next tag }
+      TagStart := P;
+      while (P <= Length(S)) and (S[P] <> '<') do
+        Inc(P);
+      AttrVal := Copy(S, TagStart, P - TagStart);
+      { Skip pure whitespace between tags }
+      if Trim(AttrVal) <> '' then
+        Result := Result + UsxHtmlEscape(AttrVal);
+    end;
+  end;
+
+  if InPara then
+    Result := Result + '</p>';
 end;
 
 function ParseUSFMFile(const FilePath: string; out ParseResult: TUSFMParseResult;

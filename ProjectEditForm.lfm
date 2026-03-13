@@ -117,7 +117,7 @@ object ProjectEditWindow: TProjectEditWindow
       Width = 34
       Caption = 'Ready'
       Font.Color = clWhite
-      Font.Height = -12
+      Font.Height = -14
       ParentFont = False
     end
   end
@@ -151,7 +151,7 @@ object ProjectEditWindow: TProjectEditWindow
         Top = 2
         Width = 80
         Caption = 'Source Text'
-        Font.Height = -13
+        Font.Height = -15
         Font.Style = [fsBold]
         ParentColor = False
         ParentFont = False
@@ -163,7 +163,7 @@ object ProjectEditWindow: TProjectEditWindow
         Width = 120
         Caption = 'English ULB'
         Font.Color = 7303023
-        Font.Height = -11
+        Font.Height = -13
         ParentColor = False
         ParentFont = False
       end
@@ -173,7 +173,7 @@ object ProjectEditWindow: TProjectEditWindow
         Top = 8
         Width = 70
         Caption = 'Change'
-        Font.Height = -10
+        Font.Height = -12
         ParentFont = False
         TabOrder = 0
       end
@@ -183,7 +183,7 @@ object ProjectEditWindow: TProjectEditWindow
         Top = 2
         Width = 80
         Caption = 'Translation'
-        Font.Height = -13
+        Font.Height = -15
         Font.Style = [fsBold]
         ParentColor = False
         ParentFont = False
@@ -195,7 +195,7 @@ object ProjectEditWindow: TProjectEditWindow
         Width = 120
         Caption = 'Language'
         Font.Color = 7303023
-        Font.Height = -11
+        Font.Height = -13
         ParentColor = False
         ParentFont = False
       end
