@@ -6,12 +6,12 @@ interface
 
 uses
   Classes, SysUtils, Forms, Controls, Graphics, Dialogs, Math,
-  ExtCtrls, StdCtrls, Buttons, ComCtrls, Menus, LCLType, LCLIntf,
+  ExtCtrls, StdCtrls, Buttons, ComCtrls, Menus, LCLType, LCLIntf, FileUtil,
   fpjson, jsonparser,
   Globals, ProjectScanner, ProjectEditForm, ProjectCreator, ProjectManager,
   TStudioPackage, SplashScreen, AppSettings, SettingsForm, ThemePalette, UIFonts,
   AppLog, UserProfile, LoginForm, GiteaClient, ImportForm, USFMExporter, GitUtils,
-  DataPaths, USFMUtils, BibleBook, BibleChapter;
+  DataPaths, USFMUtils, BibleBook, BibleChapter, DevToolsForm;
 
 resourcestring
   rsProjectDetailsTitle = 'Project Details';
@@ -54,6 +54,7 @@ resourcestring
   rsMenuFeedback = 'Feedback';
   rsMenuLogout = 'Logout';
   rsMenuSettings = 'Settings';
+  rsMenuDevTools = 'Developer Tools';
   rsFeedbackTitle = 'Feedback';
   rsFeedbackWarning = 'This will use your internet connection.';
   rsFeedbackHint = 'Describe the problem you are experiencing';
@@ -71,6 +72,7 @@ resourcestring
   rsImportSuccessPrefix = 'Project imported: ';
   rsImportFailedPrefix = 'Import failed: ';
   rsImportOverwriteConfirm = 'A project with this name already exists. Overwrite?';
+  rsImportMergedWithConflicts = 'Project merged. There are conflicts that need to be resolved. Open the project to resolve them.';
   rsUploadSuccessPrefix = 'Uploaded to server: ';
   rsUploadFailedPrefix = 'Upload failed: ';
   rsUploadRequiresServer = 'You must be logged in with a server account to upload.';
@@ -84,6 +86,11 @@ resourcestring
   rsSourceImportSuccess = 'Source text imported: ';
   rsSourceImportFailed = 'Source text import failed: ';
   rsSourceImportInvalidDir = 'Selected directory does not contain a valid resource container (missing package.json or content/toc.yml).';
+  rsDeleteProject = 'Delete';
+  rsConfirmDeleteProject = 'Are you sure you want to permanently delete this project? This cannot be undone.';
+  rsProjectDeletedPrefix = 'Project deleted: ';
+  rsChange = 'Change';
+  rsChangeResTypeTitle = 'Change Resource Type';
 
 type
   TMainWindow = class(TForm)
@@ -150,17 +157,19 @@ type
     procedure MenuImportClick(Sender: TObject);
     procedure MenuFeedbackClick(Sender: TObject);
     procedure MenuSettingsClick(Sender: TObject);
+    procedure MenuDevToolsClick(Sender: TObject);
+    procedure UpdateDevToolsMenuItem;
     procedure ShowFeedbackDialog;
     procedure DoImportProjectFile;
     procedure DoImportFromServer;
     procedure DoImportUSFMFile;
     procedure DoImportSourceText;
-    procedure DoUploadToServer(const ASummary: TProjectSummary);
-    procedure DoExportUSFM(const ASummary: TProjectSummary);
   private
-    FCurrentUser: TUserProfile;
     FMainMenu: TPopupMenu;
   public
+    FCurrentUser: TUserProfile;
+    procedure DoUploadToServer(const ASummary: TProjectSummary);
+    procedure DoExportUSFM(const ASummary: TProjectSummary);
   end;
 
 var
@@ -168,20 +177,37 @@ var
 
 implementation
 
+uses
+  Grids;
+
 {$R *.lfm}
 
 type
   TProjectDetailsWindow = class(TForm)
   private
     FSummary: TProjectSummary;
+    FDirty: Boolean;
     lblTitle: TLabel;
-    lblInfo: TLabel;
+    lblProject: TLabel;
+    lblTargetLang: TLabel;
+    lblChangeLang: TLabel;
+    lblResourceType: TLabel;
+    lblChangeResType: TLabel;
+    lblProgress: TLabel;
+    lblIssues: TLabel;
+    lblTranslators: TLabel;
     memTranslators: TMemo;
     btnDismiss: TButton;
     btnExport: TButton;
+    btnDelete: TButton;
     function LoadTranslatorsText: string;
     procedure btnDismissClick(Sender: TObject);
     procedure btnExportClick(Sender: TObject);
+    procedure btnDeleteClick(Sender: TObject);
+    procedure ChangeLangClick(Sender: TObject);
+    procedure ChangeResTypeClick(Sender: TObject);
+    procedure SaveManifestChanges;
+    function RenameProjectDir: Boolean;
   public
     constructor CreateDetails(AOwner: TComponent; const ASummary: TProjectSummary);
   end;
@@ -328,17 +354,19 @@ constructor TProjectDetailsWindow.CreateDetails(AOwner: TComponent;
 var
   ProgressPct: Integer;
   P: TThemePalette;
+  Y: Integer;
 begin
   inherited Create(AOwner);
   FSummary := ASummary;
   P := GetThemePalette(GetEffectiveTheme);
   Position := poScreenCenter;
   Width := 520;
-  Height := 430;
+  Height := 460;
   BorderIcons := [biSystemMenu];
   Caption := rsProjectDetailsTitle;
   Color := P.PanelBg;
 
+  { Title: "BookName — LangName" matching v1 }
   lblTitle := TLabel.Create(Self);
   lblTitle.Parent := Self;
   lblTitle.Left := 24;
@@ -346,57 +374,148 @@ begin
   lblTitle.Font.Style := [fsBold];
   lblTitle.Font.Height := -24;
   lblTitle.Font.Color := P.TextPrimary;
-  lblTitle.Caption := FSummary.BookName + ' - ' + FSummary.TargetLangName;
+  lblTitle.Caption := ProjectDisplayName(FSummary) + ' — ' + FSummary.TargetLangName;
 
-  lblInfo := TLabel.Create(Self);
-  lblInfo.Parent := Self;
-  lblInfo.Left := 24;
-  lblInfo.Top := 68;
-  lblInfo.Font.Height := -16;
-  lblInfo.Font.Color := P.TextSecondary;
+  Y := 68;
+
+  { Project: BookName (bookcode) }
+  lblProject := TLabel.Create(Self);
+  lblProject.Parent := Self;
+  lblProject.Left := 24;
+  lblProject.Top := Y;
+  lblProject.Font.Height := -16;
+  lblProject.Font.Color := P.TextSecondary;
+  lblProject.Caption := rsProjectLabel + ProjectDisplayName(FSummary) +
+    ' (' + LowerCase(FSummary.BookCode) + ')';
+  Inc(Y, 26);
+
+  { Target Language: LangName (langcode)    Change }
+  lblTargetLang := TLabel.Create(Self);
+  lblTargetLang.Parent := Self;
+  lblTargetLang.Left := 24;
+  lblTargetLang.Top := Y;
+  lblTargetLang.Font.Height := -16;
+  lblTargetLang.Font.Color := P.TextSecondary;
+  lblTargetLang.Caption := rsTargetLanguageLabel + FSummary.TargetLangName +
+    ' (' + FSummary.TargetLangCode + ')';
+  lblTargetLang.AutoSize := True;
+
+  lblChangeLang := TLabel.Create(Self);
+  lblChangeLang.Parent := Self;
+  lblChangeLang.Top := Y;
+  lblChangeLang.Font.Height := -16;
+  lblChangeLang.Font.Color := clTeal;
+  lblChangeLang.Font.Style := [fsUnderline];
+  lblChangeLang.Caption := rsChange;
+  lblChangeLang.Cursor := crHandPoint;
+  lblChangeLang.OnClick := @ChangeLangClick;
+  lblChangeLang.AutoSize := True;
+  lblChangeLang.BorderSpacing.Left := 16;
+  lblChangeLang.AnchorSideLeft.Control := lblTargetLang;
+  lblChangeLang.AnchorSideLeft.Side := asrRight;
+  Inc(Y, 26);
+
+  { Resource type:    Change }
+  lblResourceType := TLabel.Create(Self);
+  lblResourceType.Parent := Self;
+  lblResourceType.Left := 24;
+  lblResourceType.Top := Y;
+  lblResourceType.Font.Height := -16;
+  lblResourceType.Font.Color := P.TextSecondary;
+  lblResourceType.Caption := rsResourceTypeLabel + FSummary.ResourceType;
+  lblResourceType.AutoSize := True;
+
+  lblChangeResType := TLabel.Create(Self);
+  lblChangeResType.Parent := Self;
+  lblChangeResType.Top := Y;
+  lblChangeResType.Font.Height := -16;
+  lblChangeResType.Font.Color := clTeal;
+  lblChangeResType.Font.Style := [fsUnderline];
+  lblChangeResType.Caption := rsChange;
+  lblChangeResType.Cursor := crHandPoint;
+  lblChangeResType.OnClick := @ChangeResTypeClick;
+  lblChangeResType.AutoSize := True;
+  lblChangeResType.BorderSpacing.Left := 16;
+  lblChangeResType.AnchorSideLeft.Control := lblResourceType;
+  lblChangeResType.AnchorSideLeft.Side := asrRight;
+  Inc(Y, 26);
+
+  { Progress: }
   if FSummary.TotalChunks > 0 then
     ProgressPct := (FSummary.FinishedChunks * 100) div FSummary.TotalChunks
   else
     ProgressPct := 0;
-  lblInfo.Caption :=
-    rsProjectLabel + FSummary.DirName + LineEnding +
-    rsTargetLanguageLabel + FSummary.TargetLangCode + ' - ' + FSummary.TargetLangName + LineEnding +
-    rsResourceTypeLabel + FSummary.ResourceType + LineEnding +
-    rsProgressLabel + IntToStr(ProgressPct) + '%' + LineEnding +
-    rsIssuesLabel + LineEnding +
-    rsTranslatorsLabel;
+  lblProgress := TLabel.Create(Self);
+  lblProgress.Parent := Self;
+  lblProgress.Left := 24;
+  lblProgress.Top := Y;
+  lblProgress.Font.Height := -16;
+  lblProgress.Font.Color := P.TextSecondary;
+  lblProgress.Caption := rsProgressLabel + IntToStr(ProgressPct) + '%';
+  Inc(Y, 26);
+
+  { Issues: only show if there are issues }
   if FSummary.HasIssues then
-    lblInfo.Caption := StringReplace(lblInfo.Caption, rsIssuesLabel + LineEnding,
-      rsIssuesLabel + FSummary.IssueSummary + LineEnding, [])
-  else
-    lblInfo.Caption := StringReplace(lblInfo.Caption, rsIssuesLabel + LineEnding,
-      rsIssuesLabel + rsIssuesNone + LineEnding, []);
+  begin
+    lblIssues := TLabel.Create(Self);
+    lblIssues.Parent := Self;
+    lblIssues.Left := 24;
+    lblIssues.Top := Y;
+    lblIssues.Font.Height := -16;
+    lblIssues.Font.Color := clRed;
+    lblIssues.Caption := rsIssuesLabel + FSummary.IssueSummary;
+    Inc(Y, 26);
+  end;
+
+  { Translators: }
+  Inc(Y, 4);
+  lblTranslators := TLabel.Create(Self);
+  lblTranslators.Parent := Self;
+  lblTranslators.Left := 24;
+  lblTranslators.Top := Y;
+  lblTranslators.Font.Height := -16;
+  lblTranslators.Font.Color := P.TextSecondary;
+  lblTranslators.Caption := rsTranslatorsLabel;
+  Inc(Y, 24);
 
   memTranslators := TMemo.Create(Self);
   memTranslators.Parent := Self;
   memTranslators.Left := 24;
-  memTranslators.Top := 182;
+  memTranslators.Top := Y;
   memTranslators.Width := 464;
-  memTranslators.Height := 164;
-  memTranslators.ReadOnly := True;
+  memTranslators.Height := 120;
+  memTranslators.ReadOnly := False;
   memTranslators.ScrollBars := ssVertical;
   memTranslators.Color := P.MemoBg;
   memTranslators.Font.Color := P.TextPrimary;
   memTranslators.Lines.Text := LoadTranslatorsText;
 
+  { Bottom buttons: Delete (left), Dismiss + Export (right) }
+  btnDelete := TButton.Create(Self);
+  btnDelete.Parent := Self;
+  btnDelete.Left := 24;
+  btnDelete.Top := Height - 56;
+  btnDelete.Width := 80;
+  btnDelete.Anchors := [akLeft, akBottom];
+  btnDelete.Caption := rsDeleteProject;
+  btnDelete.Font.Color := clRed;
+  btnDelete.OnClick := @btnDeleteClick;
+
   btnDismiss := TButton.Create(Self);
   btnDismiss.Parent := Self;
-  btnDismiss.Left := 212;
-  btnDismiss.Top := 360;
+  btnDismiss.Left := Width - 240;
+  btnDismiss.Top := Height - 56;
   btnDismiss.Width := 96;
+  btnDismiss.Anchors := [akRight, akBottom];
   btnDismiss.Caption := rsDismiss;
   btnDismiss.OnClick := @btnDismissClick;
 
   btnExport := TButton.Create(Self);
   btnExport.Parent := Self;
-  btnExport.Left := 384;
-  btnExport.Top := 360;
+  btnExport.Left := Width - 130;
+  btnExport.Top := Height - 56;
   btnExport.Width := 104;
+  btnExport.Anchors := [akRight, akBottom];
   btnExport.Caption := rsExportUp;
   btnExport.OnClick := @btnExportClick;
 end;
@@ -445,8 +564,263 @@ begin
   end;
 end;
 
+procedure TProjectDetailsWindow.btnDeleteClick(Sender: TObject);
+var
+  ProjectDir: string;
+begin
+  if MessageDlg(rsConfirmDeleteProject, mtConfirmation, [mbYes, mbNo], 0) <> mrYes then
+    Exit;
+  ProjectDir := ExcludeTrailingPathDelimiter(FSummary.FullPath);
+  if DirectoryExists(ProjectDir) then
+  begin
+    if not DeleteDirectory(ProjectDir, False) then
+    begin
+      ShowMessage('Could not delete project directory.');
+      Exit;
+    end;
+  end;
+  ModalResult := mrOK;
+end;
+
+procedure TProjectDetailsWindow.ChangeLangClick(Sender: TObject);
+var
+  NewCode, NewName: string;
+begin
+  if not PromptForTargetLanguage(NewCode, NewName) then
+    Exit;
+  if (NewCode = FSummary.TargetLangCode) and (NewName = FSummary.TargetLangName) then
+    Exit;
+  FSummary.TargetLangCode := NewCode;
+  FSummary.TargetLangName := NewName;
+  lblTargetLang.Caption := rsTargetLanguageLabel + FSummary.TargetLangName +
+    ' (' + FSummary.TargetLangCode + ')';
+  lblTitle.Caption := ProjectDisplayName(FSummary) + ' — ' + FSummary.TargetLangName;
+  FDirty := True;
+end;
+
+procedure TProjectDetailsWindow.ChangeResTypeClick(Sender: TObject);
+var
+  Dlg: TForm;
+  Lst: TListBox;
+  BtnOK, BtnCancel: TButton;
+  P: TThemePalette;
+  Idx: Integer;
+begin
+  P := GetThemePalette(GetEffectiveTheme);
+  Dlg := TForm.Create(Self);
+  try
+    Dlg.Position := poScreenCenter;
+    Dlg.Width := 300;
+    Dlg.Height := 260;
+    Dlg.Caption := rsChangeResTypeTitle;
+    Dlg.BorderIcons := [biSystemMenu];
+    Dlg.Color := P.PanelBg;
+
+    Lst := TListBox.Create(Dlg);
+    Lst.Parent := Dlg;
+    Lst.Left := 20;
+    Lst.Top := 20;
+    Lst.Width := 260;
+    Lst.Height := 150;
+    Lst.Items.Add('reg — Regular');
+    Lst.Items.Add('ulb — Unlocked Literal Bible');
+    Lst.Items.Add('udb — Unlocked Dynamic Bible');
+    { Pre-select current }
+    if LowerCase(FSummary.ResourceType) = 'ulb' then
+      Lst.ItemIndex := 1
+    else if LowerCase(FSummary.ResourceType) = 'udb' then
+      Lst.ItemIndex := 2
+    else
+      Lst.ItemIndex := 0;
+
+    BtnOK := TButton.Create(Dlg);
+    BtnOK.Parent := Dlg;
+    BtnOK.Left := 100;
+    BtnOK.Top := 185;
+    BtnOK.Width := 80;
+    BtnOK.Caption := 'OK';
+    BtnOK.ModalResult := mrOK;
+    BtnOK.Default := True;
+
+    BtnCancel := TButton.Create(Dlg);
+    BtnCancel.Parent := Dlg;
+    BtnCancel.Left := 190;
+    BtnCancel.Top := 185;
+    BtnCancel.Width := 80;
+    BtnCancel.Caption := 'Cancel';
+    BtnCancel.ModalResult := mrCancel;
+    BtnCancel.Cancel := True;
+
+    if Dlg.ShowModal <> mrOK then
+      Exit;
+    Idx := Lst.ItemIndex;
+    if Idx < 0 then
+      Exit;
+  finally
+    Dlg.Free;
+  end;
+
+  case Idx of
+    1: FSummary.ResourceType := 'ulb';
+    2: FSummary.ResourceType := 'udb';
+  else
+    FSummary.ResourceType := 'reg';
+  end;
+  lblResourceType.Caption := rsResourceTypeLabel + FSummary.ResourceType;
+  FDirty := True;
+end;
+
+procedure TProjectDetailsWindow.SaveManifestChanges;
+var
+  ManifestPath: string;
+  SL: TStringList;
+  Data: TJSONData;
+  Manifest, TargetLangObj, ResourceObj: TJSONObject;
+  TransArr: TJSONArray;
+  I: Integer;
+  Line: string;
+begin
+  ManifestPath := IncludeTrailingPathDelimiter(FSummary.FullPath) + 'manifest.json';
+  if not FileExists(ManifestPath) then
+    Exit;
+
+  SL := TStringList.Create;
+  try
+    SL.LoadFromFile(ManifestPath);
+    Data := GetJSON(SL.Text);
+    if not (Data is TJSONObject) then
+    begin
+      Data.Free;
+      Exit;
+    end;
+    Manifest := TJSONObject(Data);
+    try
+      { Update target_language.id and name }
+      if Manifest.FindPath('target_language') is TJSONObject then
+      begin
+        TargetLangObj := TJSONObject(Manifest.FindPath('target_language'));
+        TargetLangObj.Strings['id'] := FSummary.TargetLangCode;
+        TargetLangObj.Strings['name'] := FSummary.TargetLangName;
+      end;
+
+      { Update resource.id and name }
+      if Manifest.FindPath('resource') is TJSONObject then
+      begin
+        ResourceObj := TJSONObject(Manifest.FindPath('resource'));
+        ResourceObj.Strings['id'] := FSummary.ResourceType;
+        case LowerCase(FSummary.ResourceType) of
+          'ulb': ResourceObj.Strings['name'] := 'Unlocked Literal Bible';
+          'udb': ResourceObj.Strings['name'] := 'Unlocked Dynamic Bible';
+        else
+          ResourceObj.Strings['name'] := 'Regular';
+        end;
+      end;
+
+      { Update translators array from memo }
+      TransArr := TJSONArray.Create;
+      for I := 0 to memTranslators.Lines.Count - 1 do
+      begin
+        Line := Trim(memTranslators.Lines[I]);
+        if Line <> '' then
+          TransArr.Add(Line);
+      end;
+      { Remove old translators and add new }
+      I := Manifest.IndexOfName('translators');
+      if I >= 0 then
+        Manifest.Delete(I);
+      Manifest.Add('translators', TransArr);
+
+      { Write back }
+      SL.Text := Manifest.FormatJSON;
+      SL.SaveToFile(ManifestPath);
+    finally
+      Manifest.Free;
+    end;
+  finally
+    SL.Free;
+  end;
+end;
+
+function TProjectDetailsWindow.RenameProjectDir: Boolean;
+var
+  NewDirName, BasePath, OldPath, NewPath, Err: string;
+  Choice: TDuplicateChoice;
+  HasConflicts: Boolean;
+begin
+  Result := True;
+  NewDirName := CanonicalProjectDirName(FSummary.TargetLangCode, FSummary.BookCode,
+    FSummary.TypeID, FSummary.ResourceType);
+  if NewDirName = '' then
+    Exit;
+  OldPath := ExcludeTrailingPathDelimiter(FSummary.FullPath);
+  BasePath := ExtractFilePath(OldPath);
+  NewPath := BasePath + NewDirName;
+  if OldPath = NewPath then
+    Exit; { no rename needed }
+
+  if DirectoryExists(NewPath) then
+  begin
+    { Existing project at target — offer merge/overwrite/cancel }
+    Choice := ShowDuplicateProjectDialog;
+    case Choice of
+      dcCancel:
+      begin
+        Result := False;
+        Exit;
+      end;
+      dcOverwrite:
+      begin
+        { Remove existing, then rename }
+        if not DeleteDirectory(NewPath, False) then
+        begin
+          ShowMessage('Could not remove existing project directory.');
+          Result := False;
+          Exit;
+        end;
+      end;
+      dcMerge:
+      begin
+        { Commit our changes, then merge old into new location }
+        EnsureProjectCommitted(OldPath, Err);
+        EnsureProjectCommitted(NewPath, Err);
+        if not MergeImportedProject(NewPath, OldPath,
+          HasConflicts, Err) then
+        begin
+          ShowMessage(rsImportFailedPrefix + Err);
+          Result := False;
+          Exit;
+        end;
+        { Remove old dir after successful merge }
+        DeleteDirectory(OldPath, False);
+        FSummary.FullPath := IncludeTrailingPathDelimiter(NewPath);
+        FSummary.DirName := NewDirName;
+        if HasConflicts then
+          ShowMessage(rsImportMergedWithConflicts);
+        Exit;
+      end;
+    end;
+  end;
+
+  if not RenameFile(OldPath, NewPath) then
+  begin
+    ShowMessage('Could not rename project directory.');
+    Result := False;
+    Exit;
+  end;
+  FSummary.FullPath := IncludeTrailingPathDelimiter(NewPath);
+  FSummary.DirName := NewDirName;
+end;
+
 procedure TProjectDetailsWindow.btnDismissClick(Sender: TObject);
 begin
+  { Check if translators changed even without explicit Change click }
+  if memTranslators.Modified then
+    FDirty := True;
+  if FDirty then
+  begin
+    SaveManifestChanges;
+    RenameProjectDir;
+  end;
   Close;
 end;
 
@@ -464,7 +838,11 @@ begin
       try
         SaveDlg.Filter := rsExportFilter;
         SaveDlg.DefaultExt := rsTStudioExt;
-        SaveDlg.FileName := FSummary.DirName + '.tstudio';
+        if FSummary.DirName <> '' then
+          SaveDlg.FileName := FSummary.DirName + '.tstudio'
+        else
+          SaveDlg.FileName := ExtractFileName(
+            ExcludeTrailingPathDelimiter(FSummary.FullPath)) + '.tstudio';
         SaveDlg.InitialDir := GetBackupLocation;
         if (SaveDlg.InitialDir = '') or not DirectoryExists(SaveDlg.InitialDir) then
           SaveDlg.InitialDir := GetEnvironmentVariable('HOME');
@@ -591,6 +969,7 @@ begin
   FMainMenu.Items.Add(TMenuItem.Create(FMainMenu));
   FMainMenu.Items[6].Caption := rsMenuSettings;
   FMainMenu.Items[6].OnClick := @MenuSettingsClick;
+  UpdateDevToolsMenuItem;
 
   ApplyTheme;
 
@@ -1213,6 +1592,33 @@ begin
   ShowFeedbackDialog;
 end;
 
+procedure TMainWindow.UpdateDevToolsMenuItem;
+var
+  I: Integer;
+  Item: TMenuItem;
+  Found: Boolean;
+begin
+  { Check if dev tools item already exists }
+  Found := False;
+  for I := 0 to FMainMenu.Items.Count - 1 do
+    if FMainMenu.Items[I].Caption = rsMenuDevTools then
+    begin
+      Found := True;
+      if not GetDeveloperTools then
+        FMainMenu.Items.Delete(I);
+      Break;
+    end;
+
+  { Add if enabled and not found }
+  if GetDeveloperTools and not Found then
+  begin
+    Item := TMenuItem.Create(FMainMenu);
+    Item.Caption := rsMenuDevTools;
+    Item.OnClick := @MenuDevToolsClick;
+    FMainMenu.Items.Add(Item);
+  end;
+end;
+
 procedure TMainWindow.MenuSettingsClick(Sender: TObject);
 var
   OldTheme, NewTheme: TAppTheme;
@@ -1230,6 +1636,14 @@ begin
       EnsureUserProfile;
     end;
   end;
+  { Always update dev tools menu item after settings dialog }
+  LogFmt(llInfo, 'After settings: developer_tools=%s', [BoolToStr(GetDeveloperTools, True)]);
+  UpdateDevToolsMenuItem;
+end;
+
+procedure TMainWindow.MenuDevToolsClick(Sender: TObject);
+begin
+  ShowDevToolsWindow;
 end;
 
 procedure TMainWindow.ShowFeedbackDialog;
@@ -1396,13 +1810,78 @@ end;
 
 { --- Import/Export implementations --- }
 
+{ Extract .tstudio to a temp dir, read its canonical name, then move to
+  the correct location.  Cleans up the outer manifest.json that unzip
+  leaves in the dest root.  Returns the final canonical project dir. }
+function ExtractTStudioToCanonical(const PackagePath, DestRoot: string;
+  out FinalDir: string; out ErrorMsg: string): Boolean;
+var
+  TmpRoot, ExtractedDir, CanonName, CanonDir, OuterManifest: string;
+  OutText, ErrText: string;
+  ExitCode: Integer;
+begin
+  Result := False;
+  FinalDir := '';
+
+  { Extract to a temp sub-dir first so we can rename freely }
+  TmpRoot := GetTempDir + 'bttw_ext_' + FormatDateTime('yyyymmddhhnnsszzz', Now);
+  ForceDirectories(TmpRoot);
+
+  if not ExtractTStudioPackage(PackagePath, TmpRoot, ExtractedDir, ErrorMsg) then
+  begin
+    RunCommandCapture('bash', ['-lc', 'rm -rf ' + ShellQuote(TmpRoot)],
+      '', OutText, ErrText, ExitCode);
+    Exit;
+  end;
+
+  if not FileExists(IncludeTrailingPathDelimiter(ExtractedDir) + 'manifest.json') then
+  begin
+    ErrorMsg := 'manifest.json not found in extracted project.';
+    RunCommandCapture('bash', ['-lc', 'rm -rf ' + ShellQuote(TmpRoot)],
+      '', OutText, ErrText, ExitCode);
+    Exit;
+  end;
+
+  { Determine canonical dir name from the inner manifest }
+  CanonName := ReadCanonicalDirName(ExtractedDir);
+  if CanonName = '' then
+    CanonName := ExtractFileName(ExcludeTrailingPathDelimiter(ExtractedDir));
+
+  CanonDir := IncludeTrailingPathDelimiter(DestRoot) + CanonName;
+  FinalDir := CanonDir;
+
+  { Move extracted project to canonical location }
+  if not DirectoryExists(DestRoot) then
+    ForceDirectories(DestRoot);
+  if DirectoryExists(CanonDir) then
+  begin
+    { Caller should have handled duplicate check already — remove stale }
+    RunCommandCapture('bash', ['-lc', 'rm -rf ' + ShellQuote(CanonDir)],
+      '', OutText, ErrText, ExitCode);
+  end;
+  MoveDirectorySafe(ExtractedDir, CanonDir);
+
+  { Clean up temp dir (outer manifest.json and empty dirs) }
+  RunCommandCapture('bash', ['-lc', 'rm -rf ' + ShellQuote(TmpRoot)],
+    '', OutText, ErrText, ExitCode);
+
+  { Also delete any outer manifest.json left in destRoot from prior bad imports }
+  OuterManifest := IncludeTrailingPathDelimiter(DestRoot) + 'manifest.json';
+  if FileExists(OuterManifest) then
+    DeleteFile(OuterManifest);
+
+  Result := True;
+end;
+
 procedure TMainWindow.DoImportProjectFile;
 var
   OpenDlg: TOpenDialog;
   Info: TTStudioPackageInfo;
-  ExtractedDir, Err, TargetDir: string;
+  ExtractedDir, Err, TargetDir, TempDir, CanonName: string;
   OutText, ErrText: string;
   ExitCode: Integer;
+  Choice: TDuplicateChoice;
+  HasConflicts: Boolean;
 begin
   OpenDlg := TOpenDialog.Create(nil);
   try
@@ -1418,35 +1897,91 @@ begin
       Exit;
     end;
 
+    { Determine canonical target directory.  Extract to temp first to
+      read the inner manifest (the outer one has only the original path). }
+    TempDir := GetTempDir + 'bttw_peek_' + FormatDateTime('yyyymmddhhnnsszzz', Now);
+    ForceDirectories(TempDir);
+    if ExtractTStudioPackage(OpenDlg.FileName, TempDir, ExtractedDir, Err) then
+      CanonName := ReadCanonicalDirName(ExtractedDir)
+    else
+      CanonName := '';
+    RunCommandCapture('bash', ['-lc', 'rm -rf ' + ShellQuote(TempDir)],
+      '', OutText, ErrText, ExitCode);
+    if CanonName = '' then
+      CanonName := Info.ProjectPath;
+
+    TargetDir := IncludeTrailingPathDelimiter(GetTargetTranslationsPath) + CanonName;
+
     { Check for existing project }
-    TargetDir := GetTargetTranslationsPath + Info.ProjectPath;
     if DirectoryExists(TargetDir) then
     begin
-      if MessageDlg(rsImportOverwriteConfirm, mtConfirmation, [mbYes, mbNo], 0) <> mrYes then
-        Exit;
-      { Remove existing directory }
-      RunCommandCapture('bash', ['-lc', 'rm -rf ' + ShellQuote(TargetDir)],
-        '', OutText, ErrText, ExitCode);
+      Choice := ShowDuplicateProjectDialog;
+      case Choice of
+        dcCancel: Exit;
+        dcOverwrite:
+        begin
+          RunCommandCapture('bash', ['-lc', 'rm -rf ' + ShellQuote(TargetDir)],
+            '', OutText, ErrText, ExitCode);
+          if not ExtractTStudioToCanonical(OpenDlg.FileName,
+            GetTargetTranslationsPath, ExtractedDir, Err) then
+          begin
+            ShowMessage(rsImportFailedPrefix + Err);
+            Exit;
+          end;
+          EnsureProjectCommitted(ExtractedDir, Err);
+          ShowMessage(rsImportSuccessPrefix +
+            ExtractFileName(ExcludeTrailingPathDelimiter(ExtractedDir)));
+          ScanAndDisplayProjects;
+          Exit;
+        end;
+        dcMerge:
+        begin
+          { Extract to a temp directory, then merge into existing }
+          TempDir := GetTempDir + 'bttw_import_' + FormatDateTime('yyyymmddhhnnss', Now);
+          ForceDirectories(TempDir);
+          if not ExtractTStudioToCanonical(OpenDlg.FileName, TempDir, ExtractedDir, Err) then
+          begin
+            ShowMessage(rsImportFailedPrefix + Err);
+            RunCommandCapture('bash', ['-lc', 'rm -rf ' + ShellQuote(TempDir)],
+              '', OutText, ErrText, ExitCode);
+            Exit;
+          end;
+          EnsureProjectCommitted(ExtractedDir, Err);
+
+          if not MergeImportedProject(TargetDir, ExtractedDir,
+            HasConflicts, Err) then
+          begin
+            ShowMessage(rsImportFailedPrefix + Err);
+            RunCommandCapture('bash', ['-lc', 'rm -rf ' + ShellQuote(TempDir)],
+              '', OutText, ErrText, ExitCode);
+            Exit;
+          end;
+
+          RunCommandCapture('bash', ['-lc', 'rm -rf ' + ShellQuote(TempDir)],
+            '', OutText, ErrText, ExitCode);
+
+          if HasConflicts then
+            ShowMessage(rsImportMergedWithConflicts)
+          else
+            ShowMessage(rsImportSuccessPrefix +
+              ExtractFileName(ExcludeTrailingPathDelimiter(TargetDir)));
+          ScanAndDisplayProjects;
+          Exit;
+        end;
+      end;
     end;
 
-    { Extract package }
-    if not ExtractTStudioPackage(OpenDlg.FileName, GetTargetTranslationsPath, ExtractedDir, Err) then
+    { No existing project — extract to canonical location }
+    if not ExtractTStudioToCanonical(OpenDlg.FileName,
+      GetTargetTranslationsPath, ExtractedDir, Err) then
     begin
       ShowMessage(rsImportFailedPrefix + Err);
       Exit;
     end;
 
-    { Verify manifest exists }
-    if not FileExists(IncludeTrailingPathDelimiter(ExtractedDir) + 'manifest.json') then
-    begin
-      ShowMessage(rsImportFailedPrefix + 'manifest.json not found in extracted project.');
-      Exit;
-    end;
-
-    { Ensure git repo is valid }
     EnsureProjectCommitted(ExtractedDir, Err);
-
-    ShowMessage(rsImportSuccessPrefix + ExtractFileName(ExcludeTrailingPathDelimiter(ExtractedDir)));
+    ShowMessage(rsImportSuccessPrefix +
+      ExtractFileName(ExcludeTrailingPathDelimiter(ExtractedDir)));
     ScanAndDisplayProjects;
   finally
     OpenDlg.Free;
@@ -1586,16 +2121,138 @@ begin
   ShowMessage(rsUploadSuccessPrefix + Username + '/' + RepoName);
 end;
 
+{ Server import search dialog — searches on text change with a debounce timer }
+type
+  TServerImportForm = class(TForm)
+  private
+    FEdUser, FEdBook: TEdit;
+    FGrid: TStringGrid;
+    FBtnCancel, FBtnImport: TButton;
+    FSearchTimer: TTimer;
+    FRepos: TGiteaRepoArray;
+    FServerURL, FToken: string;
+    FSelectedIndex: Integer;
+    procedure SearchTimerFire(Sender: TObject);
+    procedure EditChanged(Sender: TObject);
+    procedure GridDblClick(Sender: TObject);
+    procedure GridSelection(Sender: TObject; aCol, aRow: Integer);
+    procedure ImportBtnClick(Sender: TObject);
+    procedure DoSearch;
+  end;
+
+procedure TServerImportForm.EditChanged(Sender: TObject);
+begin
+  { Restart debounce timer on each keystroke }
+  FSearchTimer.Enabled := False;
+  FSearchTimer.Enabled := True;
+end;
+
+procedure TServerImportForm.SearchTimerFire(Sender: TObject);
+begin
+  FSearchTimer.Enabled := False;
+  DoSearch;
+end;
+
+procedure TServerImportForm.DoSearch;
+var
+  UserQuery, BookQuery, Err: string;
+  AllRepos: TGiteaRepoArray;
+  I, Count: Integer;
+  BookLower: string;
+begin
+  UserQuery := Trim(FEdUser.Text);
+  BookQuery := Trim(FEdBook.Text);
+
+  if (UserQuery = '') and (BookQuery = '') then
+  begin
+    FGrid.RowCount := 1;
+    SetLength(FRepos, 0);
+    Exit;
+  end;
+
+  if UserQuery <> '' then
+  begin
+    { List repos for the specific user }
+    if not GiteaListUserRepos(FServerURL, FToken, UserQuery, 50, AllRepos, Err) then
+    begin
+      FGrid.RowCount := 1;
+      SetLength(FRepos, 0);
+      Exit;
+    end;
+    { If book/language filter provided, filter client-side }
+    if BookQuery <> '' then
+    begin
+      BookLower := LowerCase(BookQuery);
+      SetLength(FRepos, 0);
+      for I := 0 to Length(AllRepos) - 1 do
+      begin
+        if Pos(BookLower, LowerCase(AllRepos[I].Name)) > 0 then
+        begin
+          SetLength(FRepos, Length(FRepos) + 1);
+          FRepos[Length(FRepos) - 1] := AllRepos[I];
+        end;
+      end;
+    end
+    else
+      FRepos := AllRepos;
+  end
+  else
+  begin
+    { No username — search by book/language via general search }
+    if not GiteaSearchRepos(FServerURL, FToken, BookQuery, 50, FRepos, Err) then
+    begin
+      FGrid.RowCount := 1;
+      SetLength(FRepos, 0);
+      Exit;
+    end;
+  end;
+
+  FGrid.RowCount := 1 + Length(FRepos);
+  for I := 0 to Length(FRepos) - 1 do
+  begin
+    FGrid.Cells[0, I + 1] := FRepos[I].Owner;
+    FGrid.Cells[1, I + 1] := FRepos[I].Name;
+  end;
+  FSelectedIndex := -1;
+end;
+
+procedure TServerImportForm.GridDblClick(Sender: TObject);
+begin
+  if (FGrid.Row >= 1) and (FGrid.Row <= Length(FRepos)) then
+  begin
+    FSelectedIndex := FGrid.Row - 1;
+    ModalResult := mrOK;
+  end;
+end;
+
+procedure TServerImportForm.GridSelection(Sender: TObject; aCol, aRow: Integer);
+begin
+  if (aRow >= 1) and (aRow <= Length(FRepos)) then
+    FSelectedIndex := aRow - 1
+  else
+    FSelectedIndex := -1;
+end;
+
+procedure TServerImportForm.ImportBtnClick(Sender: TObject);
+begin
+  if (FSelectedIndex >= 0) and (FSelectedIndex < Length(FRepos)) then
+    ModalResult := mrOK;
+end;
+
 procedure TMainWindow.DoImportFromServer;
 var
-  SearchTerm, Err, TargetDir, RemoteURL, OutText, ErrText: string;
-  ExitCode, SelectedIdx, I: Integer;
+  Err, TargetDir, RemoteURL, OutText, ErrText: string;
+  TempDir, TempCloneDir, CanonName: string;
+  ExitCode: Integer;
   ServerURL, Token: string;
-  Repos: TGiteaRepoArray;
-  F: TForm;
+  F: TServerImportForm;
   Pal: TThemePalette;
-  lbResults: TListBox;
-  btnImport, btnCancel: TButton;
+  SearchPanel, BtnPanel: TPanel;
+  lblTitle: TLabel;
+  Sep1, Sep2: TBevel;
+  SelectedRepo: TGiteaRepoInfo;
+  Choice: TDuplicateChoice;
+  HasConflicts: Boolean;
 begin
   if not IsServerUser(FCurrentUser) then
   begin
@@ -1608,103 +2265,216 @@ begin
     ServerURL := DefaultDataServerURL;
   Token := FCurrentUser.Token;
 
-  { Step 1: Get search term via InputQuery }
-  SearchTerm := '';
-  if not InputQuery(rsServerSearchTitle, rsServerSearchLabel, SearchTerm) then
-    Exit;
-  SearchTerm := Trim(SearchTerm);
-  if SearchTerm = '' then
-    Exit;
-
-  { Step 2: Search repos }
-  if not GiteaSearchRepos(ServerURL, Token, SearchTerm, 50, Repos, Err) then
-  begin
-    ShowMessage(rsImportFailedPrefix + Err);
-    Exit;
-  end;
-  if Length(Repos) = 0 then
-  begin
-    ShowMessage(rsServerNoResults);
-    Exit;
-  end;
-
-  { Step 3: Show results in a selection dialog }
   Pal := GetThemePalette(GetEffectiveTheme);
-  F := TForm.Create(nil);
+  F := TServerImportForm.CreateNew(nil);
   try
+    F.FServerURL := ServerURL;
+    F.FToken := Token;
+    F.FSelectedIndex := -1;
     F.Position := poScreenCenter;
-    F.BorderStyle := bsSizeable;
+    F.BorderStyle := bsSingle;
     F.Caption := rsServerSearchTitle;
+    F.Font.Name := 'Noto Sans';
     F.Width := 500;
-    F.Height := 400;
+    F.Height := 520;
     F.Color := Pal.PanelBg;
 
-    lbResults := TListBox.Create(F);
-    lbResults.Parent := F;
-    lbResults.SetBounds(16, 16, 456, 300);
-    lbResults.Color := Pal.MemoBg;
-    lbResults.Font.Color := Pal.TextPrimary;
-    for I := 0 to Length(Repos) - 1 do
-      lbResults.Items.Add(Repos[I].FullName);
-    if lbResults.Count > 0 then
-      lbResults.ItemIndex := 0;
+    { Title }
+    lblTitle := TLabel.Create(F);
+    lblTitle.Parent := F;
+    lblTitle.Align := alTop;
+    lblTitle.Height := 40;
+    lblTitle.Alignment := taCenter;
+    lblTitle.Layout := tlCenter;
+    lblTitle.Caption := rsServerSearchTitle;
+    lblTitle.Font.Height := -18;
+    lblTitle.Font.Style := [fsBold];
+    lblTitle.Font.Color := Pal.TextPrimary;
 
-    btnImport := TButton.Create(F);
-    btnImport.Parent := F;
-    btnImport.SetBounds(300, 330, 80, 32);
-    btnImport.Caption := rsServerImportBtn;
-    btnImport.ModalResult := mrOK;
+    { Search fields panel }
+    SearchPanel := TPanel.Create(F);
+    SearchPanel.Parent := F;
+    SearchPanel.Align := alTop;
+    SearchPanel.Height := 40;
+    SearchPanel.BevelOuter := bvNone;
+    SearchPanel.Color := Pal.PanelBg;
 
-    btnCancel := TButton.Create(F);
-    btnCancel.Parent := F;
-    btnCancel.SetBounds(390, 330, 80, 32);
-    btnCancel.Caption := 'Cancel';
-    btnCancel.ModalResult := mrCancel;
+    F.FEdUser := TEdit.Create(F);
+    F.FEdUser.Parent := SearchPanel;
+    F.FEdUser.SetBounds(24, 6, 200, 28);
+    F.FEdUser.TextHint := 'User Name';
+    F.FEdUser.Font.Height := -15;
+    F.FEdUser.OnChange := @F.EditChanged;
+
+    F.FEdBook := TEdit.Create(F);
+    F.FEdBook.Parent := SearchPanel;
+    F.FEdBook.SetBounds(240, 6, 220, 28);
+    F.FEdBook.TextHint := 'Book or Language';
+    F.FEdBook.Font.Height := -15;
+    F.FEdBook.OnChange := @F.EditChanged;
+
+    { Separator }
+    Sep1 := TBevel.Create(F);
+    Sep1.Parent := F;
+    Sep1.Align := alTop;
+    Sep1.Height := 2;
+    Sep1.Shape := bsTopLine;
+
+    { Results grid }
+    F.FGrid := TStringGrid.Create(F);
+    F.FGrid.Parent := F;
+    F.FGrid.Align := alClient;
+    F.FGrid.FixedRows := 1;
+    F.FGrid.FixedCols := 0;
+    F.FGrid.RowCount := 1;
+    F.FGrid.ColCount := 2;
+    F.FGrid.ColWidths[0] := 150;
+    F.FGrid.ColWidths[1] := 300;
+    F.FGrid.Cells[0, 0] := 'User Name';
+    F.FGrid.Cells[1, 0] := 'Project Name';
+    F.FGrid.Options := F.FGrid.Options + [goRowSelect] - [goEditing, goRangeSelect];
+    F.FGrid.Font.Height := -14;
+    F.FGrid.Color := Pal.MemoBg;
+    F.FGrid.FixedColor := Pal.PrimaryLight;
+    F.FGrid.OnDblClick := @F.GridDblClick;
+    F.FGrid.OnSelection := @F.GridSelection;
+
+    { Bottom separator + cancel }
+    Sep2 := TBevel.Create(F);
+    Sep2.Parent := F;
+    Sep2.Align := alBottom;
+    Sep2.Height := 2;
+    Sep2.Shape := bsBottomLine;
+
+    BtnPanel := TPanel.Create(F);
+    BtnPanel.Parent := F;
+    BtnPanel.Align := alBottom;
+    BtnPanel.Height := 44;
+    BtnPanel.BevelOuter := bvNone;
+    BtnPanel.Color := Pal.PanelBg;
+
+    F.FBtnImport := TButton.Create(F);
+    F.FBtnImport.Parent := BtnPanel;
+    F.FBtnImport.SetBounds(280, 8, 90, 30);
+    F.FBtnImport.Caption := 'Import';
+    F.FBtnImport.Font.Height := -13;
+    F.FBtnImport.OnClick := @F.ImportBtnClick;
+
+    F.FBtnCancel := TButton.Create(F);
+    F.FBtnCancel.Parent := BtnPanel;
+    F.FBtnCancel.SetBounds(380, 8, 90, 30);
+    F.FBtnCancel.Caption := 'CANCEL';
+    F.FBtnCancel.Font.Height := -13;
+    F.FBtnCancel.ModalResult := mrCancel;
+
+    { Debounce timer }
+    F.FSearchTimer := TTimer.Create(F);
+    F.FSearchTimer.Interval := 400;
+    F.FSearchTimer.Enabled := False;
+    F.FSearchTimer.OnTimer := @F.SearchTimerFire;
 
     if F.ShowModal <> mrOK then
       Exit;
 
-    SelectedIdx := lbResults.ItemIndex;
-    if (SelectedIdx < 0) or (SelectedIdx >= Length(Repos)) then
+    if (F.FSelectedIndex < 0) or (F.FSelectedIndex >= Length(F.FRepos)) then
       Exit;
+
+    SelectedRepo := F.FRepos[F.FSelectedIndex];
   finally
     F.Free;
   end;
 
-  { Step 4: Clone the selected repo }
-  TargetDir := GetTargetTranslationsPath + Repos[SelectedIdx].Name;
-  if DirectoryExists(TargetDir) then
-  begin
-    if MessageDlg(rsImportOverwriteConfirm, mtConfirmation, [mbYes, mbNo], 0) <> mrYes then
-      Exit;
-    RunCommandCapture('bash', ['-lc', 'rm -rf ' + ShellQuote(TargetDir)],
-      '', OutText, ErrText, ExitCode);
-  end;
-
   { Build authenticated clone URL }
-  RemoteURL := StringReplace(Repos[SelectedIdx].CloneURL,
+  RemoteURL := StringReplace(SelectedRepo.CloneURL,
     'https://', 'https://' + Token + '@', []);
 
-  ForceDirectories(GetTargetTranslationsPath);
-  if not RunCommandCapture('git', ['clone', RemoteURL, TargetDir],
+  { Clone to a temp dir first to determine canonical name }
+  TempDir := GetTempDir + 'bttw_server_' + FormatDateTime('yyyymmddhhnnsszzz', Now);
+  ForceDirectories(TempDir);
+  TempCloneDir := IncludeTrailingPathDelimiter(TempDir) + SelectedRepo.Name;
+  if not RunCommandCapture('git', ['clone', RemoteURL, TempCloneDir],
     '', OutText, ErrText, ExitCode) then
   begin
     ShowMessage(rsImportFailedPrefix + 'Clone failed: ' + ErrText);
+    RunCommandCapture('bash', ['-lc', 'rm -rf ' + ShellQuote(TempDir)],
+      '', OutText, ErrText, ExitCode);
     Exit;
   end;
   if ExitCode <> 0 then
   begin
     ShowMessage(rsImportFailedPrefix + Trim(ErrText));
+    RunCommandCapture('bash', ['-lc', 'rm -rf ' + ShellQuote(TempDir)],
+      '', OutText, ErrText, ExitCode);
     Exit;
   end;
 
-  if not FileExists(IncludeTrailingPathDelimiter(TargetDir) + 'manifest.json') then
+  if not FileExists(IncludeTrailingPathDelimiter(TempCloneDir) + 'manifest.json') then
   begin
     ShowMessage(rsImportFailedPrefix + 'Repository does not contain a valid BTT-Writer project.');
+    RunCommandCapture('bash', ['-lc', 'rm -rf ' + ShellQuote(TempDir)],
+      '', OutText, ErrText, ExitCode);
     Exit;
   end;
 
-  ShowMessage(rsImportSuccessPrefix + Repos[SelectedIdx].Name);
+  { Determine canonical dir name }
+  CanonName := ReadCanonicalDirName(TempCloneDir);
+  if CanonName = '' then
+    CanonName := SelectedRepo.Name;
+  TargetDir := IncludeTrailingPathDelimiter(GetTargetTranslationsPath) + CanonName;
+
+  if DirectoryExists(TargetDir) then
+  begin
+    Choice := ShowDuplicateProjectDialog;
+    case Choice of
+      dcCancel:
+      begin
+        RunCommandCapture('bash', ['-lc', 'rm -rf ' + ShellQuote(TempDir)],
+          '', OutText, ErrText, ExitCode);
+        Exit;
+      end;
+      dcOverwrite:
+      begin
+        RunCommandCapture('bash', ['-lc', 'rm -rf ' + ShellQuote(TargetDir)],
+          '', OutText, ErrText, ExitCode);
+        { Move clone to canonical location }
+        MoveDirectorySafe(TempCloneDir, TargetDir);
+        RunCommandCapture('rm', ['-rf', TempDir], '', OutText, ErrText, ExitCode);
+        ShowMessage(rsImportSuccessPrefix + CanonName);
+        ScanAndDisplayProjects;
+        Exit;
+      end;
+      dcMerge:
+      begin
+        if not MergeImportedProject(TargetDir, TempCloneDir,
+          HasConflicts, Err) then
+        begin
+          ShowMessage(rsImportFailedPrefix + Err);
+          RunCommandCapture('bash', ['-lc', 'rm -rf ' + ShellQuote(TempDir)],
+            '', OutText, ErrText, ExitCode);
+          Exit;
+        end;
+        RunCommandCapture('bash', ['-lc', 'rm -rf ' + ShellQuote(TempDir)],
+          '', OutText, ErrText, ExitCode);
+        if HasConflicts then
+          ShowMessage(rsImportMergedWithConflicts)
+        else
+          ShowMessage(rsImportSuccessPrefix + CanonName);
+        ScanAndDisplayProjects;
+        Exit;
+      end;
+    end;
+  end;
+
+  { No existing project — move clone to canonical location }
+  ForceDirectories(GetTargetTranslationsPath);
+  if not MoveDirectorySafe(TempCloneDir, TargetDir) then
+  begin
+    ShowMessage(rsImportFailedPrefix + 'Could not move project to ' + TargetDir);
+    RunCommandCapture('rm', ['-rf', TempDir], '', OutText, ErrText, ExitCode);
+    Exit;
+  end;
+  RunCommandCapture('rm', ['-rf', TempDir], '', OutText, ErrText, ExitCode);
+  ShowMessage(rsImportSuccessPrefix + CanonName);
   ScanAndDisplayProjects;
 end;
 
@@ -1802,6 +2572,10 @@ var
   SourceOpt: TSourceTextOption;
   ProjType: TProjectTypeID;
   NewProjectDir, SourceDir: string;
+  ExistingDir, TempDir, TempProjDir, OutText, ErrText: string;
+  ExitCode: Integer;
+  Choice: TDuplicateChoice;
+  HasConflicts: Boolean;
 begin
   OpenDlg := TOpenDialog.Create(nil);
   try
@@ -1832,7 +2606,61 @@ begin
     if not PromptForSourceText(BookCode, SourceOpt) then
       Exit;
 
-    { Create the project structure }
+    { Check for existing project — ptText produces «lang»_«book»_text_reg }
+    ExistingDir := IncludeTrailingPathDelimiter(GetTargetTranslationsPath) +
+      Trim(TargetLangCode) + '_' + SourceOpt.BookCode + '_text_reg';
+    if DirectoryExists(ExistingDir) then
+    begin
+      Choice := ShowDuplicateProjectDialog;
+      case Choice of
+        dcCancel: Exit;
+        dcOverwrite:
+        begin
+          RunCommandCapture('bash', ['-lc', 'rm -rf ' + ShellQuote(ExistingDir)],
+            '', OutText, ErrText, ExitCode);
+        end;
+        dcMerge:
+        begin
+          { Create a temp project with the USFM content, then merge into existing }
+          TempDir := GetTempDir + 'bttw_usfm_' + FormatDateTime('yyyymmddhhnnss', Now);
+          ForceDirectories(TempDir);
+          TempProjDir := IncludeTrailingPathDelimiter(TempDir) +
+            Trim(TargetLangCode) + '_' + SourceOpt.BookCode + '_text_reg';
+          ForceDirectories(TempProjDir);
+
+          { Initialize git in temp so we can merge }
+          RunCommandCapture('git', ['-C', TempProjDir, 'init'],
+            '', OutText, ErrText, ExitCode);
+
+          { Write USFM content to temp project }
+          SourceDir := FindEnglishULBContentDir(BookCode);
+          WriteUSFMVersesToChunks(ParseResult, TempProjDir, SourceDir);
+          EnsureProjectCommitted(TempProjDir, Err);
+
+          if not MergeImportedProject(ExistingDir, TempProjDir,
+            HasConflicts, Err) then
+          begin
+            ShowMessage(rsImportFailedPrefix + Err);
+            RunCommandCapture('bash', ['-lc', 'rm -rf ' + ShellQuote(TempDir)],
+              '', OutText, ErrText, ExitCode);
+            Exit;
+          end;
+
+          RunCommandCapture('bash', ['-lc', 'rm -rf ' + ShellQuote(TempDir)],
+            '', OutText, ErrText, ExitCode);
+
+          if HasConflicts then
+            ShowMessage(rsImportMergedWithConflicts)
+          else
+            ShowMessage(rsImportSuccessPrefix +
+              ExtractFileName(ExcludeTrailingPathDelimiter(ExistingDir)));
+          ScanAndDisplayProjects;
+          Exit;
+        end;
+      end;
+    end;
+
+    { Create the project structure (new or after overwrite) }
     if not CreateProjectFromSource(Trim(TargetLangCode), Trim(TargetLangName),
       SourceOpt, ProjType, NewProjectDir, Err) then
     begin
@@ -1840,8 +2668,7 @@ begin
       Exit;
     end;
 
-    { Write parsed verses into chunk files grouped by English ULB boundaries.
-      This ensures on-disk files match the canonical chunk structure. }
+    { Write parsed verses into chunk files grouped by English ULB boundaries. }
     SourceDir := FindEnglishULBContentDir(BookCode);
     WriteUSFMVersesToChunks(ParseResult, NewProjectDir, SourceDir);
 
