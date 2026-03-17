@@ -6,7 +6,7 @@ interface
 
 uses
   Classes, SysUtils, Forms, Controls, Graphics, Dialogs,
-  ExtCtrls, StdCtrls, Buttons, ComCtrls, Types,
+  ExtCtrls, StdCtrls, Buttons, ComCtrls, Types, Menus,
   fpjson, jsonparser, IpHtml,
   ProjectManager, ResourceContainer, ProjectScanner,
   BibleBook, BibleChapter, BibleChunk, USFMUtils, DataPaths, ProjectCreator,
@@ -38,9 +38,25 @@ resourcestring
   rsLoadingSourceText = 'Loading source text...';
   rsLoadingTranslation = 'Loading translation...';
   rsLoadingChapter = 'Loading chapter...';
+  rsMenuUploadExport = 'Upload/Export';
+  rsMenuPrint = 'Print';
+  rsMenuSettings = 'Settings';
+  rsMenuProjectReview = 'Project Review';
+  rsMenuFeedback = 'Feedback';
+  rsMenuMarkAllDone = 'Mark All Chunks Done';
+  rsExportFilterEdit = 'Translation Studio Package (*.tstudio)|*.tstudio|All files|*.*';
+  rsTStudioExtEdit = 'tstudio';
+  rsExportFailedEdit = 'Export failed: ';
+  rsExportedEdit = 'Exported: ';
 
 type
   TResourceTab = (rtNotes, rtWords, rtQuestions);
+
+  TResourceSection = record
+    Heading: string;
+    Body: string;
+  end;
+  TResourceSectionArray = array of TResourceSection;
 
   TChunkPanel = class;
 
@@ -65,9 +81,7 @@ type
     btnChangeSource: TButton;
     lblTransHeader: TLabel;
     lblTransLangHeader: TLabel;
-    btnTabNotes: TButton;
-    btnTabWords: TButton;
-    btnTabQuestions: TButton;
+    lblResourceHeader: TLabel;
     Splitter1: TSplitter;
     Splitter2: TSplitter;
     SourcePanel: TPanel;
@@ -75,7 +89,7 @@ type
     TransPanel: TPanel;
     TransScrollBox: TScrollBox;
     ResourcePanel: TPanel;
-    ResourceMemo: TMemo;
+    ResourceScrollBox: TScrollBox;
     AutoSaveTimer: TTimer;
     procedure FormCreate(Sender: TObject);
     procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
@@ -98,13 +112,13 @@ type
     FLastTransPos: Integer;
     FSyncingScroll: Boolean;
     FSelectedChunkIndex: Integer;
-    FActiveResourceTab: TResourceTab;
     FLayoutDirection: string;
     FSourceLangCode: string;
     FSourceResourceType: string;
     FBookCode: string;
     FSummary: TProjectSummary;
     FChapterDirty: Boolean;
+    FLastResourcePos: Integer;
 
     procedure ClearChunkPanels;
     procedure LoadChapter(AIndex: Integer);
@@ -117,14 +131,12 @@ type
     procedure OnChunkMemoChange(Sender: TObject);
     procedure OnChunkEditClick(Sender: TObject);
     procedure OnChunkPanelClick(Sender: TObject);
-    procedure OnResourceTabClick(Sender: TObject);
     procedure PaneMouseWheel(Sender: TObject; Shift: TShiftState;
       WheelDelta: Integer; MousePos: TPoint; var Handled: Boolean);
     procedure ScrollSyncTimerFire(Sender: TObject);
     procedure AttachWheelHandlers(AParent: TWinControl);
     function IsControlInPane(AControl: TControl; APane: TWinControl): Boolean;
     procedure SetSelectedChunkIndex(AIndex: Integer);
-    procedure UpdateResourcePanelForSelectedChunk;
     function ResourceDirFor(const ResourceID: string): string;
     procedure CollectChunkResources(const ChapterID: string; ChunkStart, ChunkEnd: Integer;
       const ResourceDir: string; OutList: TStringList);
@@ -136,9 +148,18 @@ type
     procedure btnChangeSourceClick(Sender: TObject);
     procedure SplitterMoved(Sender: TObject);
     procedure RecalcAllChunkLayouts;
+    procedure RecalcTimerFire(Sender: TObject);
+    procedure OnMenuUploadExport(Sender: TObject);
+    procedure OnMenuPrint(Sender: TObject);
+    procedure OnMenuSettings(Sender: TObject);
+    procedure OnMenuProjectReview(Sender: TObject);
+    procedure OnMenuFeedback(Sender: TObject);
+    procedure OnMenuMarkAllDone(Sender: TObject);
   private
+    FRecalcTimer: TTimer;
     FSourceProportion: Double;
     FResourceProportion: Double;
+    FEditMenu: TPopupMenu;
   private
     { Loading splash }
     FLoadingSplash: TForm;
@@ -155,8 +176,14 @@ type
   private
     FSourcePanel: TPanel;
     FTransPanel: TPanel;
+    FResourcePanel: TPanel;
     FSourceHtml: TIpHtmlPanel;
     FTransHtml: TIpHtmlPanel;
+    FResHtml: TIpHtmlPanel;
+    FResTabBar: TPanel;
+    FBtnTabNotes: TButton;
+    FBtnTabWords: TButton;
+    FBtnTabQuestions: TButton;
     FSourceText: string;   { raw USFM text for source chunk }
     FTransText: string;    { raw USFM text for this chunk }
     FSourceBadgeColor: TColor;
@@ -176,11 +203,15 @@ type
     FProject: TProject;
     FEditing: Boolean;
     FOwnerForm: TProjectEditWindow;
+    FActiveResTab: TResourceTab;
+    FResourceSections: TResourceSectionArray;
     procedure RefreshSourceHtml;
     procedure RefreshTransHtml;
+    procedure OnResTabClick(Sender: TObject);
+    procedure OnResHotClick(Sender: TObject);
   public
     constructor Create(AOwnerForm: TProjectEditWindow;
-      ASourceParent, ATransParent: TScrollBox;
+      ASourceParent, ATransParent, AResourceParent: TScrollBox;
       const ASourceText, ATransText, AChapterID, AChunkName, AVerseLabel: string;
       AStartVerse, AEndVerse: Integer;
       AFinished: Boolean; AProject: TProject);
@@ -188,6 +219,8 @@ type
     procedure SetEditing(AEdit: Boolean);
     procedure SaveContent;
     procedure RecalcLayout;
+    procedure ForceHtmlRelayout;
+    procedure LoadResources;
     procedure UpdateFinishedVisuals;
     procedure SetSelected(ASelected: Boolean);
     function OwnsControl(AObj: TObject): Boolean;
@@ -196,12 +229,17 @@ type
     property EndVerse: Integer read FEndVerse;
     property SourcePanel: TPanel read FSourcePanel;
     property TransPanel: TPanel read FTransPanel;
+    property ResourcePanel: TPanel read FResourcePanel;
   end;
 
 var
   ProjectEditWindow: TProjectEditWindow;
 
 implementation
+
+uses
+  MainForm, ImportForm, TStudioPackage, USFMExporter,
+  UserProfile, GiteaClient, GitUtils, ConflictResolver;
 
 {$R *.lfm}
 
@@ -545,6 +583,200 @@ begin
     '</style></head><body>' + ABody + '</body></html>';
 end;
 
+{ Process wiki-style links and pass through other content }
+function ProcessInlineMarkdown(const S: string): string;
+var
+  P, Start: Integer;
+  LinkPath, LinkText: string;
+begin
+  Result := '';
+  P := 1;
+  while P <= Length(S) do
+  begin
+    if (P <= Length(S) - 3) and (S[P] = '[') and (S[P+1] = '[') then
+    begin
+      Start := P + 2;
+      while (P <= Length(S)) and (S[P] <> ']') do
+        Inc(P);
+      LinkPath := Copy(S, Start, P - Start);
+      if (Length(LinkPath) > 0) and (LinkPath[1] = ':') then
+        Delete(LinkPath, 1, 1);
+      LinkText := LinkPath;
+      while Pos(':', LinkText) > 0 do
+        Delete(LinkText, 1, Pos(':', LinkText));
+      LinkText := StringReplace(LinkText, '-', ' ', [rfReplaceAll]);
+      Result := Result + '<i>' + LinkText + '</i>';
+      if (P <= Length(S)) and (S[P] = ']') then Inc(P);
+      if (P <= Length(S)) and (S[P] = ']') then Inc(P);
+    end
+    else
+    begin
+      Result := Result + S[P];
+      Inc(P);
+    end;
+  end;
+end;
+
+{ Extract heading text from a markdown # line, stripping # prefix and trailing colon }
+function ExtractHeading(const Line: string): string;
+var
+  P: Integer;
+begin
+  Result := Trim(Line);
+  P := 1;
+  while (P <= Length(Result)) and (Result[P] = '#') do
+    Inc(P);
+  Result := Trim(Copy(Result, P, MaxInt));
+  if (Length(Result) > 0) and (Result[Length(Result)] = ':') then
+    SetLength(Result, Length(Result) - 1);
+  Result := Trim(Result);
+end;
+
+{ Test whether a line is a top-level section heading.
+  Only markdown # headings count. HTML <h2> etc. are sub-sections
+  within translation words entries and stay as body content. }
+function IsHeadingLine(const Trimmed: string): Boolean;
+begin
+  Result := (Length(Trimmed) >= 2) and (Trimmed[1] = '#') and (Trimmed[2] <> '#');
+end;
+
+{ Parse resource text into sections. Each section has a heading and body.
+  A heading is a markdown # line or an HTML <hN> line. Content before the
+  first heading goes into a section with empty heading. }
+function ParseResourceSections(const AText: string): TResourceSectionArray;
+var
+  Lines: TStringList;
+  I, Count: Integer;
+  Trimmed: string;
+begin
+  SetLength(Result, 0);
+  Count := 0;
+  Lines := TStringList.Create;
+  try
+    Lines.Text := AText;
+    for I := 0 to Lines.Count - 1 do
+    begin
+      Trimmed := Trim(Lines[I]);
+      if Trimmed = '' then
+      begin
+        if Count > 0 then
+          Result[Count - 1].Body := Result[Count - 1].Body + LineEnding;
+        Continue;
+      end;
+
+      if IsHeadingLine(Trimmed) then
+      begin
+        Inc(Count);
+        SetLength(Result, Count);
+        Result[Count - 1].Heading := ExtractHeading(Trimmed);
+        Result[Count - 1].Body := '';
+      end
+      else
+      begin
+        if Count = 0 then
+        begin
+          Inc(Count);
+          SetLength(Result, Count);
+          Result[Count - 1].Heading := '';
+          Result[Count - 1].Body := '';
+        end;
+        if Result[Count - 1].Body <> '' then
+          Result[Count - 1].Body := Result[Count - 1].Body + LineEnding;
+        Result[Count - 1].Body := Result[Count - 1].Body + Lines[I];
+      end;
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
+
+{ Render the heading list as clickable links for the resource pane }
+function ResourceHeadingsToHtml(const Sections: TResourceSectionArray): string;
+var
+  I: Integer;
+  Heading: string;
+begin
+  Result := '';
+  for I := 0 to Length(Sections) - 1 do
+  begin
+    Heading := Sections[I].Heading;
+    if Heading = '' then
+      Continue;
+    Result := Result + '<p style="margin:8px 0;"><a href="section:' +
+      IntToStr(I) + '" style="color:#00897B;text-decoration:none;">' +
+      Heading + '</a></p>';
+  end;
+  if Result = '' then
+    Result := '<p style="color:#999;">No resources available.</p>';
+end;
+
+{ Convert hybrid markdown/HTML resource body to full HTML for popup display }
+function ResourceBodyToHtml(const AText: string): string;
+var
+  Lines: TStringList;
+  I: Integer;
+  Trimmed: string;
+  InParagraph: Boolean;
+begin
+  Lines := TStringList.Create;
+  try
+    Lines.Text := AText;
+    Result := '';
+    InParagraph := False;
+
+    for I := 0 to Lines.Count - 1 do
+    begin
+      Trimmed := Trim(Lines[I]);
+
+      if Trimmed = '' then
+      begin
+        if InParagraph then
+        begin
+          Result := Result + '</p>';
+          InParagraph := False;
+        end;
+        Continue;
+      end;
+
+      { HTML block tags — pass through }
+      if (Pos('<h1', Trimmed) = 1) or (Pos('<h2', Trimmed) = 1) or
+         (Pos('<h3', Trimmed) = 1) or (Pos('<h4', Trimmed) = 1) or
+         (Pos('<p>', Trimmed) = 1) or (Pos('<p ', Trimmed) = 1) or
+         (Pos('<ul', Trimmed) = 1) or (Pos('</ul', Trimmed) = 1) or
+         (Pos('<ol', Trimmed) = 1) or (Pos('</ol', Trimmed) = 1) or
+         (Pos('<li', Trimmed) = 1) or (Pos('</li', Trimmed) = 1) or
+         (Pos('<img', Trimmed) = 1) or (Pos('<hr', Trimmed) = 1) or
+         (Pos('<br', Trimmed) = 1) or (Pos('<div', Trimmed) = 1) or
+         (Pos('</div', Trimmed) = 1) or (Pos('</p>', Trimmed) = 1) or
+         (Pos('<strong', Trimmed) = 1) then
+      begin
+        if InParagraph then
+        begin
+          Result := Result + '</p>';
+          InParagraph := False;
+        end;
+        Result := Result + ProcessInlineMarkdown(Trimmed);
+        Continue;
+      end;
+
+      { Regular text }
+      if not InParagraph then
+      begin
+        Result := Result + '<p style="margin:4px 0;">';
+        InParagraph := True;
+      end
+      else
+        Result := Result + ' ';
+      Result := Result + ProcessInlineMarkdown(Trimmed);
+    end;
+
+    if InParagraph then
+      Result := Result + '</p>';
+  finally
+    Lines.Free;
+  end;
+end;
+
 { ---- TProjectEditWindow ---- }
 
 procedure TProjectEditWindow.FormCreate(Sender: TObject);
@@ -557,19 +789,18 @@ begin
   FLastTransPos := 0;
   FSyncingScroll := False;
   FSelectedChunkIndex := -1;
-  FActiveResourceTab := rtNotes;
   FLayoutDirection := 'ltr';
+  FLastResourcePos := 0;
   ApplyFontRecursive(Self, 'Noto Sans');
   btnMenu.OnClick := @btnMenuClick;
 
   SourceScrollBox.VertScrollBar.Smooth := True;
   TransScrollBox.VertScrollBar.Smooth := True;
+  ResourceScrollBox.VertScrollBar.Smooth := True;
 
   SourceScrollBox.OnMouseWheel := @PaneMouseWheel;
   TransScrollBox.OnMouseWheel := @PaneMouseWheel;
-  btnTabNotes.OnClick := @OnResourceTabClick;
-  btnTabWords.OnClick := @OnResourceTabClick;
-  btnTabQuestions.OnClick := @OnResourceTabClick;
+  ResourceScrollBox.OnMouseWheel := @PaneMouseWheel;
   btnChangeSource.OnClick := @btnChangeSourceClick;
   Splitter1.OnMoved := @SplitterMoved;
   Splitter2.OnMoved := @SplitterMoved;
@@ -578,6 +809,11 @@ begin
   FScrollSyncTimer.Interval := 30;
   FScrollSyncTimer.OnTimer := @ScrollSyncTimerFire;
   FScrollSyncTimer.Enabled := True;
+
+  FRecalcTimer := TTimer.Create(Self);
+  FRecalcTimer.Interval := 100;
+  FRecalcTimer.OnTimer := @RecalcTimerFire;
+  FRecalcTimer.Enabled := False;
 
   { Default proportional split: source 35%, resource 25%, trans fills rest }
   FSourceProportion := 0.35;
@@ -594,6 +830,17 @@ var
 begin
   for I := 0 to Length(FChunkPanels) - 1 do
     FChunkPanels[I].RecalcLayout;
+end;
+
+procedure TProjectEditWindow.RecalcTimerFire(Sender: TObject);
+var
+  I: Integer;
+begin
+  FRecalcTimer.Enabled := False;
+  { Re-render HTML at final panel widths so GetContentSize is accurate }
+  for I := 0 to Length(FChunkPanels) - 1 do
+    FChunkPanels[I].ForceHtmlRelayout;
+  RecalcAllChunkLayouts;
 end;
 
 procedure TProjectEditWindow.FormResize(Sender: TObject);
@@ -636,6 +883,105 @@ end;
 
 procedure TProjectEditWindow.btnMenuClick(Sender: TObject);
 var
+  Pt: TPoint;
+  MI: TMenuItem;
+begin
+  if FEditMenu = nil then
+  begin
+    FEditMenu := TPopupMenu.Create(Self);
+
+    MI := TMenuItem.Create(FEditMenu);
+    MI.Caption := rsMenuProjectReview;
+    MI.Enabled := False;
+    FEditMenu.Items.Add(MI);
+
+    MI := TMenuItem.Create(FEditMenu);
+    MI.Caption := rsMenuUploadExport;
+    MI.OnClick := @OnMenuUploadExport;
+    FEditMenu.Items.Add(MI);
+
+    MI := TMenuItem.Create(FEditMenu);
+    MI.Caption := rsMenuPrint;
+    MI.Enabled := False;
+    FEditMenu.Items.Add(MI);
+
+    MI := TMenuItem.Create(FEditMenu);
+    MI.Caption := rsMenuFeedback;
+    MI.Enabled := False;
+    FEditMenu.Items.Add(MI);
+
+    MI := TMenuItem.Create(FEditMenu);
+    MI.Caption := '-';
+    FEditMenu.Items.Add(MI);
+
+    MI := TMenuItem.Create(FEditMenu);
+    MI.Caption := rsMenuMarkAllDone;
+    MI.Enabled := False;
+    FEditMenu.Items.Add(MI);
+
+    MI := TMenuItem.Create(FEditMenu);
+    MI.Caption := '-';
+    FEditMenu.Items.Add(MI);
+
+    MI := TMenuItem.Create(FEditMenu);
+    MI.Caption := rsMenuSettings;
+    MI.OnClick := @OnMenuSettings;
+    FEditMenu.Items.Add(MI);
+  end;
+
+  Pt := btnMenu.ClientToScreen(Point(0, btnMenu.Height));
+  FEditMenu.PopUp(Pt.X, Pt.Y);
+end;
+
+procedure TProjectEditWindow.OnMenuUploadExport(Sender: TObject);
+var
+  Choice: TExportChoice;
+  SaveDlg: TSaveDialog;
+  Err: string;
+begin
+  SaveCurrentChapter;
+  Choice := ShowExportDialog(IsServerUser(MainWindow.FCurrentUser));
+  case Choice of
+    ecTStudio:
+    begin
+      SaveDlg := TSaveDialog.Create(Self);
+      try
+        SaveDlg.Filter := rsExportFilterEdit;
+        SaveDlg.DefaultExt := rsTStudioExtEdit;
+        if FSummary.DirName <> '' then
+          SaveDlg.FileName := FSummary.DirName + '.tstudio'
+        else
+          SaveDlg.FileName := ExtractFileName(
+            ExcludeTrailingPathDelimiter(FProjectPath)) + '.tstudio';
+        SaveDlg.InitialDir := GetBackupLocation;
+        if (SaveDlg.InitialDir = '') or not DirectoryExists(SaveDlg.InitialDir) then
+          SaveDlg.InitialDir := GetEnvironmentVariable('HOME');
+        if not SaveDlg.Execute then
+          Exit;
+        if not CreateTStudioPackage(FSummary.FullPath, SaveDlg.FileName, Err) then
+        begin
+          ShowMessage(rsExportFailedEdit + Err);
+          Exit;
+        end;
+        ShowMessage(rsExportedEdit + SaveDlg.FileName);
+      finally
+        SaveDlg.Free;
+      end;
+    end;
+    ecUSFM:
+      MainWindow.DoExportUSFM(FSummary);
+    ecServer:
+      MainWindow.DoUploadToServer(FSummary);
+  end;
+end;
+
+procedure TProjectEditWindow.OnMenuPrint(Sender: TObject);
+begin
+  ShowMessage('Print/PDF export is not yet implemented.');
+end;
+
+procedure TProjectEditWindow.OnMenuSettings(Sender: TObject);
+var
   OldTheme, NewTheme: TAppTheme;
   OldSuite, NewSuite: string;
 begin
@@ -644,6 +990,21 @@ begin
     if NewTheme <> OldTheme then
       ApplyTheme;
   end;
+end;
+
+procedure TProjectEditWindow.OnMenuProjectReview(Sender: TObject);
+begin
+  ShowMessage('Project Review is not yet implemented.');
+end;
+
+procedure TProjectEditWindow.OnMenuFeedback(Sender: TObject);
+begin
+  ShowMessage('Feedback is not yet implemented.');
+end;
+
+procedure TProjectEditWindow.OnMenuMarkAllDone(Sender: TObject);
+begin
+  ShowMessage('Mark All Chunks Done is not yet implemented.');
 end;
 
 procedure TProjectEditWindow.FormClose(Sender: TObject; var CloseAction: TCloseAction);
@@ -745,6 +1106,9 @@ begin
   if (Sender is TControl) and
      IsControlInPane(TControl(Sender), TransScrollBox) then
     BasePos := TransScrollBox.VertScrollBar.Position
+  else if (Sender is TControl) and
+     IsControlInPane(TControl(Sender), ResourceScrollBox) then
+    BasePos := ResourceScrollBox.VertScrollBar.Position
   else
     BasePos := SourceScrollBox.VertScrollBar.Position;
 
@@ -756,8 +1120,10 @@ begin
   try
     SourceScrollBox.VertScrollBar.Position := NewPos;
     TransScrollBox.VertScrollBar.Position := NewPos;
+    ResourceScrollBox.VertScrollBar.Position := NewPos;
     FLastSourcePos := SourceScrollBox.VertScrollBar.Position;
     FLastTransPos := TransScrollBox.VertScrollBar.Position;
+    FLastResourcePos := ResourceScrollBox.VertScrollBar.Position;
   finally
     FSyncingScroll := False;
   end;
@@ -767,17 +1133,19 @@ end;
 
 procedure TProjectEditWindow.ScrollSyncTimerFire(Sender: TObject);
 var
-  SourcePos, TransPos, NewPos: Integer;
+  SourcePos, TransPos, ResPos, NewPos: Integer;
 begin
   if FSyncingScroll then
     Exit;
 
   SourcePos := SourceScrollBox.VertScrollBar.Position;
   TransPos := TransScrollBox.VertScrollBar.Position;
-  if SourcePos = TransPos then
+  ResPos := ResourceScrollBox.VertScrollBar.Position;
+  if (SourcePos = TransPos) and (TransPos = ResPos) then
   begin
     FLastSourcePos := SourcePos;
     FLastTransPos := TransPos;
+    FLastResourcePos := ResPos;
     Exit;
   end;
 
@@ -785,6 +1153,8 @@ begin
     NewPos := SourcePos
   else if TransPos <> FLastTransPos then
     NewPos := TransPos
+  else if ResPos <> FLastResourcePos then
+    NewPos := ResPos
   else
     NewPos := SourcePos;
 
@@ -792,12 +1162,14 @@ begin
   try
     SourceScrollBox.VertScrollBar.Position := NewPos;
     TransScrollBox.VertScrollBar.Position := NewPos;
+    ResourceScrollBox.VertScrollBar.Position := NewPos;
   finally
     FSyncingScroll := False;
   end;
 
   FLastSourcePos := SourceScrollBox.VertScrollBar.Position;
   FLastTransPos := TransScrollBox.VertScrollBar.Position;
+  FLastResourcePos := ResourceScrollBox.VertScrollBar.Position;
 end;
 
 procedure TProjectEditWindow.AttachWheelHandlers(AParent: TWinControl);
@@ -853,6 +1225,15 @@ begin
   finally
     SL.Free;
   end;
+end;
+
+{ Return True if a resource slug is a non-Bible resource (notes, questions, words) }
+function IsHelpsResource(const ResSlug: string): Boolean;
+var
+  S: string;
+begin
+  S := LowerCase(ResSlug);
+  Result := (S = 'tn') or (S = 'tq') or (S = 'tw') or (S = 'obs');
 end;
 
 function PromptForSourceChange(const BookCode, CurrentLangCode, CurrentResourceType: string;
@@ -934,6 +1315,10 @@ begin
           finally
             SL.Free;
           end;
+
+          { For text projects, skip non-Bible resources (tn, tq, tw) }
+          if IsHelpsResource(ResSlug) then
+            Continue;
 
           DisplayStr := LangSlug + ' - ' + LangName + '  |  ' + ResSlug + ' - ' + ResName;
           DisplayList.Add(DisplayStr);
@@ -1161,6 +1546,43 @@ begin
   end;
 end;
 
+{ Ensure companion resources (tn, tq, tw) are available for a Bible source text.
+  Silently extracts them from the bundled archive if not already installed. }
+procedure EnsureCompanionResources(const LangCode, BookCode: string);
+var
+  LibPath, ZipPath, Slug, DestDir: string;
+  Companions: array[0..2] of string;
+  I: Integer;
+begin
+  LibPath := GetLibraryPath;
+  ZipPath := SourceExtractor.FindBundledZipPath;
+  if ZipPath = '' then
+    ZipPath := GetBundledResourceContainersZipPath;
+  if (ZipPath = '') or (not FileExists(ZipPath)) then
+    Exit;
+
+  Companions[0] := LowerCase(LangCode) + '_' + LowerCase(BookCode) + '_tn';
+  Companions[1] := LowerCase(LangCode) + '_' + LowerCase(BookCode) + '_tq';
+  Companions[2] := LowerCase(LangCode) + '_bible_tw';
+
+  for I := 0 to High(Companions) do
+  begin
+    Slug := Companions[I];
+    DestDir := IncludeTrailingPathDelimiter(LibPath) + Slug;
+    if DirectoryExists(DestDir) then
+      Continue;
+    ForceDirectories(DestDir);
+    if not SourceExtractor.ExtractTsrc(ZipPath, Slug, DestDir) then
+    begin
+      { Not available in bundle — remove empty directory }
+      RemoveDir(DestDir);
+      LogFmt(llInfo, 'Companion resource %s not available in bundle', [Slug]);
+    end
+    else
+      LogFmt(llInfo, 'Extracted companion resource: %s', [Slug]);
+  end;
+end;
+
 procedure TProjectEditWindow.OpenProject(const APath: string;
   const ASummary: TProjectSummary);
 var
@@ -1218,6 +1640,9 @@ begin
       Exit;
     end;
 
+    { Ensure companion resources (tn, tq, tw) are available }
+    EnsureCompanionResources(SourceOpt.SourceLangCode, ASummary.BookCode);
+
     { Find English ULB for save-chunking }
     FEnglishULBContentDir := FindEnglishULBContentDir(ASummary.BookCode);
 
@@ -1251,6 +1676,18 @@ begin
     UpdatePaneHeaders;
 
     AutoSaveTimer.Enabled := True;
+
+    { Check for unresolved merge conflicts }
+    if ProjectHasConflicts(FProjectPath) then
+    begin
+      HideLoadingSplash;
+      ShowConflictResolver(FProjectPath, ASummary.BookName, ASummary.TargetLangName);
+      { Reload project content after resolution }
+      FProject.Free;
+      FProject := TProject.Create(APath);
+      FProject.LoadContent(FSourceContentDir);
+      ShowLoadingSplash(rsLoadingChapter);
+    end;
 
     { Load first chapter (skip 'front' if present) }
     UpdateLoadingSplash(rsLoadingChapter, 85);
@@ -1312,7 +1749,6 @@ end;
 procedure TProjectEditWindow.UpdatePaneHeaders;
 var
   SourceLeft, TransLeft, ResLeft: Integer;
-  TabGap: Integer;
 begin
   { Position header labels above their respective panes }
   SourceLeft := SourcePanel.Left + 8;
@@ -1334,14 +1770,8 @@ begin
   lblTransLangHeader.Left := TransLeft;
   lblTransLangHeader.Top := 19;
 
-  { Resource tabs aligned to resource pane }
-  TabGap := 4;
-  btnTabNotes.Left := ResLeft + TabGap;
-  btnTabNotes.Top := 6;
-  btnTabWords.Left := btnTabNotes.Left + btnTabNotes.Width + TabGap;
-  btnTabWords.Top := 6;
-  btnTabQuestions.Left := btnTabWords.Left + btnTabWords.Width + TabGap;
-  btnTabQuestions.Top := 6;
+  lblResourceHeader.Left := ResLeft + 8;
+  lblResourceHeader.Top := 2;
 end;
 
 procedure TProjectEditWindow.ApplyTheme;
@@ -1361,8 +1791,6 @@ begin
   SourcePanel.Color := P.SecondaryPanelBg;
   TransPanel.Color := P.PanelBg;
   ResourcePanel.Color := P.SecondaryPanelBg;
-  ResourceMemo.Color := P.MemoBg;
-  ResourceMemo.Font.Color := P.TextSecondary;
   lblProjectTitle.Font.Color := P.HeaderText;
   lblChapterNav.Font.Color := P.HeaderText;
   lblChapterNum.Font.Color := P.HeaderText;
@@ -1374,6 +1802,8 @@ begin
   btnMenu.Font.Color := P.RailText;
 end;
 
+{ Ensure companion resources (tn, tq, tw) are available for a Bible source text.
+  Silently extracts them from the bundled archive if not already installed. }
 procedure TProjectEditWindow.btnChangeSourceClick(Sender: TObject);
 var
   NewSourceDir, NewContentDir, NewLangName, NewResType: string;
@@ -1396,6 +1826,9 @@ begin
     ShowMessage('Content directory not found in selected source.');
     Exit;
   end;
+
+  { Ensure companion resources are available for the new source }
+  EnsureCompanionResources(LangCode, FBookCode);
 
   { Update source }
   FSourceLangCode := LangCode;
@@ -1464,7 +1897,7 @@ var
   DisplayChunks: TChunkList;
   ChunkMap: TStringList;
   IsFinished: Boolean;
-  NextChunkStart: Integer;
+  NextChunkStart, ChunkStartVerse, ChunkEndVerse: Integer;
 begin
   DisplayChunks := nil;
   ChunkMap := nil;
@@ -1505,6 +1938,7 @@ begin
     SetLength(FChunkPanels, SourceChapter.Chunks.Count);
     SourceScrollBox.DisableAutoSizing;
     TransScrollBox.DisableAutoSizing;
+    ResourceScrollBox.DisableAutoSizing;
     try
       for I := 0 to SourceChapter.Chunks.Count - 1 do
       begin
@@ -1520,16 +1954,28 @@ begin
           ChunkLabel := rsChunkTitle
         else
           ChunkLabel := rsChunkVersePrefix + SourceChunk.Name;
-        { Determine verse range }
+        { Determine verse range for display label and resource filtering }
+        ChunkStartVerse := StrToIntDef(SourceChunk.Name, 0);
         if I < SourceChapter.Chunks.Count - 1 then
         begin
           NextChunkStart := StrToIntDef(SourceChapter.Chunks[I + 1].Name, 0);
-          if (NextChunkStart > 0) and (StrToIntDef(SourceChunk.Name, 0) > 0) then
+          if (NextChunkStart > 0) and (ChunkStartVerse > 0) then
           begin
-            if NextChunkStart - StrToIntDef(SourceChunk.Name, 0) > 1 then
+            ChunkEndVerse := NextChunkStart - 1;
+            if ChunkEndVerse > ChunkStartVerse then
               ChunkLabel := rsChunkVersePrefix + SourceChunk.Name + rsChunkVerseRangeJoin +
-                IntToStr(NextChunkStart - 1);
-          end;
+                IntToStr(ChunkEndVerse);
+          end
+          else
+            ChunkEndVerse := ChunkStartVerse;
+        end
+        else
+        begin
+          { Last chunk — extends to end of chapter }
+          if ChunkStartVerse > 0 then
+            ChunkEndVerse := 999
+          else
+            ChunkEndVerse := 0; { title chunk }
         end;
 
         { Get translated text for this chunk }
@@ -1541,15 +1987,19 @@ begin
         IsFinished := FProject.IsFinished(SourceChapter.ID, SourceChunk.Name);
 
         FChunkPanels[I] := TChunkPanel.Create(Self,
-          SourceScrollBox, TransScrollBox,
+          SourceScrollBox, TransScrollBox, ResourceScrollBox,
           SourceText, TransText, SourceChapter.ID, SourceChunk.Name,
-          ChunkLabel, StrToIntDef(SourceChunk.Name, 0),
-          NextChunkStart - 1, IsFinished, FProject);
+          ChunkLabel, ChunkStartVerse, ChunkEndVerse, IsFinished, FProject);
       end;
     finally
       SourceScrollBox.EnableAutoSizing;
       TransScrollBox.EnableAutoSizing;
+      ResourceScrollBox.EnableAutoSizing;
     end;
+
+    { Load resources for each chunk }
+    for I := 0 to Length(FChunkPanels) - 1 do
+      FChunkPanels[I].LoadResources;
 
     { Recalculate chunk layout now that auto-sizing has set final widths }
     RecalcAllChunkLayouts;
@@ -1561,16 +2011,27 @@ begin
       auto-scroll mid-chapter. Force both panes back to the first chunk. }
     SourceScrollBox.VertScrollBar.Position := 0;
     TransScrollBox.VertScrollBar.Position := 0;
+    ResourceScrollBox.VertScrollBar.Position := 0;
     FLastSourcePos := 0;
     FLastTransPos := 0;
+    FLastResourcePos := 0;
     AttachWheelHandlers(SourceScrollBox);
     AttachWheelHandlers(TransScrollBox);
+    AttachWheelHandlers(ResourceScrollBox);
     FChapterDirty := False;
-    if Length(FChunkPanels) > 0 then
+    { Select first verse chunk (skip title) for initial display }
+    if Length(FChunkPanels) > 1 then
+      SetSelectedChunkIndex(1)
+    else if Length(FChunkPanels) > 0 then
       SetSelectedChunkIndex(0)
     else
       FSelectedChunkIndex := -1;
     ActiveControl := btnBack;
+
+    { TIpHtmlPanel.GetContentSize returns accurate values only after the
+      panel has been painted.  Fire a one-shot timer so the recalc runs
+      after the next paint cycle. }
+    FRecalcTimer.Enabled := True;
   except
     on E: Exception do
     begin
@@ -1806,15 +2267,20 @@ begin
     end;
 end;
 
-procedure TProjectEditWindow.OnResourceTabClick(Sender: TObject);
+procedure StyleTabButton(Btn: TButton; Active: Boolean);
 begin
-  if Sender = btnTabNotes then
-    FActiveResourceTab := rtNotes
-  else if Sender = btnTabWords then
-    FActiveResourceTab := rtWords
-  else if Sender = btnTabQuestions then
-    FActiveResourceTab := rtQuestions;
-  UpdateResourcePanelForSelectedChunk;
+  if Active then
+  begin
+    Btn.Font.Style := [fsBold];
+    Btn.Font.Color := clWhite;
+    Btn.Color := $00B5652D;
+  end
+  else
+  begin
+    Btn.Font.Style := [];
+    Btn.Font.Color := clBlack;
+    Btn.Color := clBtnFace;
+  end;
 end;
 
 procedure TProjectEditWindow.SetSelectedChunkIndex(AIndex: Integer);
@@ -1826,7 +2292,6 @@ begin
   FSelectedChunkIndex := AIndex;
   for I := 0 to Length(FChunkPanels) - 1 do
     FChunkPanels[I].SetSelected(I = AIndex);
-  UpdateResourcePanelForSelectedChunk;
 end;
 
 function TProjectEditWindow.ResourceDirFor(const ResourceID: string): string;
@@ -1901,9 +2366,8 @@ begin
     else
       EndV := 999;
 
-    if (ChunkStart > 0) and ((ChunkEnd > 0) and ((ChunkEnd < StartV) or (ChunkStart > EndV))) then
-      Continue;
-    if (ChunkStart > 0) and (ChunkEnd <= 0) and (StartV < ChunkStart) then
+    { Skip resource files outside the chunk's verse range }
+    if (ChunkStart > EndV) or (ChunkEnd < StartV) then
       Continue;
 
     SL := TStringList.Create;
@@ -1911,7 +2375,6 @@ begin
       SL.LoadFromFile(Files[I]);
       if Trim(SL.Text) <> '' then
       begin
-        OutList.Add('[' + IntToStr(StartV) + '-' + IntToStr(EndV) + ']');
         OutList.Add(Trim(SL.Text));
         OutList.Add('');
       end;
@@ -1962,9 +2425,7 @@ begin
         if (CurrentChapter <> ChapterID) then
           Continue;
         V := StrToIntDef(CurrentVerse, 0);
-        if (ChunkStart > 0) and (V > 0) and (V < ChunkStart) then
-          Continue;
-        if (ChunkEnd > 0) and (V > ChunkEnd) then
+        if (V < ChunkStart) or (V > ChunkEnd) then
           Continue;
 
         WordID := Copy(Line, Length('- //bible/tw/') + 1, MaxInt);
@@ -1976,7 +2437,6 @@ begin
             TwText.LoadFromFile(TwFile);
             if Trim(TwText.Text) <> '' then
             begin
-              OutList.Add('[word:' + WordID + ']');
               OutList.Add(Trim(TwText.Text));
               OutList.Add('');
             end;
@@ -1991,69 +2451,18 @@ begin
   end;
 end;
 
-procedure TProjectEditWindow.UpdateResourcePanelForSelectedChunk;
-var
-  NotesList, WordsList, QuestionsList, Display: TStringList;
-  ChapterID: string;
-  StartV, EndV: Integer;
-begin
-  if (FSelectedChunkIndex < 0) or (FSelectedChunkIndex >= Length(FChunkPanels)) then
-  begin
-    ResourceMemo.Lines.Text := '';
-    Exit;
-  end;
-
-  ChapterID := FChunkPanels[FSelectedChunkIndex].FChapterID;
-  StartV := FChunkPanels[FSelectedChunkIndex].StartVerse;
-  EndV := FChunkPanels[FSelectedChunkIndex].EndVerse;
-
-  NotesList := TStringList.Create;
-  WordsList := TStringList.Create;
-  QuestionsList := TStringList.Create;
-  Display := TStringList.Create;
-  try
-    CollectChunkResources(ChapterID, StartV, EndV, ResourceDirFor('tn'), NotesList);
-    CollectWordsResources(ChapterID, StartV, EndV, WordsList);
-    CollectChunkResources(ChapterID, StartV, EndV, ResourceDirFor('tq'), QuestionsList);
-
-    btnTabNotes.Visible := NotesList.Count > 0;
-    btnTabWords.Visible := WordsList.Count > 0;
-    btnTabQuestions.Visible := QuestionsList.Count > 0;
-
-    if (FActiveResourceTab = rtNotes) and (NotesList.Count = 0) then
-      if WordsList.Count > 0 then FActiveResourceTab := rtWords else
-      if QuestionsList.Count > 0 then FActiveResourceTab := rtQuestions;
-    if (FActiveResourceTab = rtWords) and (WordsList.Count = 0) then
-      if NotesList.Count > 0 then FActiveResourceTab := rtNotes else
-      if QuestionsList.Count > 0 then FActiveResourceTab := rtQuestions;
-    if (FActiveResourceTab = rtQuestions) and (QuestionsList.Count = 0) then
-      if NotesList.Count > 0 then FActiveResourceTab := rtNotes else
-      if WordsList.Count > 0 then FActiveResourceTab := rtWords;
-
-    case FActiveResourceTab of
-      rtNotes: Display.Assign(NotesList);
-      rtWords: Display.Assign(WordsList);
-      rtQuestions: Display.Assign(QuestionsList);
-    end;
-    ResourceMemo.Lines.Assign(Display);
-  finally
-    NotesList.Free;
-    WordsList.Free;
-    QuestionsList.Free;
-    Display.Free;
-  end;
-end;
 
 { ---- TChunkPanel ---- }
 
 constructor TChunkPanel.Create(AOwnerForm: TProjectEditWindow;
-  ASourceParent, ATransParent: TScrollBox;
+  ASourceParent, ATransParent, AResourceParent: TScrollBox;
   const ASourceText, ATransText, AChapterID, AChunkName, AVerseLabel: string;
   AStartVerse, AEndVerse: Integer; AFinished: Boolean; AProject: TProject);
 var
   PanelHeight: Integer;
   HeaderHeight, FooterHeight, BodyTop: Integer;
   HeaderLabel: TLabel;
+  TabBarHeight: Integer;
 begin
   inherited Create;
   FOwnerForm := AOwnerForm;
@@ -2068,9 +2477,11 @@ begin
   FSourceBadgeColor := $00B5652D;
   FTransBadgeColor := $009A8A00;
   FIsFinished := AFinished;
+  FActiveResTab := rtNotes;
   HeaderHeight := 28;
   FooterHeight := 34;
   BodyTop := HeaderHeight + 2;
+  TabBarHeight := 28;
   PanelHeight := 120; { initial estimate, RecalcLayout will fix }
 
   { Source panel — alTop stacks by Top value, so set high to append at bottom }
@@ -2222,6 +2633,55 @@ begin
   if AFinished then
     FEditButton.Enabled := False;
 
+  { Resource panel }
+  FResourcePanel := TPanel.Create(AResourceParent);
+  FResourcePanel.Parent := AResourceParent;
+  FResourcePanel.Top := AResourceParent.ControlCount * 100;
+  FResourcePanel.Align := alTop;
+  FResourcePanel.Height := PanelHeight;
+  FResourcePanel.BorderSpacing.Bottom := 10;
+  FResourcePanel.BevelOuter := bvLowered;
+  FResourcePanel.Color := clWhite;
+
+  { Per-chunk tab bar }
+  FResTabBar := TPanel.Create(FResourcePanel);
+  FResTabBar.Parent := FResourcePanel;
+  FResTabBar.Align := alTop;
+  FResTabBar.Height := TabBarHeight;
+  FResTabBar.BevelOuter := bvNone;
+  FResTabBar.Color := $00F0F0F0;
+
+  FBtnTabNotes := TButton.Create(FResTabBar);
+  FBtnTabNotes.Parent := FResTabBar;
+  FBtnTabNotes.SetBounds(4, 2, 70, TabBarHeight - 4);
+  FBtnTabNotes.Caption := 'Notes';
+  FBtnTabNotes.Font.Height := -12;
+  FBtnTabNotes.OnClick := @OnResTabClick;
+
+  FBtnTabWords := TButton.Create(FResTabBar);
+  FBtnTabWords.Parent := FResTabBar;
+  FBtnTabWords.SetBounds(78, 2, 70, TabBarHeight - 4);
+  FBtnTabWords.Caption := 'Words';
+  FBtnTabWords.Font.Height := -12;
+  FBtnTabWords.OnClick := @OnResTabClick;
+
+  FBtnTabQuestions := TButton.Create(FResTabBar);
+  FBtnTabQuestions.Parent := FResTabBar;
+  FBtnTabQuestions.SetBounds(152, 2, 84, TabBarHeight - 4);
+  FBtnTabQuestions.Caption := 'Questions';
+  FBtnTabQuestions.Font.Height := -12;
+  FBtnTabQuestions.OnClick := @OnResTabClick;
+
+  { Resource HTML content }
+  FResHtml := TIpHtmlPanel.Create(FResourcePanel);
+  FResHtml.Parent := FResourcePanel;
+  FResHtml.Align := alClient;
+  FResHtml.DefaultTypeFace := 'Noto Sans';
+  FResHtml.DefaultFontSize := 12;
+  FResHtml.BgColor := clWhite;
+  FResHtml.BorderStyle := bsNone;
+  FResHtml.OnHotClick := @OnResHotClick;
+
   SetSelected(False);
 end;
 
@@ -2229,6 +2689,7 @@ destructor TChunkPanel.Destroy;
 begin
   FreeAndNil(FSourcePanel);
   FreeAndNil(FTransPanel);
+  FreeAndNil(FResourcePanel);
   inherited Destroy;
 end;
 
@@ -2258,35 +2719,50 @@ end;
 
 procedure TChunkPanel.RecalcLayout;
 var
-  SourceH, TransH, PanelHeight: Integer;
-  HeaderHeight, FooterHeight, BodyTop: Integer;
+  SourceContentH, TransContentH, PanelHeight: Integer;
+  HeaderHeight, FooterHeight, BodyTop, Padding: Integer;
   ContentSize: TSize;
 begin
   HeaderHeight := 28;
   FooterHeight := 34;
   BodyTop := HeaderHeight + 2;
+  Padding := 8;
 
-  { Query rendered content height from HTML panels }
+  { Force a synchronous paint so that GetContentSize returns an
+    up-to-date page rect at the current panel width. }
+  FSourceHtml.Update;
+  FTransHtml.Update;
+
   ContentSize := FSourceHtml.GetContentSize;
-  SourceH := ContentSize.cy + BodyTop + 8;
-  if SourceH < 50 then
-    SourceH := 50;
+  SourceContentH := ContentSize.cy;
+  if SourceContentH < 30 then
+    SourceContentH := 30;
 
   ContentSize := FTransHtml.GetContentSize;
   if FTransText <> '' then
-    TransH := ContentSize.cy
+    TransContentH := ContentSize.cy
   else
-    TransH := 30;
-  if TransH < 30 then
-    TransH := 30;
+    TransContentH := 30;
+  if TransContentH < 30 then
+    TransContentH := 30;
 
-  { Use the taller of source/trans for both panels }
-  PanelHeight := SourceH;
-  if TransH + BodyTop + FooterHeight + 4 > PanelHeight then
-    PanelHeight := TransH + BodyTop + FooterHeight + 4;
+  { Row height driven by source and translation only.
+    Resource panel matches that height; its HTML panel scrolls internally
+    if the resource list is taller than the available space. }
+  PanelHeight := BodyTop + SourceContentH + Padding;
+  if BodyTop + TransContentH + FooterHeight + Padding > PanelHeight then
+    PanelHeight := BodyTop + TransContentH + FooterHeight + Padding;
 
   FSourcePanel.Height := PanelHeight;
   FTransPanel.Height := PanelHeight;
+  FResourcePanel.Height := PanelHeight;
+end;
+
+procedure TChunkPanel.ForceHtmlRelayout;
+begin
+  { Re-render HTML at current panel width so GetContentSize is accurate }
+  RefreshSourceHtml;
+  RefreshTransHtml;
 end;
 
 procedure TChunkPanel.SetEditing(AEdit: Boolean);
@@ -2343,25 +2819,181 @@ begin
   begin
     FSourcePanel.BevelColor := $00B8792F;
     FTransPanel.BevelColor := $00B8792F;
+    FResourcePanel.BevelColor := $00B8792F;
   end
   else
   begin
     FSourcePanel.BevelColor := $00D0D0D0;
     FTransPanel.BevelColor := $00D0D0D0;
+    FResourcePanel.BevelColor := $00D0D0D0;
   end;
 end;
 
 function TChunkPanel.OwnsControl(AObj: TObject): Boolean;
 begin
   Result := (AObj = FSourcePanel) or (AObj = FTransPanel) or
+            (AObj = FResourcePanel) or
             (AObj = FSourceHtml) or (AObj = FTransHtml) or
+            (AObj = FResHtml) or
             (AObj = FTransMemo) or (AObj = FFinishedToggleBtn) or
-            (AObj = FEditButton);
+            (AObj = FEditButton) or
+            (AObj = FBtnTabNotes) or (AObj = FBtnTabWords) or
+            (AObj = FBtnTabQuestions);
 end;
 
 function TChunkPanel.GetHeight: Integer;
 begin
   Result := FSourcePanel.Height;
+end;
+
+procedure TChunkPanel.LoadResources;
+var
+  NotesList, WordsList, QuestionsList, Display: TStringList;
+  StartV, EndV: Integer;
+begin
+  StartV := FStartVerse;
+  EndV := FEndVerse;
+
+  { Title chunk (verse 0) — no verse-based resources apply }
+  if (StartV = 0) and (EndV < 1) then
+  begin
+    FBtnTabNotes.Visible := False;
+    FBtnTabWords.Visible := False;
+    FBtnTabQuestions.Visible := False;
+    FResTabBar.Visible := False;
+    FResHtml.SetHtmlFromStr(WrapInHtmlDoc('', 'Noto Sans', 12, clWhite));
+    SetLength(FResourceSections, 0);
+    Exit;
+  end;
+
+  NotesList := TStringList.Create;
+  WordsList := TStringList.Create;
+  QuestionsList := TStringList.Create;
+  Display := TStringList.Create;
+  try
+    FOwnerForm.CollectChunkResources(FChapterID, StartV, EndV,
+      FOwnerForm.ResourceDirFor('tn'), NotesList);
+    FOwnerForm.CollectWordsResources(FChapterID, StartV, EndV, WordsList);
+    FOwnerForm.CollectChunkResources(FChapterID, StartV, EndV,
+      FOwnerForm.ResourceDirFor('tq'), QuestionsList);
+
+    FBtnTabNotes.Visible := NotesList.Count > 0;
+    FBtnTabWords.Visible := WordsList.Count > 0;
+    FBtnTabQuestions.Visible := QuestionsList.Count > 0;
+
+    { Auto-select first available tab }
+    if (FActiveResTab = rtNotes) and (NotesList.Count = 0) then
+      if WordsList.Count > 0 then FActiveResTab := rtWords else
+      if QuestionsList.Count > 0 then FActiveResTab := rtQuestions;
+    if (FActiveResTab = rtWords) and (WordsList.Count = 0) then
+      if NotesList.Count > 0 then FActiveResTab := rtNotes else
+      if QuestionsList.Count > 0 then FActiveResTab := rtQuestions;
+    if (FActiveResTab = rtQuestions) and (QuestionsList.Count = 0) then
+      if NotesList.Count > 0 then FActiveResTab := rtNotes else
+      if WordsList.Count > 0 then FActiveResTab := rtWords;
+
+    StyleTabButton(FBtnTabNotes, FActiveResTab = rtNotes);
+    StyleTabButton(FBtnTabWords, FActiveResTab = rtWords);
+    StyleTabButton(FBtnTabQuestions, FActiveResTab = rtQuestions);
+
+    case FActiveResTab of
+      rtNotes: Display.Assign(NotesList);
+      rtWords: Display.Assign(WordsList);
+      rtQuestions: Display.Assign(QuestionsList);
+    end;
+
+    FResourceSections := ParseResourceSections(Display.Text);
+
+    if (NotesList.Count = 0) and (WordsList.Count = 0) and (QuestionsList.Count = 0) then
+      FResHtml.SetHtmlFromStr(WrapInHtmlDoc(
+        '<p style="color:#999;">No resources available.</p>',
+        'Noto Sans', 12, clWhite))
+    else
+      FResHtml.SetHtmlFromStr(WrapInHtmlDoc(
+        ResourceHeadingsToHtml(FResourceSections), 'Noto Sans', 12, clWhite));
+  finally
+    NotesList.Free;
+    WordsList.Free;
+    QuestionsList.Free;
+    Display.Free;
+  end;
+end;
+
+procedure TChunkPanel.OnResTabClick(Sender: TObject);
+begin
+  if Sender = FBtnTabNotes then
+    FActiveResTab := rtNotes
+  else if Sender = FBtnTabWords then
+    FActiveResTab := rtWords
+  else if Sender = FBtnTabQuestions then
+    FActiveResTab := rtQuestions;
+  LoadResources;
+  RecalcLayout;
+end;
+
+procedure TChunkPanel.OnResHotClick(Sender: TObject);
+var
+  URL: string;
+  Idx: Integer;
+  F: TForm;
+  Html: TIpHtmlPanel;
+  CloseBtn: TButton;
+  IndexLabel: string;
+  Heading, Body, BodyHtml, FooterHtml: string;
+  Pal: TThemePalette;
+begin
+  URL := FResHtml.HotURL;
+  if Pos('section:', URL) <> 1 then
+    Exit;
+  Idx := StrToIntDef(Copy(URL, Length('section:') + 1, MaxInt), -1);
+  if (Idx < 0) or (Idx >= Length(FResourceSections)) then
+    Exit;
+
+  Heading := FResourceSections[Idx].Heading;
+  Body := FResourceSections[Idx].Body;
+  Pal := GetThemePalette(GetEffectiveTheme);
+
+  { Build footer link based on active tab }
+  case FActiveResTab of
+    rtNotes: IndexLabel := 'NOTES INDEX';
+    rtWords: IndexLabel := 'WORDS INDEX';
+    rtQuestions: IndexLabel := 'QUESTIONS INDEX';
+  end;
+  FooterHtml := '<p style="margin:16px 0 8px 0;font-weight:bold;">' +
+    '<font color="#00897B">' + IndexLabel + '</font></p>';
+
+  BodyHtml := '<h3 style="margin:4px 0 8px 0;color:#00897B;">' + Heading + '</h3>' +
+    ResourceBodyToHtml(Body) + FooterHtml;
+
+  F := TForm.CreateNew(FOwnerForm);
+  try
+    F.Position := poMainFormCenter;
+    F.BorderStyle := bsSizeToolWin;
+    F.Caption := Heading;
+    F.Font.Name := 'Noto Sans';
+    F.Width := 500;
+    F.Height := 500;
+    F.Color := Pal.PanelBg;
+
+    { Close button at top }
+    CloseBtn := TButton.Create(F);
+    CloseBtn.Parent := F;
+    CloseBtn.Align := alTop;
+    CloseBtn.Height := 30;
+    CloseBtn.Caption := 'X CLOSE';
+    CloseBtn.Font.Height := -14;
+    CloseBtn.ModalResult := mrClose;
+
+    Html := TIpHtmlPanel.Create(F);
+    Html.Parent := F;
+    Html.Align := alClient;
+    Html.DefaultFontSize := 13;
+    Html.SetHtmlFromStr(WrapInHtmlDoc(BodyHtml, 'Noto Sans', 13, Pal.PanelBg));
+
+    F.ShowModal;
+  finally
+    F.Free;
+  end;
 end;
 
 end.
