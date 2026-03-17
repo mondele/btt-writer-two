@@ -249,7 +249,7 @@ var
   Pages: TPageControl;
   TabGeneral, TabAbout, TabLegal, TabAdvanced: TTabSheet;
   BtnOK, BtnCancel: TButton;
-  BtnPanel: TPanel;
+  //BtnPanel: TPanel; { unused — buttons parented directly to form }
   Pal: TThemePalette;
   Y: Integer;
   Helper: TSettingsHelper;
@@ -294,41 +294,37 @@ begin
       F.Caption := rsSettingsCaption;
       F.Font.Name := 'Noto Sans';
       F.Width := 700;
-      F.Height := 550;
+      F.Height := 620;
       F.Color := Pal.PanelBg;
 
-      { Button panel at bottom }
-      BtnPanel := TPanel.Create(F);
-      BtnPanel.Parent := F;
-      BtnPanel.Align := alBottom;
-      BtnPanel.Height := 48;
-      BtnPanel.BevelOuter := bvNone;
-      BtnPanel.Color := Pal.PanelBg;
+      { Page control — anchored to all sides except bottom margin for buttons }
+      Pages := TPageControl.Create(F);
+      Pages.Parent := F;
+      Pages.SetBounds(0, 0, F.ClientWidth, F.ClientHeight - 48);
+      Pages.Anchors := [akTop, akLeft, akRight, akBottom];
+      Pages.Font.Name := 'Noto Sans';
 
+      { OK / Cancel buttons anchored to bottom-right }
       BtnOK := TButton.Create(F);
-      BtnOK.Parent := BtnPanel;
+      BtnOK.Parent := F;
       BtnOK.Caption := rsOK;
       BtnOK.Width := 80;
-      BtnOK.Left := F.Width - 200;
-      BtnOK.Top := 8;
-      BtnOK.Anchors := [akTop, akRight];
+      BtnOK.Height := 30;
+      BtnOK.Left := F.ClientWidth - 190;
+      BtnOK.Top := F.ClientHeight - 40;
+      BtnOK.Anchors := [akRight, akBottom];
       BtnOK.ModalResult := mrOK;
       BtnOK.Default := True;
 
       BtnCancel := TButton.Create(F);
-      BtnCancel.Parent := BtnPanel;
+      BtnCancel.Parent := F;
       BtnCancel.Caption := rsCancel;
       BtnCancel.Width := 80;
-      BtnCancel.Left := F.Width - 110;
-      BtnCancel.Top := 8;
-      BtnCancel.Anchors := [akTop, akRight];
+      BtnCancel.Height := 30;
+      BtnCancel.Left := F.ClientWidth - 95;
+      BtnCancel.Top := F.ClientHeight - 40;
+      BtnCancel.Anchors := [akRight, akBottom];
       BtnCancel.ModalResult := mrCancel;
-
-      { Page control }
-      Pages := TPageControl.Create(F);
-      Pages.Parent := F;
-      Pages.Align := alClient;
-      Pages.Font.Name := 'Noto Sans';
 
       { ===== General Tab ===== }
       TabGeneral := TTabSheet.Create(Pages);
