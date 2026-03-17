@@ -6,12 +6,13 @@ uses
   {$IFDEF UNIX}
   cthreads,
   {$ENDIF}
-  SysUtils, Interfaces, Forms,
+  SysUtils, Interfaces, Forms, Graphics,
   Globals, DataPaths, USFMUtils, BibleChunk, BibleChapter, BibleBook,
   ResourceContainer, ProjectManager, ProjectScanner,
   MainForm, ProjectEditForm, SplashScreen, AppSettings, AppLog,
   UserProfile, GiteaClient, LoginForm, IndexDatabase, SourceExtractor,
-  LegalTexts, GitUtils, USFMExporter, ImportForm;
+  LegalTexts, GitUtils, USFMExporter, ImportForm, ConflictResolver,
+  DevToolsForm;
 
 resourcestring
   rsSplashInitializing = 'Initializing interface...';
@@ -29,10 +30,32 @@ begin
   end;
 end;
 
+procedure LoadAppIcon;
+var
+  IconPath: string;
+  Png: TPortableNetworkGraphic;
+begin
+  { If the icon is already set (e.g. from compiled resources on Windows), skip }
+  if not Application.Icon.Empty then
+    Exit;
+  { Developer fallback: load PNG from next to the executable }
+  IconPath := ExtractFilePath(ParamStr(0)) + 'bttwriter2.png';
+  if not FileExists(IconPath) then
+    Exit;
+  Png := TPortableNetworkGraphic.Create;
+  try
+    Png.LoadFromFile(IconPath);
+    Application.Icon.Assign(Png);
+  finally
+    Png.Free;
+  end;
+end;
+
 begin
   ParseCommandLine;
   Application.Scaled := True;
   Application.Initialize;
+  LoadAppIcon;
   InitLog;
   if Verbose then
     LogInfo('Debug/verbose mode enabled');

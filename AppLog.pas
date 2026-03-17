@@ -15,6 +15,7 @@ procedure LogInfo(const AMsg: string);
 procedure LogWarn(const AMsg: string);
 procedure LogError(const AMsg: string);
 procedure LogFmt(ALevel: TLogLevel; const AFmt: string; const AArgs: array of const);
+function GetLogPath: string;
 
 implementation
 
@@ -120,6 +121,11 @@ end;
 procedure LogFmt(ALevel: TLogLevel; const AFmt: string; const AArgs: array of const);
 begin
   Log(ALevel, Format(AFmt, AArgs));
+end;
+
+function GetLogPath: string;
+begin
+  Result := FLogPath;
 end;
 
 finalization
