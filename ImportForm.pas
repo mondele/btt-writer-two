@@ -10,9 +10,11 @@ uses
 type
   TImportChoice = (icNone, icServer, icProject, icUSFM, icSourceText);
   TExportChoice = (ecNone, ecServer, ecTStudio, ecUSFM);
+  TDuplicateChoice = (dcCancel, dcMerge, dcOverwrite);
 
 function ShowImportDialog(AIsServerUser: Boolean): TImportChoice;
 function ShowExportDialog(AIsServerUser: Boolean): TExportChoice;
+function ShowDuplicateProjectDialog: TDuplicateChoice;
 
 implementation
 
@@ -31,6 +33,11 @@ resourcestring
   rsExportTStudio = 'Export to Project File (.tstudio)';
   rsExportUSFM = 'Export to USFM File (.usfm)';
   rsCancelBtn = 'Cancel';
+  rsDuplicateTitle = 'Project Already Exists';
+  rsDuplicateMsg = 'A project with this name already exists. What would you like to do?';
+  rsDupMerge = 'Merge (combine changes)';
+  rsDupOverwrite = 'Overwrite (replace existing)';
+  rsDupCancel = 'Cancel';
 
 type
   TChoiceForm = class(TForm)
@@ -156,6 +163,50 @@ begin
 
     if F.ShowModal = mrOK then
       Result := TExportChoice(F.Tag);
+  finally
+    F.Free;
+  end;
+end;
+
+function ShowDuplicateProjectDialog: TDuplicateChoice;
+var
+  F: TChoiceForm;
+  Pal: TThemePalette;
+  lblMsg: TLabel;
+  btnCancel: TButton;
+begin
+  Result := dcCancel;
+  Pal := GetThemePalette(GetEffectiveTheme);
+
+  F := TChoiceForm.CreateNew(nil);
+  try
+    F.Position := poScreenCenter;
+    F.BorderStyle := bsSingle;
+    F.Caption := rsDuplicateTitle;
+    F.Width := 400;
+    F.Height := 280;
+    F.Color := Pal.PanelBg;
+    F.Tag := 0;
+
+    lblMsg := TLabel.Create(F);
+    lblMsg.Parent := F;
+    lblMsg.SetBounds(24, 12, 352, 30);
+    lblMsg.Caption := rsDuplicateMsg;
+    lblMsg.Font.Height := -14;
+    lblMsg.Font.Color := Pal.TextPrimary;
+    lblMsg.WordWrap := True;
+
+    CreateOptionPanel(F, F, rsDupMerge, 50, Ord(dcMerge), True, Pal);
+    CreateOptionPanel(F, F, rsDupOverwrite, 104, Ord(dcOverwrite), True, Pal);
+
+    btnCancel := TButton.Create(F);
+    btnCancel.Parent := F;
+    btnCancel.SetBounds(290, 200, 80, 32);
+    btnCancel.Caption := rsDupCancel;
+    btnCancel.ModalResult := mrCancel;
+
+    if F.ShowModal = mrOK then
+      Result := TDuplicateChoice(F.Tag);
   finally
     F.Free;
   end;

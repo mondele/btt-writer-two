@@ -75,6 +75,8 @@ function GiteaCreateRepo(const AServerURL, AToken, ARepoName: string;
 function GiteaRepoExists(const AServerURL, AToken, AOwner, ARepoName: string): Boolean;
 function GiteaSearchRepos(const AServerURL, AToken, AQuery: string;
   ALimit: Integer; out Repos: TGiteaRepoArray; out ErrorMsg: string): Boolean;
+function GiteaListUserRepos(const AServerURL, AToken, AUsername: string;
+  ALimit: Integer; out Repos: TGiteaRepoArray; out ErrorMsg: string): Boolean;
 
 implementation
 
@@ -592,6 +594,64 @@ begin
   end;
 
   LogFmt(llInfo, 'GiteaSearchRepos: query=%s found=%d', [AQuery, Length(Repos)]);
+end;
+
+function GiteaListUserRepos(const AServerURL, AToken, AUsername: string;
+  ALimit: Integer; out Repos: TGiteaRepoArray; out ErrorMsg: string): Boolean;
+var
+  Resp: string;
+  Data: TJSONData;
+  Arr: TJSONArray;
+  I, Page: Integer;
+  PageRepos: TGiteaRepoArray;
+  Batch: TJSONArray;
+begin
+  Result := False;
+  SetLength(Repos, 0);
+  ErrorMsg := '';
+  if ALimit <= 0 then
+    ALimit := 50;
+
+  Page := 1;
+  repeat
+    try
+      Resp := DoTokenGet(AServerURL + '/api/v1/users/' + AUsername +
+        '/repos?limit=' + IntToStr(ALimit) + '&page=' + IntToStr(Page), AToken);
+    except
+      on E: Exception do
+      begin
+        ErrorMsg := E.Message;
+        Exit;
+      end;
+    end;
+
+    Data := GetJSON(Resp);
+    try
+      if Data is TJSONArray then
+        Batch := TJSONArray(Data)
+      else
+        Break;
+      if Batch.Count = 0 then
+        Break;
+      SetLength(PageRepos, Batch.Count);
+      for I := 0 to Batch.Count - 1 do
+      begin
+        if Batch.Items[I] is TJSONObject then
+          PageRepos[I] := ParseRepoInfo(TJSONObject(Batch.Items[I]));
+      end;
+      SetLength(Repos, Length(Repos) + Length(PageRepos));
+      for I := 0 to Length(PageRepos) - 1 do
+        Repos[Length(Repos) - Length(PageRepos) + I] := PageRepos[I];
+      if Batch.Count < ALimit then
+        Break;
+    finally
+      Data.Free;
+    end;
+    Inc(Page);
+  until False;
+
+  Result := True;
+  LogFmt(llInfo, 'GiteaListUserRepos: user=%s found=%d', [AUsername, Length(Repos)]);
 end;
 
 end.

@@ -16,6 +16,7 @@ type
     TargetLangCode: string;
     TargetLangName: string;
     ResourceType: string;
+    TypeID: string;
     TotalChunks: Integer;
     FinishedChunks: Integer;
     ManifestPresent: Boolean;
@@ -36,6 +37,17 @@ function FindSourceContentDir(const Summary: TProjectSummary): string;
 
 { Find the English ULB content directory for a given book code }
 function FindEnglishULBContentDir(const ABookCode: string): string;
+
+{ Build canonical directory name from manifest fields.
+  Text projects: {langCode}_{bookCode}_text_{resourceType}
+  Resource projects (tn/tq/tw): {langCode}_{bookCode}_{typeID} }
+function CanonicalProjectDirName(const TargetLangCode, BookCode, TypeID, ResourceType: string): string;
+
+{ Check if a directory name is conforming — starts with {langCode}_{bookCode}_ }
+function IsConformingDirName(const DirName, TargetLangCode, BookCode: string): Boolean;
+
+{ Read manifest and compute canonical dir name. Returns '' if manifest unreadable. }
+function ReadCanonicalDirName(const ProjectDir: string): string;
 
 implementation
 
@@ -152,7 +164,35 @@ begin
   end;
 end;
 
-function ReadManifestSummary(const ProjectDir: string; out Summary: TProjectSummary): Boolean;
+function CanonicalProjectDirName(const TargetLangCode, BookCode, TypeID, ResourceType: string): string;
+var
+  ResType, TypID: string;
+begin
+  TypID := LowerCase(Trim(TypeID));
+  if TypID = '' then
+    TypID := 'text';
+  if (TypID = 'tn') or (TypID = 'tq') or (TypID = 'tw') then
+    Result := LowerCase(Trim(TargetLangCode)) + '_' + LowerCase(Trim(BookCode)) +
+      '_' + TypID
+  else
+  begin
+    ResType := LowerCase(Trim(ResourceType));
+    if ResType = '' then
+      ResType := 'reg';
+    Result := LowerCase(Trim(TargetLangCode)) + '_' + LowerCase(Trim(BookCode)) +
+      '_' + TypID + '_' + ResType;
+  end;
+end;
+
+function IsConformingDirName(const DirName, TargetLangCode, BookCode: string): Boolean;
+var
+  Expected: string;
+begin
+  Expected := LowerCase(Trim(TargetLangCode)) + '_' + LowerCase(Trim(BookCode)) + '_';
+  Result := Pos(Expected, LowerCase(DirName)) = 1;
+end;
+
+function ReadManifestSummary(const ProjectDir: string; var Summary: TProjectSummary): Boolean;
 var
   ManifestPath: string;
   SL: TStringList;
@@ -172,7 +212,14 @@ begin
   SL := TStringList.Create;
   try
     SL.LoadFromFile(ManifestPath);
-    JSONData := GetJSON(SL.Text);
+    try
+      JSONData := GetJSON(SL.Text);
+    except
+      { manifest.json may contain git conflict markers — treat as invalid }
+      Summary.HasIssues := True;
+      Summary.IssueSummary := 'manifest.json contains invalid JSON (merge conflict?)';
+      Exit;
+    end;
     if not (JSONData is TJSONObject) then
     begin
       JSONData.Free;
@@ -199,7 +246,10 @@ begin
       if Node <> nil then
         Summary.BookName := Node.AsString;
 
-      { Resource type }
+      { Type and resource }
+      Node := Manifest.FindPath('type.id');
+      if Node <> nil then
+        Summary.TypeID := Node.AsString;
       Node := Manifest.FindPath('resource.id');
       if Node <> nil then
         Summary.ResourceType := Node.AsString;
@@ -227,6 +277,17 @@ begin
   end;
 end;
 
+function ReadCanonicalDirName(const ProjectDir: string): string;
+var
+  Summary: TProjectSummary;
+begin
+  Result := '';
+  Summary := Default(TProjectSummary);
+  if ReadManifestSummary(ProjectDir, Summary) then
+    Result := CanonicalProjectDirName(Summary.TargetLangCode, Summary.BookCode,
+      Summary.TypeID, Summary.ResourceType);
+end;
+
 function ScanProjects: TProjectSummaryList;
 var
   BasePath: string;
@@ -240,6 +301,10 @@ begin
 
   if not DirectoryExists(BasePath) then
     Exit;
+
+  { Clean up stale outer manifest.json from bad .tstudio imports }
+  if FileExists(BasePath + 'manifest.json') then
+    DeleteFile(BasePath + 'manifest.json');
 
   if FindFirst(BasePath + '*', faDirectory, SearchRec) = 0 then
   begin
@@ -269,6 +334,10 @@ begin
           AddIssue(Summary.IssueSummary, 'manifest invalid');
         if Summary.ManifestValid and (not Summary.CanonicalBook) then
           AddIssue(Summary.IssueSummary, 'unsupported book type');
+        if Summary.ManifestValid and
+           not IsConformingDirName(Summary.DirName, Summary.TargetLangCode,
+             Summary.BookCode) then
+          AddIssue(Summary.IssueSummary, 'non-conforming directory name');
         if not Summary.GitValid then
           AddIssue(Summary.IssueSummary, 'git repo invalid');
         Summary.HasIssues := Summary.IssueSummary <> '';
