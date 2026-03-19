@@ -23,6 +23,10 @@ function ParseVerseNumbers(const Text: string): TStringList;
   and strips <para> tags. }
 function UsxToPlainText(const UsxText: string): string;
 
+{ Render USFM text (with \v markers) as HTML with superscript verse numbers.
+  Other markers are stripped. Suitable for read-mode display of translations. }
+function RenderUSFMAsHtml(const USFMText: string): string;
+
 { Convert USX markup to HTML with styled paragraphs, verse badges,
   poetry indentation, Selah, footnotes, and section headings.
   ABadgeColor is the verse number badge background color as #RRGGBB. }
@@ -445,6 +449,66 @@ begin
 
   if InPara then
     Result := Result + '</p>';
+end;
+
+function RenderUSFMAsHtml(const USFMText: string): string;
+var
+  P, Len, NumStart: Integer;
+  Ch: Char;
+  NumStr: string;
+begin
+  Result := '';
+  P := 1;
+  Len := Length(USFMText);
+
+  while P <= Len do
+  begin
+    Ch := USFMText[P];
+
+    if (Ch = '\') and (P + 1 <= Len) then
+    begin
+      { Check for \v marker }
+      if (USFMText[P + 1] = 'v') and (P + 2 <= Len) and (USFMText[P + 2] = ' ') then
+      begin
+        { Extract verse number }
+        P := P + 3;
+        NumStart := P;
+        while (P <= Len) and (USFMText[P] in ['0'..'9', '-']) do
+          Inc(P);
+        NumStr := Copy(USFMText, NumStart, P - NumStart);
+        if NumStr <> '' then
+          Result := Result + '<sup style="color:#5C6BC0;font-weight:bold;' +
+            'font-size:75%;margin:0 2px;">' + NumStr + '</sup>';
+        { Skip space after number }
+        if (P <= Len) and (USFMText[P] = ' ') then
+          Inc(P);
+        Continue;
+      end
+      else
+      begin
+        { Other marker — skip marker name, keep any argument text }
+        Inc(P); { skip backslash }
+        while (P <= Len) and (USFMText[P] in ['a'..'z', 'A'..'Z', '0'..'9', '*']) do
+          Inc(P);
+        { Skip space after marker }
+        if (P <= Len) and (USFMText[P] = ' ') then
+          Inc(P);
+        Continue;
+      end;
+    end
+    else
+    begin
+      { Plain text — HTML-escape }
+      case Ch of
+        '<': Result := Result + '&lt;';
+        '>': Result := Result + '&gt;';
+        '&': Result := Result + '&amp;';
+      else
+        Result := Result + Ch;
+      end;
+      Inc(P);
+    end;
+  end;
 end;
 
 { ----- Fault-tolerant USFM tokenizer/parser -----
