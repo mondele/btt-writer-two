@@ -2307,6 +2307,11 @@ begin
   SourceLangHeader.Caption := NewLangName + ' ' + UpperCase(ResType);
   UpdatePaneHeaders;
 
+  { Update read mode source label if in read mode }
+  if FCurrentViewMode = vmRead then
+    FReadSourceLabel.Caption := FSourceRC.LanguageCode + ' ' +
+      UpperCase(FSourceRC.ResourceType) + '  ✕';
+
   { Reload current chapter }
   LoadChapter(FCurrentChapterIndex);
 end;
@@ -2362,6 +2367,15 @@ begin
     SaveCurrentChapter;
 
     FCurrentChapterIndex := AIndex;
+
+    { In Read mode, skip Edit-Review panel building — just update nav and content }
+    if FCurrentViewMode = vmRead then
+    begin
+      UpdateChapterNav;
+      LoadReadModeContent;
+      UpdateStatus;
+      Exit;
+    end;
     ClearChunkPanels;
 
     if FSourceRC = nil then
@@ -2461,8 +2475,6 @@ begin
     RecalcAllChunkLayouts;
 
     UpdateChapterNav;
-    if FCurrentViewMode = vmRead then
-      LoadReadModeContent;
     UpdateStatus;
 
     { Some controls created during chunk panel build can steal focus and
