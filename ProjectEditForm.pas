@@ -41,6 +41,7 @@ resourcestring
   rsMenuUploadExport = 'Upload/Export';
   rsMenuPrint = 'Print';
   rsMenuSettings = 'Settings';
+  rsMenuDevTools = 'Developer Tools';
   rsMenuProjectReview = 'Project Review';
   rsMenuFeedback = 'Feedback';
   rsMenuMarkAllDone = 'Mark All Chunks Done';
@@ -156,6 +157,7 @@ type
     procedure OnMenuUploadExport(Sender: TObject);
     procedure OnMenuPrint(Sender: TObject);
     procedure OnMenuSettings(Sender: TObject);
+    procedure OnMenuDevTools(Sender: TObject);
     procedure OnMenuProjectReview(Sender: TObject);
     procedure OnMenuFeedback(Sender: TObject);
     procedure OnMenuMarkAllDone(Sender: TObject);
@@ -178,6 +180,22 @@ type
     procedure btnModeEditReviewClick(Sender: TObject);
     procedure cmbChapterJumpChange(Sender: TObject);
     procedure lblChapterNumClick(Sender: TObject);
+  private
+    { Read mode controls }
+    FReadContainer: TPanel;
+    FReadCard: TPanel;
+    FReadHtml: TIpHtmlPanel;
+    FReadSourceLabel: TLabel;
+    FReadBackTab: TPanel;
+    FReadBackTabLabel: TLabel;
+    FReadShowingSource: Boolean;
+    procedure CreateReadModeControls;
+    procedure ShowReadMode;
+    procedure ShowEditReviewMode;
+    procedure LoadReadModeContent;
+    procedure ReadBackTabClick(Sender: TObject);
+    function BuildFullChapterHtml(const ChapterID: string;
+      ASourceChapter: TChapter; IsSource: Boolean): string;
   private
     { Loading splash }
     FLoadingSplash: TForm;
@@ -257,7 +275,7 @@ implementation
 
 uses
   MainForm, ImportForm, TStudioPackage, USFMExporter,
-  UserProfile, GiteaClient, GitUtils, ConflictResolver;
+  UserProfile, GiteaClient, GitUtils, ConflictResolver, DevToolsForm;
 
 {$R *.lfm}
 
@@ -940,7 +958,7 @@ begin
   SaveCurrentChapter;
   FCurrentViewMode := vmRead;
   UpdateModeButtons;
-  { TODO: switch to read-mode layout }
+  ShowReadMode;
   UpdateStatus;
 end;
 
@@ -950,8 +968,209 @@ begin
     Exit;
   FCurrentViewMode := vmEditReview;
   UpdateModeButtons;
-  { TODO: switch to edit-review layout }
+  ShowEditReviewMode;
   UpdateStatus;
+end;
+
+procedure TProjectEditWindow.CreateReadModeControls;
+var
+  P: TThemePalette;
+begin
+  P := GetThemePalette(GetEffectiveTheme);
+
+  { Read mode container — same position as SplitPanel, initially hidden }
+  FReadContainer := TPanel.Create(Self);
+  FReadContainer.Parent := Self;
+  FReadContainer.BevelOuter := bvNone;
+  FReadContainer.Color := $00E8E8E8;
+  FReadContainer.Visible := False;
+
+  { Source label + change control at top center }
+  FReadSourceLabel := TLabel.Create(Self);
+  FReadSourceLabel.Parent := FReadContainer;
+  FReadSourceLabel.Alignment := taCenter;
+  FReadSourceLabel.AutoSize := False;
+  FReadSourceLabel.Font.Height := -14;
+  FReadSourceLabel.Font.Color := P.TextSecondary;
+  FReadSourceLabel.Cursor := crHandPoint;
+  FReadSourceLabel.OnClick := @btnChangeSourceClick;
+  FReadSourceLabel.Hint := 'Click to change source text';
+  FReadSourceLabel.ShowHint := True;
+
+  { Back tab — visible strip behind the main card, clickable to swap }
+  FReadBackTab := TPanel.Create(Self);
+  FReadBackTab.Parent := FReadContainer;
+  FReadBackTab.BevelOuter := bvNone;
+  FReadBackTab.Color := $00D8D8D8;
+  FReadBackTab.Cursor := crHandPoint;
+  FReadBackTab.OnClick := @ReadBackTabClick;
+
+  FReadBackTabLabel := TLabel.Create(Self);
+  FReadBackTabLabel.Parent := FReadBackTab;
+  FReadBackTabLabel.Alignment := taCenter;
+  FReadBackTabLabel.Layout := tlCenter;
+  FReadBackTabLabel.AutoSize := False;
+  FReadBackTabLabel.Font.Height := -13;
+  FReadBackTabLabel.Font.Color := $00606060;
+  FReadBackTabLabel.Cursor := crHandPoint;
+  FReadBackTabLabel.OnClick := @ReadBackTabClick;
+
+  { Main reading card }
+  FReadCard := TPanel.Create(Self);
+  FReadCard.Parent := FReadContainer;
+  FReadCard.BevelOuter := bvNone;
+  FReadCard.Color := clWhite;
+
+  FReadHtml := TIpHtmlPanel.Create(Self);
+  FReadHtml.Parent := FReadCard;
+  FReadHtml.Align := alClient;
+  FReadHtml.DefaultTypeFace := 'Roboto';
+  FReadHtml.DefaultFontSize := 14;
+  FReadHtml.BgColor := clWhite;
+  FReadHtml.BorderStyle := bsNone;
+
+  FReadShowingSource := True;
+end;
+
+procedure TProjectEditWindow.ShowReadMode;
+var
+  CardMargin, TopOffset, CardW, CardH: Integer;
+begin
+  SplitPanel.Visible := False;
+
+  FReadContainer.SetBounds(
+    SplitPanel.Left, SplitPanel.Top,
+    SplitPanel.Width, SplitPanel.Height);
+  FReadContainer.Anchors := [akTop, akLeft, akRight, akBottom];
+
+  { Source label at top center }
+  FReadSourceLabel.SetBounds(0, 4, FReadContainer.ClientWidth, 24);
+  if FSourceRC <> nil then
+    FReadSourceLabel.Caption := FSourceRC.LanguageCode + ' ' +
+      UpperCase(FSourceRC.ResourceType) + '  ✕'
+  else
+    FReadSourceLabel.Caption := 'No source';
+
+  TopOffset := 32;
+  CardMargin := 40;
+  CardW := FReadContainer.ClientWidth - (CardMargin * 2);
+  CardH := FReadContainer.ClientHeight - TopOffset - 12;
+
+  { Main card — full area minus space for back tab at bottom-right }
+  FReadCard.SetBounds(
+    CardMargin, TopOffset, CardW - 10, CardH - 30);
+
+  { Back tab — visible strip at bottom-right, offset to peek out }
+  FReadBackTab.SetBounds(
+    CardMargin + 10, TopOffset + 10, CardW - 10, CardH - 10);
+  FReadBackTab.SendToBack;
+  if FReadShowingSource then
+    FReadBackTabLabel.Caption := '  Translation (click to view)'
+  else
+    FReadBackTabLabel.Caption := '  Source (click to view)';
+  FReadBackTabLabel.SetBounds(0, CardH - 40 - 10, CardW - 10, 30);
+  FReadBackTabLabel.Alignment := taLeftJustify;
+  FReadCard.BringToFront;
+
+  FReadContainer.Visible := True;
+  FReadShowingSource := True;
+  LoadReadModeContent;
+end;
+
+procedure TProjectEditWindow.ShowEditReviewMode;
+begin
+  FReadContainer.Visible := False;
+  SplitPanel.Visible := True;
+end;
+
+procedure TProjectEditWindow.LoadReadModeContent;
+var
+  SourceChapter: TChapter;
+  Html, ChapterID: string;
+  Doc: TIpHtml;
+  SS: TStringStream;
+begin
+  if FSourceRC = nil then
+    Exit;
+  if (FCurrentChapterIndex < 0) or
+     (FCurrentChapterIndex >= FSourceRC.Book.Chapters.Count) then
+    Exit;
+
+  SourceChapter := FSourceRC.Book.Chapters[FCurrentChapterIndex];
+  ChapterID := SourceChapter.ID;
+
+  Html := BuildFullChapterHtml(ChapterID, SourceChapter, FReadShowingSource);
+
+  SS := TStringStream.Create(Html);
+  try
+    Doc := TIpHtml.Create;
+    Doc.LoadFromStream(SS);
+    FReadHtml.SetHtml(Doc);
+  finally
+    SS.Free;
+  end;
+
+  { Update back tab label }
+  if FReadShowingSource then
+    FReadBackTabLabel.Caption := 'Translation (click to view)'
+  else
+    FReadBackTabLabel.Caption := 'Source (click to view)';
+end;
+
+procedure TProjectEditWindow.ReadBackTabClick(Sender: TObject);
+begin
+  FReadShowingSource := not FReadShowingSource;
+  LoadReadModeContent;
+end;
+
+function TProjectEditWindow.BuildFullChapterHtml(const ChapterID: string;
+  ASourceChapter: TChapter; IsSource: Boolean): string;
+var
+  I: Integer;
+  BookName, Body: string;
+  ProjChapter: TChapter;
+  MergedText: string;
+begin
+  BookName := CanonicalBookName(FBookCode);
+  if BookName = '' then
+    BookName := FBookCode;
+
+  Result := '<html><body style="font-family:Roboto,sans-serif;' +
+    'padding:20px 40px;line-height:1.6;">';
+  Result := Result + '<h2 style="text-align:center;color:#333;' +
+    'font-weight:normal;margin-bottom:20px;">' +
+    UpperCase(BookName) + ' ' + ChapterID + '</h2>';
+
+  if IsSource then
+  begin
+    { Render all source chunks as continuous text }
+    for I := 0 to ASourceChapter.Chunks.Count - 1 do
+    begin
+      Body := UsxToHtml(ASourceChapter.Chunks[I].Content, '#5C6BC0');
+      if Body <> '' then
+        Result := Result + Body;
+    end;
+  end
+  else
+  begin
+    { Render merged translation text }
+    ProjChapter := nil;
+    if (FProject <> nil) and (FProject.Book <> nil) then
+      ProjChapter := FProject.Book.GetChapter(ChapterID);
+    if ProjChapter <> nil then
+    begin
+      MergedText := ProjChapter.MergeAllContent;
+      { Translation is USFM — render verse markers as superscript numbers }
+      Result := Result + '<p style="margin:0;text-indent:1em;">';
+      Result := Result + RenderUSFMAsHtml(MergedText);
+      Result := Result + '</p>';
+    end
+    else
+      Result := Result + '<p style="color:#999;text-align:center;">' +
+        'No translation yet</p>';
+  end;
+
+  Result := Result + '</body></html>';
 end;
 
 procedure TProjectEditWindow.lblChapterNumClick(Sender: TObject);
@@ -1004,6 +1223,7 @@ begin
   FCurrentViewMode := vmEditReview;
   ApplyFontRecursive(Self, 'Noto Sans');
   CreateRailControls;
+  CreateReadModeControls;
   btnMenu.OnClick := @btnMenuClick;
 
   SourceScrollBox.VertScrollBar.Smooth := True;
@@ -1140,6 +1360,14 @@ begin
     MI.Caption := rsMenuSettings;
     MI.OnClick := @OnMenuSettings;
     FEditMenu.Items.Add(MI);
+
+    if GetDeveloperTools then
+    begin
+      MI := TMenuItem.Create(FEditMenu);
+      MI.Caption := rsMenuDevTools;
+      MI.OnClick := @OnMenuDevTools;
+      FEditMenu.Items.Add(MI);
+    end;
   end;
 
   if Sender is TSpeedButton then
@@ -1207,6 +1435,11 @@ begin
     if NewTheme <> OldTheme then
       ApplyTheme;
   end;
+end;
+
+procedure TProjectEditWindow.OnMenuDevTools(Sender: TObject);
+begin
+  ShowDevToolsWindow;
 end;
 
 procedure TProjectEditWindow.OnMenuProjectReview(Sender: TObject);
@@ -2228,6 +2461,8 @@ begin
     RecalcAllChunkLayouts;
 
     UpdateChapterNav;
+    if FCurrentViewMode = vmRead then
+      LoadReadModeContent;
     UpdateStatus;
 
     { Some controls created during chunk panel build can steal focus and
