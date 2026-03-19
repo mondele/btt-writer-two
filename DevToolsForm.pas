@@ -299,9 +299,12 @@ begin
       LogGrid.EndUpdate;
     end;
 
-    { Scroll to bottom }
+    { Scroll to bottom on load }
     if LogGrid.RowCount > 1 then
+    begin
       LogGrid.TopRow := LogGrid.RowCount - 1;
+      LogGrid.Row := LogGrid.RowCount - 1;
+    end;
   finally
     SL.Free;
   end;

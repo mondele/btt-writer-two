@@ -1598,6 +1598,8 @@ var
   Item: TMenuItem;
   Found: Boolean;
 begin
+  LogFmt(llInfo, 'UpdateDevToolsMenuItem: GetDeveloperTools=%s, menu items=%d',
+    [BoolToStr(GetDeveloperTools, True), FMainMenu.Items.Count]);
   { Check if dev tools item already exists }
   Found := False;
   for I := 0 to FMainMenu.Items.Count - 1 do
@@ -1616,6 +1618,8 @@ begin
     Item.Caption := rsMenuDevTools;
     Item.OnClick := @MenuDevToolsClick;
     FMainMenu.Items.Add(Item);
+    LogFmt(llInfo, 'UpdateDevToolsMenuItem: added DevTools item, now %d items',
+      [FMainMenu.Items.Count]);
   end;
 end;
 
