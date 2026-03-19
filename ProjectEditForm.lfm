@@ -25,17 +25,6 @@ object ProjectEditWindow: TProjectEditWindow
     ParentBackground = False
     ParentColor = False
     TabOrder = 0
-    object btnBack: TButton
-      Left = 8
-      Height = 30
-      Top = 8
-      Width = 70
-      Caption = '<- Back'
-      Font.Color = clBlack
-      ParentFont = False
-      TabOrder = 0
-      OnClick = btnBackClick
-    end
     object lblProjectTitle: TLabel
       Left = 90
       Height = 17
@@ -47,53 +36,6 @@ object ProjectEditWindow: TProjectEditWindow
       Font.Style = [fsBold]
       ParentColor = False
       ParentFont = False
-    end
-    object lblChapterNav: TLabel
-      Left = 780
-      Height = 17
-      Top = 12
-      Width = 50
-      Alignment = taRightJustify
-      Anchors = [akTop, akRight]
-      Caption = 'Chapter'
-      Font.Color = clWhite
-      Font.Height = -14
-      ParentColor = False
-      ParentFont = False
-    end
-    object btnPrevChapter: TButton
-      Left = 840
-      Height = 30
-      Top = 8
-      Width = 30
-      Anchors = [akTop, akRight]
-      Caption = '<'
-      TabOrder = 1
-      OnClick = btnPrevChapterClick
-    end
-    object lblChapterNum: TLabel
-      Left = 902
-      Height = 17
-      Top = 12
-      Width = 18
-      Alignment = taCenter
-      Anchors = [akTop, akRight]
-      Caption = '01'
-      Font.Color = clWhite
-      Font.Height = -15
-      Font.Style = [fsBold]
-      ParentColor = False
-      ParentFont = False
-    end
-    object btnNextChapter: TButton
-      Left = 930
-      Height = 30
-      Top = 8
-      Width = 30
-      Anchors = [akTop, akRight]
-      Caption = '>'
-      TabOrder = 2
-      OnClick = btnNextChapterClick
     end
   end
   object StatusPanel: TPanel

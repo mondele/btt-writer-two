@@ -58,6 +58,8 @@ type
   end;
   TResourceSectionArray = array of TResourceSection;
 
+  TViewMode = (vmRead, vmEditReview, vmBlindEdit);
+
   TChunkPanel = class;
 
   { TProjectEditWindow }
@@ -66,12 +68,7 @@ type
     btnMenu: TSpeedButton;
     LeftRail: TPanel;
     TopPanel: TPanel;
-    btnBack: TButton;
     lblProjectTitle: TLabel;
-    lblChapterNav: TLabel;
-    btnPrevChapter: TButton;
-    lblChapterNum: TLabel;
-    btnNextChapter: TButton;
     StatusPanel: TPanel;
     lblStatus: TLabel;
     SplitPanel: TPanel;
@@ -99,6 +96,13 @@ type
     procedure btnPrevChapterClick(Sender: TObject);
     procedure btnNextChapterClick(Sender: TObject);
     procedure AutoSaveTimerFire(Sender: TObject);
+  private
+    { Controls created in code (not in LFM) }
+    btnBack: TSpeedButton;
+    btnPrevChapter: TSpeedButton;
+    lblChapterNum: TLabel;
+    btnNextChapter: TSpeedButton;
+    cmbChapterJump: TComboBox;
   private
     FProject: TProject;
     FSourceRC: TResourceContainer;
@@ -160,6 +164,20 @@ type
     FSourceProportion: Double;
     FResourceProportion: Double;
     FEditMenu: TPopupMenu;
+  private
+    { Left rail controls (created in code, not LFM) }
+    FCurrentViewMode: TViewMode;
+    btnHamburger: TSpeedButton;
+    btnModeRead: TSpeedButton;
+    btnModeEditReview: TSpeedButton;
+    pnlChapterNav: TPanel;
+    procedure CreateRailControls;
+    procedure UpdateRailLayout;
+    procedure UpdateModeButtons;
+    procedure btnModeReadClick(Sender: TObject);
+    procedure btnModeEditReviewClick(Sender: TObject);
+    procedure cmbChapterJumpChange(Sender: TObject);
+    procedure lblChapterNumClick(Sender: TObject);
   private
     { Loading splash }
     FLoadingSplash: TForm;
@@ -779,6 +797,198 @@ end;
 
 { ---- TProjectEditWindow ---- }
 
+procedure TProjectEditWindow.CreateRailControls;
+{ Build left sidebar controls in code. Icon captions use Unicode glyphs
+  as placeholders. TODO: replace with SVG/PNG image glyphs for a more
+  polished look across all platforms. }
+var
+  RW, Y: Integer;
+
+  function MakeRailButton(AParent: TWinControl; const ACaption: string;
+    ATop, AFontHeight: Integer): TSpeedButton;
+  begin
+    Result := TSpeedButton.Create(Self);
+    Result.Parent := AParent;
+    Result.Flat := True;
+    Result.Caption := ACaption;
+    Result.Font.Color := clWhite;
+    Result.Font.Height := AFontHeight;
+    Result.SetBounds(4, ATop, RW, 36);
+  end;
+
+begin
+  RW := LeftRail.ClientWidth - 8;
+  Y := 4;
+
+  { Home/Back — U+2302 ⌂ }
+  btnBack := MakeRailButton(LeftRail, '⌂', Y, -22);
+  btnBack.Hint := 'Home';
+  btnBack.ShowHint := True;
+  btnBack.OnClick := @btnBackClick;
+  Inc(Y, 40);
+
+  { Hamburger menu — U+2261 ≡ }
+  btnHamburger := MakeRailButton(LeftRail, '≡', Y, -22);
+  btnHamburger.Hint := 'Menu';
+  btnHamburger.ShowHint := True;
+  btnHamburger.OnClick := @btnMenuClick;
+  Inc(Y, 44);
+
+  { View mode buttons — TODO: replace captions with SVG/PNG icon glyphs }
+  btnModeRead := MakeRailButton(LeftRail, '☰', Y, -18);
+  btnModeRead.Hint := 'Read';
+  btnModeRead.ShowHint := True;
+  btnModeRead.GroupIndex := 1;
+  btnModeRead.OnClick := @btnModeReadClick;
+  Inc(Y, 38);
+
+  btnModeEditReview := MakeRailButton(LeftRail, '▥', Y, -18);
+  btnModeEditReview.Hint := 'Edit-Review';
+  btnModeEditReview.ShowHint := True;
+  btnModeEditReview.GroupIndex := 1;
+  btnModeEditReview.Down := True;
+  btnModeEditReview.OnClick := @btnModeEditReviewClick;
+
+  { Chapter nav group — centered vertically by UpdateRailLayout }
+  pnlChapterNav := TPanel.Create(Self);
+  pnlChapterNav.Parent := LeftRail;
+  pnlChapterNav.Width := RW;
+  pnlChapterNav.Height := 140;
+  pnlChapterNav.Left := 4;
+  pnlChapterNav.BevelOuter := bvNone;
+  pnlChapterNav.Color := LeftRail.Color;
+
+  { TODO: replace chevron captions with SVG/PNG icon glyphs }
+  btnPrevChapter := TSpeedButton.Create(Self);
+  btnPrevChapter.Parent := pnlChapterNav;
+  btnPrevChapter.Flat := True;
+  btnPrevChapter.Caption := '⊼';
+  btnPrevChapter.Font.Color := clWhite;
+  btnPrevChapter.Font.Height := -22;
+  btnPrevChapter.SetBounds(0, 0, RW, 36);
+  btnPrevChapter.OnClick := @btnPrevChapterClick;
+
+  { Chapter number — bordered label + dropdown combo for jumping }
+  with TShape.Create(Self) do
+  begin
+    Parent := pnlChapterNav;
+    SetBounds(4, 42, RW - 8, 30);
+    Shape := stRectangle;
+    Pen.Color := clWhite;
+    Brush.Style := bsClear;
+    SendToBack;
+  end;
+
+  lblChapterNum := TLabel.Create(Self);
+  lblChapterNum.Parent := pnlChapterNav;
+  lblChapterNum.Alignment := taCenter;
+  lblChapterNum.Layout := tlCenter;
+  lblChapterNum.AutoSize := False;
+  lblChapterNum.SetBounds(4, 42, RW - 8, 30);
+  lblChapterNum.Font.Color := clWhite;
+  lblChapterNum.Font.Height := -16;
+  lblChapterNum.Font.Style := [fsBold];
+  lblChapterNum.Caption := '01';
+  lblChapterNum.Cursor := crHandPoint;
+
+  { Hidden combo box for chapter jump — shown when label is clicked }
+  cmbChapterJump := TComboBox.Create(Self);
+  cmbChapterJump.Parent := pnlChapterNav;
+  cmbChapterJump.Style := csDropDownList;
+  cmbChapterJump.SetBounds(2, 42, RW - 4, 30);
+  cmbChapterJump.Visible := False;
+  cmbChapterJump.OnChange := @cmbChapterJumpChange;
+
+  { Click label to show dropdown }
+  lblChapterNum.OnClick := @lblChapterNumClick;
+
+  btnNextChapter := TSpeedButton.Create(Self);
+  btnNextChapter.Parent := pnlChapterNav;
+  btnNextChapter.Flat := True;
+  btnNextChapter.Caption := '⊻';
+  btnNextChapter.Font.Color := clWhite;
+  btnNextChapter.Font.Height := -22;
+  btnNextChapter.SetBounds(0, 80, RW, 36);
+  btnNextChapter.OnClick := @btnNextChapterClick;
+
+  { Three-dot menu at bottom — TODO: replace with SVG/PNG icon glyph }
+  btnMenu.SetBounds(4, 0, RW, 36);
+  btnMenu.Anchors := [akLeft, akBottom, akRight];
+  btnMenu.Top := LeftRail.ClientHeight - 40;
+end;
+
+procedure TProjectEditWindow.UpdateRailLayout;
+begin
+  { Center chapter nav group vertically in the rail }
+  if pnlChapterNav <> nil then
+  begin
+    pnlChapterNav.Left := 4;
+    pnlChapterNav.Top := (LeftRail.ClientHeight - pnlChapterNav.Height) div 2;
+  end;
+end;
+
+procedure TProjectEditWindow.UpdateModeButtons;
+begin
+  btnModeRead.Down := (FCurrentViewMode = vmRead);
+  btnModeEditReview.Down := (FCurrentViewMode = vmEditReview);
+end;
+
+procedure TProjectEditWindow.btnModeReadClick(Sender: TObject);
+begin
+  if FCurrentViewMode = vmRead then
+    Exit;
+  SaveCurrentChapter;
+  FCurrentViewMode := vmRead;
+  UpdateModeButtons;
+  { TODO: switch to read-mode layout }
+  UpdateStatus;
+end;
+
+procedure TProjectEditWindow.btnModeEditReviewClick(Sender: TObject);
+begin
+  if FCurrentViewMode = vmEditReview then
+    Exit;
+  FCurrentViewMode := vmEditReview;
+  UpdateModeButtons;
+  { TODO: switch to edit-review layout }
+  UpdateStatus;
+end;
+
+procedure TProjectEditWindow.lblChapterNumClick(Sender: TObject);
+var
+  I: Integer;
+begin
+  if FSourceRC = nil then
+    Exit;
+  { Populate combo with chapter IDs }
+  cmbChapterJump.Items.Clear;
+  for I := 0 to FSourceRC.Book.Chapters.Count - 1 do
+    cmbChapterJump.Items.Add(FSourceRC.Book.Chapters[I].ID);
+  if (FCurrentChapterIndex >= 0) and
+     (FCurrentChapterIndex < cmbChapterJump.Items.Count) then
+    cmbChapterJump.ItemIndex := FCurrentChapterIndex;
+  { Show the combo in place of the label }
+  lblChapterNum.Visible := False;
+  cmbChapterJump.Visible := True;
+  cmbChapterJump.DroppedDown := True;
+  cmbChapterJump.SetFocus;
+end;
+
+procedure TProjectEditWindow.cmbChapterJumpChange(Sender: TObject);
+var
+  NewIndex: Integer;
+begin
+  NewIndex := cmbChapterJump.ItemIndex;
+  { Hide combo, show label again }
+  cmbChapterJump.Visible := False;
+  lblChapterNum.Visible := True;
+  if (NewIndex >= 0) and (NewIndex <> FCurrentChapterIndex) then
+  begin
+    SaveCurrentChapter;
+    LoadChapter(NewIndex);
+  end;
+end;
+
 procedure TProjectEditWindow.FormCreate(Sender: TObject);
 begin
   LogFmt(llInfo, 'ProjectEditForm.FormCreate self=%p', [Pointer(Self)]);
@@ -791,7 +1001,9 @@ begin
   FSelectedChunkIndex := -1;
   FLayoutDirection := 'ltr';
   FLastResourcePos := 0;
+  FCurrentViewMode := vmEditReview;
   ApplyFontRecursive(Self, 'Noto Sans');
+  CreateRailControls;
   btnMenu.OnClick := @btnMenuClick;
 
   SourceScrollBox.VertScrollBar.Smooth := True;
@@ -862,6 +1074,7 @@ begin
     ResourcePanel.Width := ResW;
   end;
 
+  UpdateRailLayout;
   RecalcAllChunkLayouts;
 end;
 
@@ -929,7 +1142,11 @@ begin
     FEditMenu.Items.Add(MI);
   end;
 
-  Pt := btnMenu.ClientToScreen(Point(0, btnMenu.Height));
+  if Sender is TSpeedButton then
+    Pt := TSpeedButton(Sender).ClientToScreen(
+      Point(TSpeedButton(Sender).Width, 0))
+  else
+    Pt := btnMenu.ClientToScreen(Point(0, btnMenu.Height));
   FEditMenu.PopUp(Pt.X, Pt.Y);
 end;
 
@@ -1792,14 +2009,20 @@ begin
   TransPanel.Color := P.PanelBg;
   ResourcePanel.Color := P.SecondaryPanelBg;
   lblProjectTitle.Font.Color := P.HeaderText;
-  lblChapterNav.Font.Color := P.HeaderText;
-  lblChapterNum.Font.Color := P.HeaderText;
+  lblChapterNum.Font.Color := clWhite;
   lblSourceHeader.Font.Color := P.TextPrimary;
   SourceLangHeader.Font.Color := P.TextSecondary;
   lblTransHeader.Font.Color := P.TextPrimary;
   lblTransLangHeader.Font.Color := P.TextSecondary;
   lblStatus.Font.Color := P.HeaderText;
   btnMenu.Font.Color := P.RailText;
+  btnBack.Font.Color := P.RailText;
+  btnHamburger.Font.Color := P.RailText;
+  btnModeRead.Font.Color := P.RailText;
+  btnModeEditReview.Font.Color := P.RailText;
+  btnPrevChapter.Font.Color := P.RailText;
+  btnNextChapter.Font.Color := P.RailText;
+  pnlChapterNav.Color := P.RailBg;
 end;
 
 { Ensure companion resources (tn, tq, tw) are available for a Bible source text.
@@ -2026,7 +2249,7 @@ begin
       SetSelectedChunkIndex(0)
     else
       FSelectedChunkIndex := -1;
-    ActiveControl := btnBack;
+    ActiveControl := SourceScrollBox;
 
     { TIpHtmlPanel.GetContentSize returns accurate values only after the
       panel has been painted.  Fire a one-shot timer so the recalc runs
