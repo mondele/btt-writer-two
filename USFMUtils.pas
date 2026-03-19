@@ -36,10 +36,18 @@ type
   end;
   TUSFMVerseArray = array of TUSFMVerse;
 
+  TUSFMParseWarning = record
+    Line: Integer;       { 1-based line number (0 if not line-specific) }
+    Col: Integer;        { 1-based column (0 if not applicable) }
+    Msg: string;
+  end;
+  TUSFMParseWarningArray = array of TUSFMParseWarning;
+
   TUSFMParseResult = record
     BookID: string;      { from \id line }
     BookTitle: string;   { from \h or \mt }
     Verses: TUSFMVerseArray;
+    Warnings: TUSFMParseWarningArray;
   end;
 
 function ParseUSFMFile(const FilePath: string; out ParseResult: TUSFMParseResult;
@@ -439,18 +447,284 @@ begin
     Result := Result + '</p>';
 end;
 
+{ ----- Fault-tolerant USFM tokenizer/parser -----
+
+  Scans character-by-character for \marker patterns. Handles multiple
+  markers per line, stray/duplicate markers, missing numbers, typos
+  like /v or \c., and inline footnotes. Produces a chapter/verse
+  structure even from badly malformed input, logging warnings for
+  every anomaly encountered. }
+
+type
+  TUSFMTokenKind = (
+    tkId, tkIde, tkH, tkToc, tkMt, tkCl,
+    tkChapter, tkVerse, tkParagraph, tkBlank,
+    tkFootnoteOpen, tkFootnoteClose,
+    tkSection, tkOther, tkText
+  );
+
+  TUSFMToken = record
+    Kind: TUSFMTokenKind;
+    Marker: string;   { e.g. 'c', 'v', 'p', 'f', 'id' }
+    Arg: string;      { text after marker+space, up to next marker }
+    Line: Integer;    { source line (1-based) }
+    Col: Integer;     { source column (1-based) }
+  end;
+  TUSFMTokenArray = array of TUSFMToken;
+
+function IsUSFMMarkerChar(C: Char): Boolean; inline;
+begin
+  Result := C in ['a'..'z', 'A'..'Z', '0'..'9'];
+end;
+
+function ClassifyMarker(const Marker: string): TUSFMTokenKind;
+var
+  M: string;
+begin
+  M := LowerCase(Marker);
+  if M = 'id' then Result := tkId
+  else if M = 'ide' then Result := tkIde
+  else if M = 'h' then Result := tkH
+  else if (M = 'toc1') or (M = 'toc2') or (M = 'toc3') or
+          (M = 'toca1') or (M = 'toca2') or (M = 'toca3') then Result := tkToc
+  else if (M = 'mt') or (M = 'mt1') or (M = 'mt2') or (M = 'mt3') then Result := tkMt
+  else if M = 'cl' then Result := tkCl
+  else if M = 'c' then Result := tkChapter
+  else if M = 'v' then Result := tkVerse
+  else if (M = 'p') or (M = 'po') or (M = 'pr') or (M = 'pm') or
+          (M = 'pmo') or (M = 'pms') or (M = 'pi') or (M = 'pi1') or
+          (M = 'pi2') or (M = 'pi3') or (M = 'pc') or (M = 'm') or
+          (M = 'q') or (M = 'q1') or (M = 'q2') or (M = 'q3') or
+          (M = 'q4') or (M = 'qr') or (M = 'qm') or (M = 'qm1') or
+          (M = 'qm2') or (M = 'li') or (M = 'li1') or (M = 'li2') or
+          (M = 'tr') then Result := tkParagraph
+  else if M = 'b' then Result := tkBlank
+  else if (M = 'f') or (M = 'fe') or (M = 'x') then Result := tkFootnoteOpen
+  else if (M = 'f*') or (M = 'fe*') or (M = 'x*') then Result := tkFootnoteClose
+  else if (M = 's') or (M = 's1') or (M = 's2') or (M = 's3') or
+          (M = 's4') or (M = 's5') or (M = 'd') or (M = 'r') or
+          (M = 'ms') or (M = 'ms1') or (M = 'ms2') or (M = 'mr') or
+          (M = 'sp') then Result := tkSection
+  else Result := tkOther;
+end;
+
+{ Tokenize raw USFM text into a flat token array.
+  Handles:
+  - Multiple markers per line
+  - \marker with no space before next marker
+  - Closing markers like \f* (star suffix)
+  - Stray punctuation after markers (e.g. \c.)
+  - Forward-slash typos (/v)  }
+function TokenizeUSFM(const Text: string; out Warnings: TUSFMParseWarningArray): TUSFMTokenArray;
+var
+  Tokens: TUSFMTokenArray;
+  TokenCount, WarnCount: Integer;
+  P, Len, MarkerStart, MarkerEnd, ArgStart, ArgEnd: Integer;
+  CurLine, CurCol, LineStart: Integer;
+  Marker, Arg: string;
+  Ch: Char;
+  InFootnote: Boolean;
+
+  procedure AddToken(AKind: TUSFMTokenKind; const AMarker, AArg: string;
+    ALine, ACol: Integer);
+  begin
+    if TokenCount >= Length(Tokens) then
+      SetLength(Tokens, Length(Tokens) + 256);
+    Tokens[TokenCount].Kind := AKind;
+    Tokens[TokenCount].Marker := AMarker;
+    Tokens[TokenCount].Arg := AArg;
+    Tokens[TokenCount].Line := ALine;
+    Tokens[TokenCount].Col := ACol;
+    Inc(TokenCount);
+  end;
+
+  procedure AddWarning(ALine, ACol: Integer; const AMsg: string);
+  begin
+    if WarnCount >= Length(Warnings) then
+      SetLength(Warnings, Length(Warnings) + 32);
+    Warnings[WarnCount].Line := ALine;
+    Warnings[WarnCount].Col := ACol;
+    Warnings[WarnCount].Msg := AMsg;
+    Inc(WarnCount);
+  end;
+
+  procedure TrackPosition;
+  begin
+    while (LineStart < P) do
+    begin
+      if Text[LineStart] = #10 then
+      begin
+        Inc(CurLine);
+        CurCol := 1;
+      end
+      else
+        Inc(CurCol);
+      Inc(LineStart);
+    end;
+  end;
+
+begin
+  SetLength(Tokens, 256);
+  SetLength(Warnings, 32);
+  TokenCount := 0;
+  WarnCount := 0;
+  Len := Length(Text);
+  P := 1;
+  CurLine := 1;
+  CurCol := 1;
+  LineStart := 1;
+  InFootnote := False;
+
+  while P <= Len do
+  begin
+    Ch := Text[P];
+
+    { Detect marker: backslash (or forward-slash typo) followed by letter }
+    if ((Ch = '\') or (Ch = '/')) and (P + 1 <= Len) and
+       (Text[P + 1] in ['a'..'z', 'A'..'Z']) then
+    begin
+      TrackPosition;
+
+      if Ch = '/' then
+        AddWarning(CurLine, CurCol,
+          'Forward slash used instead of backslash — treating as marker');
+
+      MarkerStart := P + 1;
+      MarkerEnd := MarkerStart;
+      while (MarkerEnd <= Len) and IsUSFMMarkerChar(Text[MarkerEnd]) do
+        Inc(MarkerEnd);
+
+      { Check for closing marker star: \f* }
+      if (MarkerEnd <= Len) and (Text[MarkerEnd] = '*') then
+        Inc(MarkerEnd);
+
+      Marker := Copy(Text, MarkerStart, MarkerEnd - MarkerStart);
+
+      { Skip stray punctuation after marker (e.g. \c. or \c,) }
+      if (MarkerEnd <= Len) and (Text[MarkerEnd] in ['.', ',', ';', ':']) and
+         (Marker <> '') and (Pos('*', Marker) = 0) then
+      begin
+        AddWarning(CurLine, CurCol,
+          'Stray "' + Text[MarkerEnd] + '" after \' + Marker + ' — ignored');
+        Inc(MarkerEnd);
+      end;
+
+      { Skip whitespace after marker }
+      while (MarkerEnd <= Len) and (Text[MarkerEnd] in [' ', #9]) do
+        Inc(MarkerEnd);
+
+      { Collect argument text until next marker or end of line }
+      ArgStart := MarkerEnd;
+      ArgEnd := ArgStart;
+      while (ArgEnd <= Len) do
+      begin
+        if (Text[ArgEnd] = '\') or
+           ((Text[ArgEnd] = '/') and (ArgEnd + 1 <= Len) and
+            (Text[ArgEnd + 1] in ['a'..'z', 'A'..'Z'])) then
+          Break;
+        if Text[ArgEnd] = #10 then
+        begin
+          Inc(ArgEnd);
+          Break;
+        end;
+        Inc(ArgEnd);
+      end;
+
+      Arg := Trim(Copy(Text, ArgStart, ArgEnd - ArgStart));
+      P := ArgEnd;
+
+      { Track footnote state }
+      if ClassifyMarker(Marker) = tkFootnoteOpen then
+        InFootnote := True
+      else if ClassifyMarker(Marker) = tkFootnoteClose then
+        InFootnote := False;
+
+      AddToken(ClassifyMarker(Marker), Marker, Arg, CurLine, CurCol);
+    end
+    else if Ch in [#10, #13] then
+    begin
+      { Line break — skip }
+      if (Ch = #13) and (P + 1 <= Len) and (Text[P + 1] = #10) then
+        Inc(P);
+      Inc(P);
+      Inc(CurLine);
+      CurCol := 1;
+      LineStart := P;
+    end
+    else
+    begin
+      { Plain text — collect until next marker or line break }
+      TrackPosition;
+      ArgStart := P;
+      while (P <= Len) and not (Text[P] in ['\', '/', #10, #13]) do
+      begin
+        { Forward slash is only a marker if followed by letter }
+        if (Text[P] = '/') then
+        begin
+          if (P + 1 <= Len) and (Text[P + 1] in ['a'..'z', 'A'..'Z']) then
+            Break;
+        end;
+        Inc(P);
+      end;
+      Arg := Trim(Copy(Text, ArgStart, P - ArgStart));
+      if Arg <> '' then
+        AddToken(tkText, '', Arg, CurLine, CurCol);
+    end;
+  end;
+
+  SetLength(Tokens, TokenCount);
+  SetLength(Warnings, WarnCount);
+  Result := Tokens;
+end;
+
+{ Build chapter/verse structure from token array }
 function ParseUSFMFile(const FilePath: string; out ParseResult: TUSFMParseResult;
   out ErrorMsg: string): Boolean;
 var
   SL: TStringList;
-  I, CurChapter, CurVerse: Integer;
-  Line, Trimmed, Token, Rest: string;
-  SpacePos: Integer;
-  VerseCount: Integer;
+  FullText: string;
+  Tokens: TUSFMTokenArray;
+  TokenWarnings: TUSFMParseWarningArray;
+  I, CurChapter, CurVerse, VerseCount, WarnCount: Integer;
+  Tok: TUSFMToken;
+  NumStr, VerseText: string;
+  SpacePos, Num: Integer;
+  SeenChapter: Integer;  { track last valid \c number to detect duplicates }
+  InFootnote: Boolean;
+  FootnoteText: string;
+
+  procedure AddWarning(ALine, ACol: Integer; const AMsg: string);
+  begin
+    if WarnCount >= Length(ParseResult.Warnings) then
+      SetLength(ParseResult.Warnings, Length(ParseResult.Warnings) + 32);
+    ParseResult.Warnings[WarnCount].Line := ALine;
+    ParseResult.Warnings[WarnCount].Col := ACol;
+    ParseResult.Warnings[WarnCount].Msg := AMsg;
+    Inc(WarnCount);
+  end;
+
+  procedure EmitVerse(AChapter, AVerse: Integer; const AContent: string);
+  begin
+    Inc(VerseCount);
+    if VerseCount > Length(ParseResult.Verses) then
+      SetLength(ParseResult.Verses, Length(ParseResult.Verses) + 128);
+    ParseResult.Verses[VerseCount - 1].Chapter := AChapter;
+    ParseResult.Verses[VerseCount - 1].Verse := AVerse;
+    ParseResult.Verses[VerseCount - 1].Content := AContent;
+  end;
+
+  procedure AppendToLastVerse(const AText: string);
+  begin
+    if VerseCount > 0 then
+      ParseResult.Verses[VerseCount - 1].Content :=
+        ParseResult.Verses[VerseCount - 1].Content + ' ' + AText;
+  end;
+
 begin
   Result := False;
   ParseResult := Default(TUSFMParseResult);
   ErrorMsg := '';
+  WarnCount := 0;
 
   if not FileExists(FilePath) then
   begin
@@ -461,106 +735,195 @@ begin
   SL := TStringList.Create;
   try
     SL.LoadFromFile(FilePath);
-    CurChapter := 0;
-    CurVerse := 0;
-    VerseCount := 0;
-    SetLength(ParseResult.Verses, 0);
-
-    for I := 0 to SL.Count - 1 do
-    begin
-      Line := SL[I];
-      Trimmed := Trim(Line);
-      if Trimmed = '' then
-        Continue;
-
-      { Check for markers }
-      if (Length(Trimmed) > 1) and (Trimmed[1] = '\') then
-      begin
-        { Extract marker token }
-        SpacePos := Pos(' ', Trimmed);
-        if SpacePos > 0 then
-        begin
-          Token := Copy(Trimmed, 1, SpacePos - 1);
-          Rest := Trim(Copy(Trimmed, SpacePos + 1, Length(Trimmed)));
-        end
-        else
-        begin
-          Token := Trimmed;
-          Rest := '';
-        end;
-
-        if Token = '\id' then
-        begin
-          { \id BOOK description }
-          SpacePos := Pos(' ', Rest);
-          if SpacePos > 0 then
-            ParseResult.BookID := Copy(Rest, 1, SpacePos - 1)
-          else
-            ParseResult.BookID := Rest;
-          Continue;
-        end
-        else if Token = '\h' then
-        begin
-          if ParseResult.BookTitle = '' then
-            ParseResult.BookTitle := Rest;
-          Continue;
-        end
-        else if Token = '\mt' then
-        begin
-          if ParseResult.BookTitle = '' then
-            ParseResult.BookTitle := Rest;
-          Continue;
-        end
-        else if Token = '\c' then
-        begin
-          CurChapter := StrToIntDef(Rest, CurChapter + 1);
-          CurVerse := 0;
-          Continue;
-        end
-        else if Token = '\v' then
-        begin
-          { \v NUM text... }
-          SpacePos := Pos(' ', Rest);
-          if SpacePos > 0 then
-          begin
-            CurVerse := StrToIntDef(Copy(Rest, 1, SpacePos - 1), CurVerse + 1);
-            Rest := Trimmed; { keep the full \v line }
-          end
-          else
-          begin
-            CurVerse := StrToIntDef(Rest, CurVerse + 1);
-            Rest := Trimmed;
-          end;
-
-          Inc(VerseCount);
-          SetLength(ParseResult.Verses, VerseCount);
-          ParseResult.Verses[VerseCount - 1].Chapter := CurChapter;
-          ParseResult.Verses[VerseCount - 1].Verse := CurVerse;
-          ParseResult.Verses[VerseCount - 1].Content := Rest;
-          Continue;
-        end
-        else if (Token = '\p') or (Token = '\s') or (Token = '\s5') or
-                (Token = '\d') or (Token = '\ide') or (Token = '\toc1') or
-                (Token = '\toc2') or (Token = '\toc3') or (Token = '\mt1') or
-                (Token = '\mt2') then
-        begin
-          { Known structural markers — skip }
-          Continue;
-        end;
-      end;
-
-      { Non-marker line or continuation — append to last verse if any }
-      if VerseCount > 0 then
-        ParseResult.Verses[VerseCount - 1].Content :=
-          ParseResult.Verses[VerseCount - 1].Content + ' ' + Trimmed;
-    end;
-
-    Result := ParseResult.BookID <> '';
-    if not Result then
-      ErrorMsg := 'No \id marker found in USFM file.';
+    FullText := SL.Text;
   finally
     SL.Free;
   end;
+
+  Tokens := TokenizeUSFM(FullText, TokenWarnings);
+
+  { Copy tokenizer warnings }
+  SetLength(ParseResult.Warnings, Length(TokenWarnings) + 32);
+  for I := 0 to Length(TokenWarnings) - 1 do
+  begin
+    ParseResult.Warnings[I] := TokenWarnings[I];
+    Inc(WarnCount);
+  end;
+
+  CurChapter := 0;
+  CurVerse := 0;
+  VerseCount := 0;
+  SeenChapter := -1;
+  InFootnote := False;
+
+  for I := 0 to Length(Tokens) - 1 do
+  begin
+    Tok := Tokens[I];
+
+    case Tok.Kind of
+      tkId:
+      begin
+        { \id BOOK rest-of-line }
+        SpacePos := Pos(' ', Tok.Arg);
+        if SpacePos > 0 then
+          ParseResult.BookID := Trim(Copy(Tok.Arg, 1, SpacePos - 1))
+        else
+          ParseResult.BookID := Trim(Tok.Arg);
+      end;
+
+      tkH:
+      begin
+        if ParseResult.BookTitle = '' then
+          ParseResult.BookTitle := Tok.Arg;
+      end;
+
+      tkMt:
+      begin
+        if ParseResult.BookTitle = '' then
+          ParseResult.BookTitle := Tok.Arg;
+      end;
+
+      tkChapter:
+      begin
+        { Extract chapter number from arg }
+        NumStr := Tok.Arg;
+        { Strip anything after the number (e.g. "\c 1 \c \v 1 text") }
+        SpacePos := 1;
+        while (SpacePos <= Length(NumStr)) and
+              (NumStr[SpacePos] in ['0'..'9']) do
+          Inc(SpacePos);
+        NumStr := Copy(NumStr, 1, SpacePos - 1);
+
+        Num := StrToIntDef(NumStr, 0);
+        if Num = 0 then
+        begin
+          { Bare \c with no valid number — skip }
+          AddWarning(Tok.Line, Tok.Col,
+            '\c marker with no valid chapter number — ignored');
+          Continue;
+        end;
+
+        if Num = SeenChapter then
+        begin
+          { Duplicate chapter marker (e.g. \c 01 then \c 1) — skip }
+          AddWarning(Tok.Line, Tok.Col,
+            'Duplicate \c ' + IntToStr(Num) + ' — ignored');
+          Continue;
+        end;
+
+        CurChapter := Num;
+        SeenChapter := Num;
+        CurVerse := 0;
+      end;
+
+      tkVerse:
+      begin
+        if CurChapter = 0 then
+        begin
+          { Verse before any chapter — assume chapter 1 }
+          CurChapter := 1;
+          SeenChapter := 1;
+          AddWarning(Tok.Line, Tok.Col,
+            '\v before any \c marker — assuming chapter 1');
+        end;
+
+        { Extract verse number }
+        NumStr := '';
+        SpacePos := 1;
+        while (SpacePos <= Length(Tok.Arg)) and
+              (Tok.Arg[SpacePos] in ['0'..'9', '-']) do
+          Inc(SpacePos);
+        NumStr := Copy(Tok.Arg, 1, SpacePos - 1);
+
+        { Handle verse ranges like "1-3" — take the first number }
+        if Pos('-', NumStr) > 0 then
+          NumStr := Copy(NumStr, 1, Pos('-', NumStr) - 1);
+
+        Num := StrToIntDef(NumStr, 0);
+        if Num = 0 then
+        begin
+          AddWarning(Tok.Line, Tok.Col,
+            '\v marker with no valid verse number — ignored');
+          { Append arg text to previous verse if any }
+          VerseText := Trim(Copy(Tok.Arg, SpacePos, MaxInt));
+          if VerseText <> '' then
+            AppendToLastVerse(VerseText);
+          Continue;
+        end;
+
+        CurVerse := Num;
+        VerseText := Trim(Copy(Tok.Arg, SpacePos, MaxInt));
+        EmitVerse(CurChapter, CurVerse,
+          '\v ' + IntToStr(CurVerse) + ' ' + VerseText);
+      end;
+
+      tkFootnoteOpen:
+      begin
+        InFootnote := True;
+        FootnoteText := '\f ' + Tok.Arg;
+      end;
+
+      tkFootnoteClose:
+      begin
+        if InFootnote then
+        begin
+          FootnoteText := FootnoteText + ' \f*';
+          { Attach footnote to current verse }
+          AppendToLastVerse(FootnoteText);
+          InFootnote := False;
+        end;
+      end;
+
+      tkBlank:
+      begin
+        { \b — blank line marker used inline is a common error; skip it }
+        if Tok.Arg <> '' then
+        begin
+          AddWarning(Tok.Line, Tok.Col,
+            '\b marker has text content — treating as verse continuation');
+          AppendToLastVerse(Tok.Arg);
+        end;
+      end;
+
+      tkParagraph, tkSection, tkCl:
+      begin
+        { Structural markers — ignore, but if they have text that looks
+          like verse content (after all inline \v have been extracted by
+          the tokenizer), keep it }
+      end;
+
+      tkText:
+      begin
+        if InFootnote then
+          FootnoteText := FootnoteText + ' ' + Tok.Arg
+        else
+          AppendToLastVerse(Tok.Arg);
+      end;
+
+      tkIde, tkToc:
+      begin
+        { Header markers — skip }
+      end;
+
+      tkOther:
+      begin
+        { Unknown marker — warn and pass through text }
+        AddWarning(Tok.Line, Tok.Col,
+          'Unknown marker \' + Tok.Marker + ' — passed through');
+        if InFootnote then
+          FootnoteText := FootnoteText + ' \' + Tok.Marker + ' ' + Tok.Arg
+        else if Tok.Arg <> '' then
+          AppendToLastVerse('\' + Tok.Marker + ' ' + Tok.Arg);
+      end;
+    end;
+  end;
+
+  SetLength(ParseResult.Verses, VerseCount);
+  SetLength(ParseResult.Warnings, WarnCount);
+
+  Result := ParseResult.BookID <> '';
+  if not Result then
+    ErrorMsg := 'No \id marker found in USFM file.';
 end;
 
 end.
