@@ -171,12 +171,14 @@ type
     FCurrentViewMode: TViewMode;
     btnHamburger: TSpeedButton;
     btnModeRead: TSpeedButton;
+    btnModeBlindEdit: TSpeedButton;
     btnModeEditReview: TSpeedButton;
     pnlChapterNav: TPanel;
     procedure CreateRailControls;
     procedure UpdateRailLayout;
     procedure UpdateModeButtons;
     procedure btnModeReadClick(Sender: TObject);
+    procedure btnModeBlindEditClick(Sender: TObject);
     procedure btnModeEditReviewClick(Sender: TObject);
     procedure cmbChapterJumpChange(Sender: TObject);
     procedure lblChapterNumClick(Sender: TObject);
@@ -843,29 +845,38 @@ begin
   btnBack.Hint := 'Home';
   btnBack.ShowHint := True;
   btnBack.OnClick := @btnBackClick;
-  Inc(Y, 40);
-
-  { Hamburger menu — U+2261 ≡ }
-  btnHamburger := MakeRailButton(LeftRail, '≡', Y, -22);
-  btnHamburger.Hint := 'Menu';
-  btnHamburger.ShowHint := True;
-  btnHamburger.OnClick := @btnMenuClick;
   Inc(Y, 44);
 
   { View mode buttons — TODO: replace captions with SVG/PNG icon glyphs }
-  btnModeRead := MakeRailButton(LeftRail, '☰', Y, -18);
+  btnModeRead := MakeRailButton(LeftRail, '⊞', Y, -18);
   btnModeRead.Hint := 'Read';
   btnModeRead.ShowHint := True;
   btnModeRead.GroupIndex := 1;
+  btnModeRead.Down := (FCurrentViewMode = vmRead);
   btnModeRead.OnClick := @btnModeReadClick;
+  Inc(Y, 38);
+
+  btnModeBlindEdit := MakeRailButton(LeftRail, '⊡', Y, -18);
+  btnModeBlindEdit.Hint := 'Blind Draft';
+  btnModeBlindEdit.ShowHint := True;
+  btnModeBlindEdit.GroupIndex := 1;
+  btnModeBlindEdit.Down := (FCurrentViewMode = vmBlindEdit);
+  btnModeBlindEdit.OnClick := @btnModeBlindEditClick;
   Inc(Y, 38);
 
   btnModeEditReview := MakeRailButton(LeftRail, '▥', Y, -18);
   btnModeEditReview.Hint := 'Edit-Review';
   btnModeEditReview.ShowHint := True;
   btnModeEditReview.GroupIndex := 1;
-  btnModeEditReview.Down := True;
+  btnModeEditReview.Down := (FCurrentViewMode = vmEditReview);
   btnModeEditReview.OnClick := @btnModeEditReviewClick;
+  Inc(Y, 44);
+
+  { Hamburger menu — U+2261 ≡ }
+  btnHamburger := MakeRailButton(LeftRail, '≡', Y, -22);
+  btnHamburger.Hint := 'Menu';
+  btnHamburger.ShowHint := True;
+  btnHamburger.OnClick := @btnMenuClick;
 
   { Chapter nav group — centered vertically by UpdateRailLayout }
   pnlChapterNav := TPanel.Create(Self);
@@ -948,6 +959,7 @@ end;
 procedure TProjectEditWindow.UpdateModeButtons;
 begin
   btnModeRead.Down := (FCurrentViewMode = vmRead);
+  btnModeBlindEdit.Down := (FCurrentViewMode = vmBlindEdit);
   btnModeEditReview.Down := (FCurrentViewMode = vmEditReview);
 end;
 
@@ -960,6 +972,20 @@ begin
   UpdateModeButtons;
   ShowReadMode;
   UpdateStatus;
+end;
+
+procedure TProjectEditWindow.btnModeBlindEditClick(Sender: TObject);
+begin
+  if FCurrentViewMode = vmBlindEdit then
+    Exit;
+  SaveCurrentChapter;
+  FCurrentViewMode := vmBlindEdit;
+  UpdateModeButtons;
+  { TODO: switch to blind draft layout }
+  ShowMessage('Blind Draft mode is not yet implemented.');
+  { Fall back to current mode }
+  FCurrentViewMode := vmRead;
+  UpdateModeButtons;
 end;
 
 procedure TProjectEditWindow.btnModeEditReviewClick(Sender: TObject);
@@ -1220,7 +1246,7 @@ begin
   FSelectedChunkIndex := -1;
   FLayoutDirection := 'ltr';
   FLastResourcePos := 0;
-  FCurrentViewMode := vmEditReview;
+  FCurrentViewMode := vmRead;
   ApplyFontRecursive(Self, 'Noto Sans');
   CreateRailControls;
   CreateReadModeControls;
@@ -2139,6 +2165,13 @@ begin
       ShowLoadingSplash(rsLoadingChapter);
     end;
 
+    { Show the appropriate view mode }
+    if FCurrentViewMode = vmRead then
+      ShowReadMode
+    else
+      ShowEditReviewMode;
+    UpdateModeButtons;
+
     { Load first chapter (skip 'front' if present) }
     UpdateLoadingSplash(rsLoadingChapter, 85);
     if FSourceRC.Book.Chapters.Count > 0 then
@@ -2252,6 +2285,7 @@ begin
   btnBack.Font.Color := P.RailText;
   btnHamburger.Font.Color := P.RailText;
   btnModeRead.Font.Color := P.RailText;
+  btnModeBlindEdit.Font.Color := P.RailText;
   btnModeEditReview.Font.Color := P.RailText;
   btnPrevChapter.Font.Color := P.RailText;
   btnNextChapter.Font.Color := P.RailText;
