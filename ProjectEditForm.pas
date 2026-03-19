@@ -613,12 +613,12 @@ begin
 end;
 
 function WrapInHtmlDoc(const ABody, AFontName: string; AFontSize: Integer;
-  ABgColor: TColor): string;
+  ABgColor: TColor; const ADirection: string = 'ltr'): string;
 begin
   Result := '<html><head><style>' +
     'body { font-family: ' + AFontName + '; font-size: ' + IntToStr(AFontSize) +
     'pt; margin: 4px; background-color: ' + ColorToHtmlHex(ABgColor) + '; }' +
-    '</style></head><body>' + ABody + '</body></html>';
+    '</style></head><body dir="' + ADirection + '">' + ABody + '</body></html>';
 end;
 
 { Process wiki-style links and pass through other content }
@@ -1153,7 +1153,7 @@ function TProjectEditWindow.BuildFullChapterHtml(const ChapterID: string;
   ASourceChapter: TChapter; IsSource: Boolean): string;
 var
   I: Integer;
-  BookName, Body: string;
+  BookName, Body, Dir: string;
   ProjChapter: TChapter;
   MergedText: string;
 begin
@@ -1161,7 +1161,13 @@ begin
   if BookName = '' then
     BookName := FBookCode;
 
-  Result := '<html><body style="font-family:Roboto,sans-serif;' +
+  { Determine text direction for this content }
+  if IsSource then
+    Dir := FSourceRC.Direction
+  else
+    Dir := FLayoutDirection;
+
+  Result := '<html><body dir="' + Dir + '" style="font-family:Roboto,sans-serif;' +
     'padding:20px 40px;line-height:1.6;">';
   Result := Result + '<h2 style="text-align:center;color:#333;' +
     'font-weight:normal;margin-bottom:20px;">' +
@@ -2127,6 +2133,9 @@ begin
     FSourceRC := TResourceContainer.Create('', ASummary.BookCode, SourceResourceID, '');
     FSourceRC.Book.LoadFromToc(FSourceContentDir);
     FSourceRC.Book.LoadContent(FSourceContentDir, '.usx');
+    { Read source language direction from package.json (one level above content/) }
+    FSourceRC.Direction := ReadResourceDirection(
+      ExtractFileDir(ExcludeTrailingPathDelimiter(FSourceContentDir)));
 
     { Load project content }
     UpdateLoadingSplash(rsLoadingTranslation, 60);
@@ -2330,6 +2339,7 @@ begin
   FSourceRC := TResourceContainer.Create(LangCode, FBookCode, ResType, '');
   FSourceRC.Book.LoadFromToc(FSourceContentDir);
   FSourceRC.Book.LoadContent(FSourceContentDir, '.usx');
+  FSourceRC.Direction := ReadResourceDirection(NewSourceDir);
 
   { Reload project content with new source chunking }
   FProject.LoadContent(FSourceContentDir);
@@ -3065,6 +3075,10 @@ begin
   FTransMemo.WordWrap := True;
   FTransMemo.ScrollBars := ssAutoVertical;
   FTransMemo.Visible := False;
+  if SameText(AOwnerForm.FLayoutDirection, 'rtl') then
+    FTransMemo.BiDiMode := bdRightToLeft
+  else
+    FTransMemo.BiDiMode := bdLeftToRight;
   FTransMemo.OnExit := @AOwnerForm.OnChunkMemoExit;
   FTransMemo.OnChange := @AOwnerForm.OnChunkMemoChange;
   FTransMemo.OnClick := @AOwnerForm.OnChunkPanelClick;
@@ -3199,15 +3213,19 @@ end;
 
 procedure TChunkPanel.RefreshSourceHtml;
 var
-  Body: string;
+  Body, SrcDir: string;
 begin
   Body := UsxToHtml(FSourceText, ColorToHtmlHex(FSourceBadgeColor));
-  FSourceHtml.SetHtmlFromStr(WrapInHtmlDoc(Body, 'Roboto', 13, clWhite));
+  if (FOwnerForm <> nil) and (FOwnerForm.FSourceRC <> nil) then
+    SrcDir := FOwnerForm.FSourceRC.Direction
+  else
+    SrcDir := 'ltr';
+  FSourceHtml.SetHtmlFromStr(WrapInHtmlDoc(Body, 'Roboto', 13, clWhite, SrcDir));
 end;
 
 procedure TChunkPanel.RefreshTransHtml;
 var
-  Body, TextColor: string;
+  Body, TextColor, TgtDir: string;
 begin
   if FIsFinished then
     TextColor := 'green'
@@ -3218,7 +3236,11 @@ begin
   Body := USFMToHtml(FTransText, FTransBadgeColor, TextColor);
   if Body = '' then
     Body := '&nbsp;';
-  FTransHtml.SetHtmlFromStr(WrapInHtmlDoc(Body, 'Roboto', 13, clWhite));
+  if FOwnerForm <> nil then
+    TgtDir := FOwnerForm.FLayoutDirection
+  else
+    TgtDir := 'ltr';
+  FTransHtml.SetHtmlFromStr(WrapInHtmlDoc(Body, 'Roboto', 13, clWhite, TgtDir));
 end;
 
 procedure TChunkPanel.RecalcLayout;
