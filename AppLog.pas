@@ -83,8 +83,12 @@ begin
 
   Line := FormatDateTime('hh:nn:ss.zzz', Now) + ' [' + LevelStr(ALevel) + '] ' + AMsg;
 
-  { Always write to stdout for console runs }
-  WriteLn(Line);
+  { GUI builds on Windows may not have stdout/stderr attached. }
+  try
+    WriteLn(Line);
+  except
+    { Ignore console write failures and continue with file logging. }
+  end;
 
   { Write to log file if open }
   if FLogOpen then

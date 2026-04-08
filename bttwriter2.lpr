@@ -6,7 +6,7 @@ uses
   {$IFDEF UNIX}
   cthreads,
   {$ENDIF}
-  SysUtils, Interfaces, Forms, Graphics,
+  SysUtils, Interfaces, Forms, Graphics, Dialogs,
   Globals, DataPaths, USFMUtils, BibleChunk, BibleChapter, BibleBook,
   ResourceContainer, ProjectManager, ProjectScanner,
   MainForm, ProjectEditForm, SplashScreen, AppSettings, AppLog,
@@ -16,8 +16,44 @@ uses
 
 resourcestring
   rsSplashInitializing = 'Initializing interface...';
+  rsFatalStartupError = 'Fatal startup error: ';
 
 {$R *.res}
+
+procedure ReportFatalStartupError(const Msg: string);
+var
+  FatalPath: string;
+  F: TextFile;
+begin
+  try
+    FatalPath := IncludeTrailingPathDelimiter(GetDataPath) + 'startup-fatal.log';
+    ForceDirectories(ExtractFileDir(FatalPath));
+    AssignFile(F, FatalPath);
+    if FileExists(FatalPath) then
+      Append(F)
+    else
+      Rewrite(F);
+    try
+      WriteLn(F, FormatDateTime('yyyy-mm-dd hh:nn:ss.zzz', Now) + ' ' + Msg);
+    finally
+      CloseFile(F);
+    end;
+  except
+    { Best-effort logging only. }
+  end;
+
+  try
+    MessageDlg(rsFatalStartupError + Msg, mtError, [mbOK], 0);
+  except
+    { Ignore dialog failures and fall back to stdout only. }
+  end;
+
+  try
+    WriteLn(StdErr, rsFatalStartupError + Msg);
+  except
+    { Ignore console write failures for GUI builds. }
+  end;
+end;
 
 procedure ParseCommandLine;
 var
@@ -52,16 +88,24 @@ begin
 end;
 
 begin
-  ParseCommandLine;
-  Application.Scaled := True;
-  Application.Initialize;
-  LoadAppIcon;
-  InitLog;
-  if Verbose then
-    LogInfo('Debug/verbose mode enabled');
-  InitializeAppSettings;
-  ShowStartupSplash;
-  UpdateStartupSplash(rsSplashInitializing);
-  Application.CreateForm(TMainWindow, MainWindow);
-  Application.Run;
+  try
+    ParseCommandLine;
+    Application.Scaled := True;
+    Application.Initialize;
+    LoadAppIcon;
+    InitLog;
+    if Verbose then
+      LogInfo('Debug/verbose mode enabled');
+    InitializeAppSettings;
+    ShowStartupSplash;
+    UpdateStartupSplash(rsSplashInitializing);
+    Application.CreateForm(TMainWindow, MainWindow);
+    Application.Run;
+  except
+    on E: Exception do
+    begin
+      ReportFatalStartupError(E.ClassName + ': ' + E.Message);
+      Halt(1);
+    end;
+  end;
 end.
