@@ -487,82 +487,60 @@ begin
   AreaW := FScrollView.EffectiveWidthForChildren;
   if AreaW < 1 then Exit;
 
-  if FShowSource then
+  TotalH := ChunkCardGap;
+  for I := 0 to FScrollView.ScrollArea.ControlsCount - 1 do
   begin
-    { Single-label source mode — same as before }
+    Ctrl := FScrollView.ScrollArea.Controls[I];
+    if not (Ctrl is TCastleRectangleControl) then Continue;
+    Card := TCastleRectangleControl(Ctrl);
+
     Lbl := nil;
-    for I := 0 to FScrollView.ScrollArea.ControlsCount - 1 do
-      if FScrollView.ScrollArea.Controls[I] is TCastleLabel then
+    for J := 0 to Card.ControlsCount - 1 do
+      if Card.Controls[J] is TCastleLabel then
       begin
-        Lbl := TCastleLabel(FScrollView.ScrollArea.Controls[I]);
+        Lbl := TCastleLabel(Card.Controls[J]);
         Break;
       end;
-    if Lbl = nil then Exit;
-    Lbl.MaxWidth := AreaW - ContentPad * 2;
-    FScrollView.ScrollArea.Width  := AreaW;
-    FScrollView.ScrollArea.Height :=
-      Max(FScrollView.Height, Lbl.EffectiveHeight + ContentPad * 2);
-  end
-  else
+
+    if Lbl <> nil then
+    begin
+      Lbl.MaxWidth := AreaW - ChunkCardPad * 2;
+      LblH := Lbl.EffectiveHeight;
+    end
+    else
+      LblH := 0;
+
+    CardH := LblH + ChunkCardPad * 2 + EditBtnH + 8;
+    TotalH := TotalH + CardH + ChunkCardGap;
+  end;
+
+  FScrollView.ScrollArea.Width  := AreaW;
+  FScrollView.ScrollArea.Height := Max(FScrollView.Height, TotalH);
+
+  CurBottom := Max(FScrollView.Height, TotalH) - ChunkCardGap;
+  for I := 0 to FScrollView.ScrollArea.ControlsCount - 1 do
   begin
-    { Card mode — calculate each card height from its label, then position }
-    TotalH := ChunkCardGap;
-    for I := 0 to FScrollView.ScrollArea.ControlsCount - 1 do
-    begin
-      Ctrl := FScrollView.ScrollArea.Controls[I];
-      if not (Ctrl is TCastleRectangleControl) then Continue;
-      Card := TCastleRectangleControl(Ctrl);
+    Ctrl := FScrollView.ScrollArea.Controls[I];
+    if not (Ctrl is TCastleRectangleControl) then Continue;
+    Card := TCastleRectangleControl(Ctrl);
 
-      { Find the label child of this card }
-      Lbl := nil;
-      for J := 0 to Card.ControlsCount - 1 do
-        if Card.Controls[J] is TCastleLabel then
-        begin
-          Lbl := TCastleLabel(Card.Controls[J]);
-          Break;
-        end;
-
-      if Lbl <> nil then
+    Lbl := nil;
+    for J := 0 to Card.ControlsCount - 1 do
+      if Card.Controls[J] is TCastleLabel then
       begin
-        Lbl.MaxWidth := AreaW - ChunkCardPad * 2;
-        LblH := Lbl.EffectiveHeight;
-      end
-      else
-        LblH := 0;
+        Lbl := TCastleLabel(Card.Controls[J]);
+        Break;
+      end;
 
-      CardH := LblH + ChunkCardPad * 2 + EditBtnH + 8;
-      TotalH := TotalH + CardH + ChunkCardGap;
-    end;
+    if Lbl <> nil then LblH := Lbl.EffectiveHeight else LblH := 0;
+    CardH := LblH + ChunkCardPad * 2 + EditBtnH + 8;
+    CurBottom := CurBottom - CardH;
 
-    { Position cards from top down (CGE: y=0 at bottom) }
-    FScrollView.ScrollArea.Width  := AreaW;
-    FScrollView.ScrollArea.Height := Max(FScrollView.Height, TotalH);
+    Card.Translation := Vector2(0, CurBottom);
+    Card.Width       := AreaW;
+    Card.Height      := CardH;
 
-    CurBottom := Max(FScrollView.Height, TotalH) - ChunkCardGap;
-    for I := 0 to FScrollView.ScrollArea.ControlsCount - 1 do
-    begin
-      Ctrl := FScrollView.ScrollArea.Controls[I];
-      if not (Ctrl is TCastleRectangleControl) then Continue;
-      Card := TCastleRectangleControl(Ctrl);
-
-      Lbl := nil;
-      for J := 0 to Card.ControlsCount - 1 do
-        if Card.Controls[J] is TCastleLabel then
-        begin
-          Lbl := TCastleLabel(Card.Controls[J]);
-          Break;
-        end;
-
-      if Lbl <> nil then LblH := Lbl.EffectiveHeight else LblH := 0;
-      CardH := LblH + ChunkCardPad * 2 + EditBtnH + 8;
-      CurBottom := CurBottom - CardH;
-
-      Card.Translation := Vector2(0, CurBottom);
-      Card.Width       := AreaW;
-      Card.Height      := CardH;
-
-      CurBottom := CurBottom - ChunkCardGap;
-    end;
+    CurBottom := CurBottom - ChunkCardGap;
   end;
 end;
 
