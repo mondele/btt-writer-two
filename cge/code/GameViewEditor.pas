@@ -59,6 +59,7 @@ type
     procedure UpdateScrollHeight;
 
     procedure ClickBack(Sender: TObject);
+    procedure ClickBlindEdit(Sender: TObject);
     procedure ClickToggle(Sender: TObject);
     procedure ClickPrev(Sender: TObject);
     procedure ClickNext(Sender: TObject);
@@ -83,7 +84,7 @@ uses
   DataPaths, ProjectManager, ResourceContainer, ProjectScanner,
   BibleBook, BibleChapter,
   USFMRenderer,
-  GameViewHome, GameViewChunkEdit;
+  GameViewHome, GameViewChunkEdit, GameViewBlindEdit;
 
 const
   ChapterBarH  = 44;
@@ -165,8 +166,9 @@ end;
 
 procedure TViewEditor.BuildChrome;
 var
-  Pal     : TBTTPalette;
-  BackBtn : TCastleButton;
+  Pal      : TBTTPalette;
+  BackBtn  : TCastleButton;
+  BlindBtn : TCastleButton;
 begin
   Pal := P;
 
@@ -214,6 +216,13 @@ begin
   BackBtn.FontSize := 14;
   BackBtn.OnClick  := @ClickBack;
   FHeader.AddLeft(BackBtn);
+
+  { Blind Edit mode button }
+  BlindBtn          := TCastleButton.Create(FreeAtStop);
+  BlindBtn.Caption  := 'Blind Edit';
+  BlindBtn.FontSize := 13;
+  BlindBtn.OnClick  := @ClickBlindEdit;
+  FHeader.AddRight(BlindBtn);
 
   { Source/Translation toggle }
   FToggleBtn          := TCastleButton.Create(FreeAtStop);
@@ -500,6 +509,12 @@ begin
   GAppState.Screen := asHome;
   ResetEditorState;
   Container.View := ViewHome;
+end;
+
+procedure TViewEditor.ClickBlindEdit(Sender: TObject);
+begin
+  GAppState.Editor.ChunkIndex := 0;
+  Container.View := ViewBlindEdit;
 end;
 
 procedure TViewEditor.ClickToggle(Sender: TObject);
