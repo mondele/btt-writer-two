@@ -63,7 +63,8 @@ uses
   SysUtils, CastleVectors,
   AppState, BTTTheme, AppLog,
   UserProfile,
-  GameViewHome;
+  AppSettings,
+  GameViewHome, GameViewTerms;
 
 const
   CardW   = 440;
@@ -238,7 +239,10 @@ begin
   GAppState.IsLocal  := True;
   LogInfo('Login: local profile created for ' + DisplayName);
 
-  Container.View := ViewHome;
+  if GetTermsAccepted then
+    Container.View := ViewHome
+  else
+    Container.View := ViewTerms;
 end;
 
 procedure TViewLogin.ClickBack(Sender: TObject);

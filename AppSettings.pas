@@ -43,6 +43,10 @@ procedure SetIndexSQLiteURL(const AValue: string);
 function GetTranslationManualURL: string;
 procedure SetTranslationManualURL(const AValue: string);
 
+{ Terms of Use }
+function GetTermsAccepted: Boolean;
+procedure SetTermsAccepted(AValue: Boolean);
+
 { Developer settings }
 function GetDeveloperTools: Boolean;
 procedure SetDeveloperTools(AValue: Boolean);
@@ -476,6 +480,19 @@ begin
 end;
 
 { Developer settings }
+
+function GetTermsAccepted: Boolean;
+begin
+  LoadSettings;
+  Result := FTermsAccepted;
+end;
+
+procedure SetTermsAccepted(AValue: Boolean);
+begin
+  LoadSettings;
+  FTermsAccepted := AValue;
+  SaveSettings;
+end;
 
 function GetDeveloperTools: Boolean;
 begin
