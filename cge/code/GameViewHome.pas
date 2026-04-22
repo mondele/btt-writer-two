@@ -72,7 +72,7 @@ uses
   SysUtils,
   AppState, BTTTheme, AppLog,
   UserProfile,
-  GameViewEditor, GameViewLogin;
+  GameViewEditor, GameViewLogin, GameViewSettings;
 
 const
   RowH         = 72;
@@ -325,7 +325,7 @@ end;
 procedure TViewHome.MenuSettingsClick(Sender: TObject);
 begin
   MenuDismiss;
-  LogInfo('Menu: Settings selected (stub)');
+  Container.View := ViewSettings;
 end;
 
 procedure TViewHome.Resize;
