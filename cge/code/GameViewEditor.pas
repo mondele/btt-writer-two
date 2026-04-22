@@ -1,17 +1,21 @@
 {$mode objfpc}{$H+}
 unit GameViewEditor;
 
-{ Read-mode editor view — Phase 4.
+{ Read-mode editor view — Phase 4 / Phase 5.
   Displays a chapter's source or translation text as rich CGE labels.
   Navigation: prev/next chapter buttons below the header.
   Toggle: source ↔ translation via a header-right button.
   Chapter content is rebuilt via LoadChapterContent without a full view
   restart; only project data is loaded once in Start.
 
+  Phase 5: Translation chunks are shown as individual cards with Edit
+  buttons.  Clicking Edit pushes TViewChunkEdit (full-screen); the edited
+  text is saved back to the chunk and persisted in Resume.
+
   Layout (top-to-bottom):
     BTTHeader  (60 px)   — Back button, project+chapter title, mode toggle
     ChapterBar (44 px)   — Prev / Next chapter navigation
-    ScrollView (rest)    — content labels
+    ScrollView (rest)    — content cards (translation) or single label (source)
 }
 
 interface
@@ -41,8 +45,12 @@ type
     FShowSource  : Boolean;
 
     { ── per-chapter content ── }
-    FChapterContent : TComponent;  { owns the current chapter's labels }
-    FNeedsRelayout  : Boolean;
+    FChapterContent  : TComponent;  { owns the current chapter's cards/labels }
+    FNeedsRelayout   : Boolean;
+
+    { ── editing ── }
+    FChunkEdit       : TObject;  { TViewChunkEdit instance while editing }
+    FEditingChunkIdx : Integer;
 
     procedure BuildChrome;
     procedure LoadProjectData;
@@ -54,9 +62,10 @@ type
     procedure ClickToggle(Sender: TObject);
     procedure ClickPrev(Sender: TObject);
     procedure ClickNext(Sender: TObject);
+    procedure ClickEditChunk(Sender: TObject);
   public
-    procedure Start; override;
-    procedure Stop; override;
+    procedure Start;  override;
+    procedure Stop;   override;
     procedure Resume; override;
     procedure Resize; override;
     procedure Update(const SecondsPassed: Single; var HandleInput: Boolean); override;
@@ -74,11 +83,14 @@ uses
   DataPaths, ProjectManager, ResourceContainer, ProjectScanner,
   BibleBook, BibleChapter,
   USFMRenderer,
-  GameViewHome;
+  GameViewHome, GameViewChunkEdit;
 
 const
-  ChapterBarH = 44;
-  ContentPad  = 16;
+  ChapterBarH  = 44;
+  ContentPad   = 16;
+  ChunkCardPad = 12;
+  ChunkCardGap = 8;
+  EditBtnH     = 28;
 
 { ── helpers ─────────────────────────────────────────────────────────────────── }
 
@@ -98,7 +110,9 @@ procedure TViewEditor.Start;
 begin
   inherited;
   ApplyBackground;
-  FShowSource := False;
+  FShowSource      := False;
+  FEditingChunkIdx := -1;
+  FChunkEdit       := nil;
   BuildChrome;
   LoadProjectData;
   LoadChapterContent;
@@ -111,13 +125,42 @@ begin
   FProject := nil;
   if FSource <> nil then TResourceContainer(FSource).Free;
   FSource := nil;
+  FChunkEdit := nil;  { owned by CGE view stack — do not free here }
   inherited;
 end;
 
 procedure TViewEditor.Resume;
+var
+  Edit    : TViewChunkEdit;
+  ChIdx   : Integer;
+  Chapter : TChapter;
 begin
   inherited;
-  { Returning from a pushed modal (e.g. future settings dialog) — nothing needed. }
+
+  if FChunkEdit = nil then Exit;
+  Edit := TViewChunkEdit(FChunkEdit);
+  FChunkEdit := nil;
+
+  if Edit.Answered and not Edit.Cancelled then
+  begin
+    if (FProject <> nil) and (TProject(FProject).Book <> nil) then
+    begin
+      ChIdx := GAppState.Editor.ChapterIndex;
+      if (ChIdx >= 0) and (ChIdx < FChapterCount) then
+      begin
+        Chapter := TProject(FProject).Book.Chapters[ChIdx];
+        if (FEditingChunkIdx >= 0) and
+           (FEditingChunkIdx < Chapter.Chunks.Count) then
+        begin
+          Chapter.Chunks[FEditingChunkIdx].Content := Edit.Answer;
+          TProject(FProject).SaveContent;
+          LogInfo('Editor: saved chunk ' + IntToStr(FEditingChunkIdx));
+        end;
+      end;
+    end;
+    LoadChapterContent;  { refresh display }
+  end;
+  FEditingChunkIdx := -1;
 end;
 
 procedure TViewEditor.BuildChrome;
@@ -240,11 +283,12 @@ var
   ChIdx      : Integer;
   Chapter    : TChapter;
   SrcChapter : TChapter;
-  FullText   : string;
   I          : Integer;
-  ChunkTrans , ChunkSrc: string;
-  Lbl        : TCastleLabel;
+  ChunkText  : string;
   VerseColor : string;
+  Lbl        : TCastleLabel;
+  Card       : TCastleRectangleControl;
+  EditBtn    : TCastleButton;
 begin
   FreeAndNil(FChapterContent);
   FChapterContent := TComponent.Create(nil);
@@ -258,74 +302,98 @@ begin
   ChIdx := GAppState.Editor.ChapterIndex;
   if (ChIdx < 0) or (ChIdx >= FChapterCount) then Exit;
 
-  Pal := P;
+  Pal        := P;
   VerseColor := '#888888';
 
   Chapter := TProject(FProject).Book.Chapters[ChIdx];
 
-  { Build source chapter reference }
+  { Source chapter reference (for source mode) }
   SrcChapter := nil;
   if FHasSource and (FSource <> nil) then
-  begin
     if TResourceContainer(FSource).Book <> nil then
       if ChIdx < TResourceContainer(FSource).Book.Chapters.Count then
         SrcChapter := TResourceContainer(FSource).Book.Chapters[ChIdx];
-  end;
 
-  { Assemble full chapter text from chunks }
-  FullText := '';
-  for I := 0 to Chapter.Chunks.Count - 1 do
+  if FShowSource then
   begin
-    if FShowSource then
+    { Source mode — single label with all chunks concatenated (read-only) }
+    ChunkText := '';
+    for I := 0 to Chapter.Chunks.Count - 1 do
     begin
-      { Source mode }
       if (SrcChapter <> nil) and (I < SrcChapter.Chunks.Count) then
-        ChunkSrc := UsxToRichText(SrcChapter.Chunks[I].Content, VerseColor)
-      else
-        ChunkSrc := '';
-      if FullText <> '' then FullText := FullText + LineEnding + LineEnding;
-      FullText := FullText + ChunkSrc;
-    end
-    else
+      begin
+        if ChunkText <> '' then ChunkText := ChunkText + LineEnding + LineEnding;
+        ChunkText := ChunkText +
+          UsxToRichText(SrcChapter.Chunks[I].Content, VerseColor);
+      end;
+    end;
+    if ChunkText = '' then ChunkText := '<i>(no source)</i>';
+
+    Lbl             := TCastleLabel.Create(FChapterContent);
+    Lbl.Caption     := ChunkText;
+    Lbl.Html        := True;
+    Lbl.Color       := Pal.TextPrimary;
+    Lbl.FontSize    := 15;
+    Lbl.MaxWidth    := FScrollView.EffectiveWidthForChildren - ContentPad * 2;
+    Lbl.Translation := Vector2(ContentPad, ContentPad);
+    FScrollView.ScrollArea.InsertFront(Lbl);
+  end
+  else
+  begin
+    { Translation mode — one card per chunk with Edit button }
+    for I := 0 to Chapter.Chunks.Count - 1 do
     begin
-      { Translation mode }
-      ChunkTrans := USFMToRichText(Chapter.Chunks[I].Content, VerseColor);
-      if FullText <> '' then FullText := FullText + LineEnding + LineEnding;
-      FullText := FullText + ChunkTrans;
+      ChunkText := USFMToRichText(Chapter.Chunks[I].Content, VerseColor);
+      if ChunkText = '' then ChunkText := '<i>(empty)</i>';
+
+      { Card owned by FChapterContent; label/button owned by card }
+      Card       := TCastleRectangleControl.Create(FChapterContent);
+      Card.Color := Pal.PanelBg;
+      Card.Tag   := I;
+      FScrollView.ScrollArea.InsertFront(Card);
+
+      Lbl          := TCastleLabel.Create(Card);
+      Lbl.Caption  := ChunkText;
+      Lbl.Html     := True;
+      Lbl.Color    := Pal.TextPrimary;
+      Lbl.FontSize := 15;
+      Lbl.Anchor(hpLeft,  hpLeft,  ChunkCardPad);
+      Lbl.Anchor(vpTop,   vpTop,   -ChunkCardPad);
+      Card.InsertFront(Lbl);
+
+      EditBtn         := TCastleButton.Create(Card);
+      EditBtn.Caption := 'Edit';
+      EditBtn.FontSize := 12;
+      EditBtn.Tag     := I;
+      EditBtn.OnClick := @ClickEditChunk;
+      EditBtn.Anchor(hpRight,  hpRight,  -ChunkCardPad);
+      EditBtn.Anchor(vpBottom, vpBottom,  ChunkCardPad);
+      Card.InsertFront(EditBtn);
+    end;
+
+    if Chapter.Chunks.Count = 0 then
+    begin
+      Lbl             := TCastleLabel.Create(FChapterContent);
+      Lbl.Caption     := '(no chunks)';
+      Lbl.Html        := False;
+      Lbl.Color       := Pal.TextSecondary;
+      Lbl.FontSize    := 15;
+      Lbl.Translation := Vector2(ContentPad, ContentPad);
+      FScrollView.ScrollArea.InsertFront(Lbl);
     end;
   end;
-
-  if FullText = '' then
-    FullText := '<i>(no content)</i>';
-
-  { Create the content label, owned by FChapterContent so it can be replaced }
-  Lbl             := TCastleLabel.Create(FChapterContent);
-  Lbl.Caption     := FullText;
-  Lbl.Html        := True;
-  Lbl.Color       := Pal.TextPrimary;
-  Lbl.FontSize    := 15;
-  Lbl.MaxWidth    := FScrollView.EffectiveWidthForChildren - ContentPad * 2;
-  Lbl.Translation := Vector2(ContentPad, ContentPad);
-  FScrollView.ScrollArea.InsertFront(Lbl);
 end;
 
 procedure TViewEditor.UpdateChapterInfo;
-var
-  BookName: string;
-  ChIdx: Integer;
 begin
   if FChInfoLbl = nil then Exit;
 
-  BookName := GAppState.Editor.BookCode;
-  if TProject(FProject) <> nil then ; { already using BookCode from AppState }
-
-  ChIdx := GAppState.Editor.ChapterIndex;
   FChInfoLbl.Caption :=
-    'Chapter ' + IntToStr(ChIdx + 1) +
-    ' of ' + IntToStr(FChapterCount);
+    'Chapter ' + IntToStr(GAppState.Editor.ChapterIndex + 1) +
+    ' of '     + IntToStr(FChapterCount);
 
-  FPrevBtn.Exists := (ChIdx > 0);
-  FNextBtn.Exists := (ChIdx < FChapterCount - 1);
+  FPrevBtn.Exists := (GAppState.Editor.ChapterIndex > 0);
+  FNextBtn.Exists := (GAppState.Editor.ChapterIndex < FChapterCount - 1);
 
   if FToggleBtn <> nil then
     FToggleBtn.Caption :=
@@ -334,28 +402,97 @@ end;
 
 procedure TViewEditor.UpdateScrollHeight;
 var
-  Lbl: TCastleLabel;
-  AreaW: Single;
-  I: Integer;
+  AreaW      : Single;
+  TotalH     : Single;
+  CurBottom  : Single;
+  I          : Integer;
+  Ctrl       : TCastleUserInterface;
+  Card       : TCastleRectangleControl;
+  Lbl        : TCastleLabel;
+  LblH, CardH: Single;
+  J          : Integer;
 begin
-  { Find the content label in the scroll area }
-  Lbl := nil;
-  for I := 0 to FScrollView.ScrollArea.ControlsCount - 1 do
-    if FScrollView.ScrollArea.Controls[I] is TCastleLabel then
-    begin
-      Lbl := TCastleLabel(FScrollView.ScrollArea.Controls[I]);
-      Break;
-    end;
-
-  if Lbl = nil then Exit;
-
-  AreaW := FScrollView.EffectiveWidthForChildren - ContentPad * 2;
+  if FScrollView = nil then Exit;
+  AreaW := FScrollView.EffectiveWidthForChildren;
   if AreaW < 1 then Exit;
 
-  Lbl.MaxWidth := AreaW;
-  FScrollView.ScrollArea.Width  := FScrollView.EffectiveWidthForChildren;
-  FScrollView.ScrollArea.Height :=
-    Max(FScrollView.Height, Lbl.EffectiveHeight + ContentPad * 2);
+  if FShowSource then
+  begin
+    { Single-label source mode — same as before }
+    Lbl := nil;
+    for I := 0 to FScrollView.ScrollArea.ControlsCount - 1 do
+      if FScrollView.ScrollArea.Controls[I] is TCastleLabel then
+      begin
+        Lbl := TCastleLabel(FScrollView.ScrollArea.Controls[I]);
+        Break;
+      end;
+    if Lbl = nil then Exit;
+    Lbl.MaxWidth := AreaW - ContentPad * 2;
+    FScrollView.ScrollArea.Width  := AreaW;
+    FScrollView.ScrollArea.Height :=
+      Max(FScrollView.Height, Lbl.EffectiveHeight + ContentPad * 2);
+  end
+  else
+  begin
+    { Card mode — calculate each card height from its label, then position }
+    TotalH := ChunkCardGap;
+    for I := 0 to FScrollView.ScrollArea.ControlsCount - 1 do
+    begin
+      Ctrl := FScrollView.ScrollArea.Controls[I];
+      if not (Ctrl is TCastleRectangleControl) then Continue;
+      Card := TCastleRectangleControl(Ctrl);
+
+      { Find the label child of this card }
+      Lbl := nil;
+      for J := 0 to Card.ControlsCount - 1 do
+        if Card.Controls[J] is TCastleLabel then
+        begin
+          Lbl := TCastleLabel(Card.Controls[J]);
+          Break;
+        end;
+
+      if Lbl <> nil then
+      begin
+        Lbl.MaxWidth := AreaW - ChunkCardPad * 2;
+        LblH := Lbl.EffectiveHeight;
+      end
+      else
+        LblH := 0;
+
+      CardH := LblH + ChunkCardPad * 2 + EditBtnH + 8;
+      TotalH := TotalH + CardH + ChunkCardGap;
+    end;
+
+    { Position cards from top down (CGE: y=0 at bottom) }
+    FScrollView.ScrollArea.Width  := AreaW;
+    FScrollView.ScrollArea.Height := Max(FScrollView.Height, TotalH);
+
+    CurBottom := Max(FScrollView.Height, TotalH) - ChunkCardGap;
+    for I := 0 to FScrollView.ScrollArea.ControlsCount - 1 do
+    begin
+      Ctrl := FScrollView.ScrollArea.Controls[I];
+      if not (Ctrl is TCastleRectangleControl) then Continue;
+      Card := TCastleRectangleControl(Ctrl);
+
+      Lbl := nil;
+      for J := 0 to Card.ControlsCount - 1 do
+        if Card.Controls[J] is TCastleLabel then
+        begin
+          Lbl := TCastleLabel(Card.Controls[J]);
+          Break;
+        end;
+
+      if Lbl <> nil then LblH := Lbl.EffectiveHeight else LblH := 0;
+      CardH := LblH + ChunkCardPad * 2 + EditBtnH + 8;
+      CurBottom := CurBottom - CardH;
+
+      Card.Translation := Vector2(0, CurBottom);
+      Card.Width       := AreaW;
+      Card.Height      := CardH;
+
+      CurBottom := CurBottom - ChunkCardGap;
+    end;
+  end;
 end;
 
 procedure TViewEditor.ClickBack(Sender: TObject);
@@ -387,6 +524,27 @@ begin
     Inc(GAppState.Editor.ChapterIndex);
     LoadChapterContent;
   end;
+end;
+
+procedure TViewEditor.ClickEditChunk(Sender: TObject);
+var
+  ChIdx   : Integer;
+  Chapter : TChapter;
+  Idx     : Integer;
+begin
+  Idx := (Sender as TCastleButton).Tag;
+  if (FProject = nil) or (TProject(FProject).Book = nil) then Exit;
+
+  ChIdx := GAppState.Editor.ChapterIndex;
+  if (ChIdx < 0) or (ChIdx >= FChapterCount) then Exit;
+
+  Chapter := TProject(FProject).Book.Chapters[ChIdx];
+  if (Idx < 0) or (Idx >= Chapter.Chunks.Count) then Exit;
+
+  FEditingChunkIdx := Idx;
+  ViewChunkEdit.InputText := Chapter.Chunks[Idx].Content;
+  FChunkEdit := ViewChunkEdit;
+  Container.PushView(ViewChunkEdit);
 end;
 
 procedure TViewEditor.Resize;
