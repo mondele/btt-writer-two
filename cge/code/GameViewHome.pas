@@ -72,7 +72,7 @@ uses
   SysUtils,
   AppState, BTTTheme, AppLog,
   UserProfile,
-  GameViewEditor, GameViewLogin, GameViewSettings;
+  GameViewEditor, GameViewLogin, GameViewSettings, GameViewNewProject;
 
 const
   RowH         = 72;
@@ -275,7 +275,7 @@ end;
 
 procedure TViewHome.ClickNewProject(Sender: TObject);
 begin
-  LogInfo('New Project: not yet implemented in CGE view');
+  Container.View := ViewNewProject;
 end;
 
 procedure TViewHome.ClickMenu(Sender: TObject);
