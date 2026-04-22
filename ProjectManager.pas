@@ -47,6 +47,7 @@ type
     function GetSourceLanguageCode: string;
     function GetSourceResourceType: string;
     function GetTargetLanguageDirection: string;
+    procedure SetSourceTranslation(const ALangCode, AResType: string);
 
     property ProjectDir: string read FProjectDir;
     property TargetLanguageCode: string read FTargetLanguageCode;
@@ -323,6 +324,43 @@ begin
   Node := FManifest.FindPath('target_language.direction');
   if (Node <> nil) and (Trim(Node.AsString) <> '') then
     Result := LowerCase(Trim(Node.AsString));
+end;
+
+procedure TProject.SetSourceTranslation(const ALangCode, AResType: string);
+var
+  Arr: TJSONArray;
+  Obj: TJSONObject;
+  Node: TJSONData;
+begin
+  if FManifest = nil then
+    Exit;
+
+  Node := FManifest.FindPath('source_translations');
+  if Node is TJSONArray then
+    Arr := TJSONArray(Node)
+  else
+  begin
+    Arr := TJSONArray.Create;
+    FManifest.Add('source_translations', Arr);
+  end;
+
+  if (Arr.Count > 0) and (Arr.Items[0] is TJSONObject) then
+  begin
+    Obj := TJSONObject(Arr.Items[0]);
+    Obj.Delete('language_id');
+    Obj.Add('language_id', ALangCode);
+    Obj.Delete('resource_id');
+    Obj.Add('resource_id', AResType);
+  end
+  else
+  begin
+    Obj := TJSONObject.Create;
+    Obj.Add('language_id', ALangCode);
+    Obj.Add('resource_id', AResType);
+    Arr.Add(Obj);
+  end;
+
+  SaveManifest;
 end;
 
 end.

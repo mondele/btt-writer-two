@@ -194,10 +194,41 @@ type
     procedure CreateReadModeControls;
     procedure ShowReadMode;
     procedure ShowEditReviewMode;
+    procedure LayoutReadModeCards;
     procedure LoadReadModeContent;
     procedure ReadBackTabClick(Sender: TObject);
     function BuildFullChapterHtml(const ChapterID: string;
       ASourceChapter: TChapter; IsSource: Boolean): string;
+  private
+    { Blind Edit mode controls }
+    FBlindContainer: TPanel;
+    FBlindSourceCard: TPanel;
+    FBlindSourceHtml: TIpHtmlPanel;
+    FBlindTransCard: TPanel;
+    FBlindTransMemo: TMemo;
+    FBlindChunkLabel: TLabel;
+    FBlindPrevBtn: TSpeedButton;
+    FBlindNextBtn: TSpeedButton;
+    FBlindFlipLabel: TLabel;
+    FBlindShowingSource: Boolean;
+    FBlindChunkIndex: Integer;
+    FBlindChunkCount: Integer;
+    FBlindChunkNames: TStringList;  { chunk names for current chapter }
+    FBlindChunkDirty: Boolean;
+    procedure CreateBlindEditControls;
+    procedure ShowBlindEditMode;
+    procedure LayoutBlindEditCards;
+    procedure LoadBlindEditChunk;
+    procedure SaveBlindEditChunk;
+    procedure BlindCardClick(Sender: TObject);
+    procedure BlindPrevClick(Sender: TObject);
+    procedure BlindNextClick(Sender: TObject);
+    procedure BlindMemoChange(Sender: TObject);
+    { Verse-range helpers for blind edit (bypass \v marker scanning) }
+    function GetSourceChunkVerse(ASourceChapter: TChapter; ChunkIndex: Integer): Integer;
+    function LoadBlindChunkText(ASourceChapter: TChapter; ChunkIndex: Integer): string;
+    procedure WriteBlindChunkToProject(ASourceChapter: TChapter; ChunkIndex: Integer;
+      const TransText: string);
   private
     { Loading splash }
     FLoadingSplash: TForm;
@@ -280,6 +311,44 @@ uses
   UserProfile, GiteaClient, GitUtils, ConflictResolver, DevToolsForm;
 
 {$R *.lfm}
+
+{ Strip all USFM backslash markers from text, returning clean prose.
+  Removes \v N, \p, \s5, \q, \d, \f+...\f*, etc. and their trailing spaces.
+  Verse numbers after \v are also removed. }
+function StripUSFMMarkersFromText(const S: string): string;
+var
+  I, Len: Integer;
+begin
+  Result := '';
+  I := 1;
+  Len := Length(S);
+  while I <= Len do
+  begin
+    if (S[I] = '\') and (I + 1 <= Len) and
+       (S[I + 1] in ['a'..'z', 'A'..'Z', '*']) then
+    begin
+      Inc(I);  { skip backslash }
+      { Skip marker word: letters, digits, *, + }
+      while (I <= Len) and (S[I] in ['a'..'z', 'A'..'Z', '0'..'9', '*', '+']) do
+        Inc(I);
+      { Skip space between marker and its argument }
+      if (I <= Len) and (S[I] = ' ') then Inc(I);
+      { If next chars are digits (verse/chapter number), skip them too }
+      if (I <= Len) and (S[I] in ['0'..'9']) then
+      begin
+        while (I <= Len) and (S[I] in ['0'..'9']) do Inc(I);
+        { Skip space after number }
+        if (I <= Len) and (S[I] = ' ') then Inc(I);
+      end;
+    end
+    else
+    begin
+      Result := Result + S[I];
+      Inc(I);
+    end;
+  end;
+  Result := Trim(Result);
+end;
 
 { Delete all files with the given extension from a directory }
 procedure CleanChapterDir(const Dir, Ext: string);
@@ -981,11 +1050,8 @@ begin
   SaveCurrentChapter;
   FCurrentViewMode := vmBlindEdit;
   UpdateModeButtons;
-  { TODO: switch to blind draft layout }
-  ShowMessage('Blind Draft mode is not yet implemented.');
-  { Fall back to current mode }
-  FCurrentViewMode := vmRead;
-  UpdateModeButtons;
+  ShowBlindEditMode;
+  UpdateStatus;
 end;
 
 procedure TProjectEditWindow.btnModeEditReviewClick(Sender: TObject);
@@ -1058,17 +1124,10 @@ begin
   FReadShowingSource := True;
 end;
 
-procedure TProjectEditWindow.ShowReadMode;
+procedure TProjectEditWindow.LayoutReadModeCards;
 var
   CardMargin, TopOffset, CardW, CardH: Integer;
 begin
-  SplitPanel.Visible := False;
-
-  FReadContainer.SetBounds(
-    SplitPanel.Left, SplitPanel.Top,
-    SplitPanel.Width, SplitPanel.Height);
-  FReadContainer.Anchors := [akTop, akLeft, akRight, akBottom];
-
   { Source label at top center }
   FReadSourceLabel.SetBounds(0, 4, FReadContainer.ClientWidth, 24);
   if FSourceRC <> nil then
@@ -1081,6 +1140,8 @@ begin
   CardMargin := 40;
   CardW := FReadContainer.ClientWidth - (CardMargin * 2);
   CardH := FReadContainer.ClientHeight - TopOffset - 12;
+  if CardW < 100 then CardW := 100;
+  if CardH < 100 then CardH := 100;
 
   { Main card — full area minus space for back tab at bottom-right }
   FReadCard.SetBounds(
@@ -1097,6 +1158,20 @@ begin
   FReadBackTabLabel.SetBounds(0, CardH - 40 - 10, CardW - 10, 30);
   FReadBackTabLabel.Alignment := taLeftJustify;
   FReadCard.BringToFront;
+end;
+
+procedure TProjectEditWindow.ShowReadMode;
+begin
+  SaveBlindEditChunk;
+  SplitPanel.Visible := False;
+  FBlindContainer.Visible := False;
+
+  FReadContainer.SetBounds(
+    SplitPanel.Left, SplitPanel.Top,
+    SplitPanel.Width, SplitPanel.Height);
+  FReadContainer.Anchors := [akTop, akLeft, akRight, akBottom];
+
+  LayoutReadModeCards;
 
   FReadContainer.Visible := True;
   FReadShowingSource := True;
@@ -1105,8 +1180,12 @@ end;
 
 procedure TProjectEditWindow.ShowEditReviewMode;
 begin
+  SaveBlindEditChunk;
   FReadContainer.Visible := False;
+  FBlindContainer.Visible := False;
   SplitPanel.Visible := True;
+  { Rebuild chunk panels — they weren't created if we were in Read/Blind mode }
+  LoadChapter(FCurrentChapterIndex);
 end;
 
 procedure TProjectEditWindow.LoadReadModeContent;
@@ -1205,6 +1284,472 @@ begin
   Result := Result + '</body></html>';
 end;
 
+{ ---- Blind Edit Mode ---- }
+
+procedure TProjectEditWindow.CreateBlindEditControls;
+var
+  P: TThemePalette;
+begin
+  P := GetThemePalette(GetEffectiveTheme);
+
+  FBlindChunkNames := TStringList.Create;
+  FBlindChunkIndex := 0;
+  FBlindChunkCount := 0;
+  FBlindShowingSource := True;
+  FBlindChunkDirty := False;
+
+  { Container — same area as SplitPanel, initially hidden }
+  FBlindContainer := TPanel.Create(Self);
+  FBlindContainer.Parent := Self;
+  FBlindContainer.BevelOuter := bvNone;
+  FBlindContainer.Color := $00E8E8E8;
+  FBlindContainer.Visible := False;
+
+  { Chunk navigation bar at top }
+  FBlindPrevBtn := TSpeedButton.Create(Self);
+  FBlindPrevBtn.Parent := FBlindContainer;
+  FBlindPrevBtn.Caption := '<';
+  FBlindPrevBtn.Flat := True;
+  FBlindPrevBtn.Font.Height := -18;
+  FBlindPrevBtn.OnClick := @BlindPrevClick;
+
+  FBlindNextBtn := TSpeedButton.Create(Self);
+  FBlindNextBtn.Parent := FBlindContainer;
+  FBlindNextBtn.Caption := '>';
+  FBlindNextBtn.Flat := True;
+  FBlindNextBtn.Font.Height := -18;
+  FBlindNextBtn.OnClick := @BlindNextClick;
+
+  FBlindChunkLabel := TLabel.Create(Self);
+  FBlindChunkLabel.Parent := FBlindContainer;
+  FBlindChunkLabel.Alignment := taCenter;
+  FBlindChunkLabel.AutoSize := False;
+  FBlindChunkLabel.Font.Height := -14;
+  FBlindChunkLabel.Font.Color := P.TextSecondary;
+
+  { Source card — front, read-only HTML }
+  FBlindSourceCard := TPanel.Create(Self);
+  FBlindSourceCard.Parent := FBlindContainer;
+  FBlindSourceCard.BevelOuter := bvNone;
+  FBlindSourceCard.Color := clWhite;
+  FBlindSourceCard.Cursor := crHandPoint;
+  FBlindSourceCard.OnClick := @BlindCardClick;
+
+  FBlindSourceHtml := TIpHtmlPanel.Create(Self);
+  FBlindSourceHtml.Parent := FBlindSourceCard;
+  FBlindSourceHtml.Align := alClient;
+  FBlindSourceHtml.DefaultTypeFace := 'Roboto';
+  FBlindSourceHtml.DefaultFontSize := 14;
+  FBlindSourceHtml.BgColor := clWhite;
+  FBlindSourceHtml.BorderStyle := bsNone;
+
+  { Translation card — back, editable memo }
+  FBlindTransCard := TPanel.Create(Self);
+  FBlindTransCard.Parent := FBlindContainer;
+  FBlindTransCard.BevelOuter := bvNone;
+  FBlindTransCard.Color := clWhite;
+  FBlindTransCard.Visible := False;
+
+  FBlindTransMemo := TMemo.Create(Self);
+  FBlindTransMemo.Parent := FBlindTransCard;
+  FBlindTransMemo.Align := alClient;
+  FBlindTransMemo.BorderStyle := bsNone;
+  FBlindTransMemo.ScrollBars := ssAutoVertical;
+  FBlindTransMemo.Font.Name := 'Roboto';
+  FBlindTransMemo.Font.Height := -16;
+  FBlindTransMemo.WordWrap := True;
+  FBlindTransMemo.OnChange := @BlindMemoChange;
+
+  { Flip instruction label at bottom of container }
+  FBlindFlipLabel := TLabel.Create(Self);
+  FBlindFlipLabel.Parent := FBlindContainer;
+  FBlindFlipLabel.Alignment := taCenter;
+  FBlindFlipLabel.AutoSize := False;
+  FBlindFlipLabel.Font.Height := -12;
+  FBlindFlipLabel.Font.Color := $00808080;
+  FBlindFlipLabel.Caption := 'Click the card to translate';
+  FBlindFlipLabel.Cursor := crHandPoint;
+  FBlindFlipLabel.OnClick := @BlindCardClick;
+end;
+
+procedure TProjectEditWindow.ShowBlindEditMode;
+begin
+  SplitPanel.Visible := False;
+  FReadContainer.Visible := False;
+
+  FBlindContainer.SetBounds(
+    SplitPanel.Left, SplitPanel.Top,
+    SplitPanel.Width, SplitPanel.Height);
+  FBlindContainer.Anchors := [akTop, akLeft, akRight, akBottom];
+
+  { Build chunk list for current chapter }
+  FBlindChunkNames.Clear;
+  FBlindChunkIndex := 0;
+  FBlindChunkCount := 0;
+  FBlindShowingSource := True;
+  FBlindChunkDirty := False;
+
+  if (FSourceRC <> nil) and
+     (FCurrentChapterIndex >= 0) and
+     (FCurrentChapterIndex < FSourceRC.Book.Chapters.Count) then
+  begin
+    FBlindChunkCount := FSourceRC.Book.Chapters[FCurrentChapterIndex].Chunks.Count;
+    { Skip 'front' title chunk — start on first content chunk if possible }
+    if (FBlindChunkCount > 1) and
+       (FSourceRC.Book.Chapters[FCurrentChapterIndex].Chunks[0].Name = 'title') then
+      FBlindChunkIndex := 1;
+  end;
+
+  LayoutBlindEditCards;
+  FBlindContainer.Visible := True;
+  LoadBlindEditChunk;
+end;
+
+procedure TProjectEditWindow.LayoutBlindEditCards;
+var
+  CardMargin, TopOffset, CardW, CardH, NavH: Integer;
+begin
+  NavH := 32;
+  TopOffset := NavH + 4;
+  CardMargin := 40;
+  CardW := FBlindContainer.ClientWidth - (CardMargin * 2);
+  CardH := FBlindContainer.ClientHeight - TopOffset - 36;
+  if CardW < 100 then CardW := 100;
+  if CardH < 100 then CardH := 100;
+
+  { Nav bar: prev | chunk label | next }
+  FBlindPrevBtn.SetBounds(CardMargin, 4, 32, NavH - 4);
+  FBlindNextBtn.SetBounds(FBlindContainer.ClientWidth - CardMargin - 32, 4, 32, NavH - 4);
+  FBlindChunkLabel.SetBounds(CardMargin + 36, 4,
+    FBlindContainer.ClientWidth - (CardMargin * 2) - 72, NavH - 4);
+
+  { Cards — same position, only one visible at a time }
+  FBlindSourceCard.SetBounds(CardMargin, TopOffset, CardW, CardH);
+  FBlindTransCard.SetBounds(CardMargin, TopOffset, CardW, CardH);
+
+  { Flip label at bottom }
+  FBlindFlipLabel.SetBounds(CardMargin, FBlindContainer.ClientHeight - 28,
+    CardW, 24);
+end;
+
+procedure TProjectEditWindow.LoadBlindEditChunk;
+var
+  SourceChapter: TChapter;
+  SourceChunk: TChunk;
+  ChunkText, Html, Dir, ChunkName: string;
+  Doc: TIpHtml;
+  SS: TStringStream;
+begin
+  if FSourceRC = nil then Exit;
+  if (FCurrentChapterIndex < 0) or
+     (FCurrentChapterIndex >= FSourceRC.Book.Chapters.Count) then Exit;
+
+  SourceChapter := FSourceRC.Book.Chapters[FCurrentChapterIndex];
+  FBlindChunkCount := SourceChapter.Chunks.Count;
+
+  if (FBlindChunkIndex < 0) or (FBlindChunkIndex >= FBlindChunkCount) then
+    Exit;
+
+  SourceChunk := SourceChapter.Chunks[FBlindChunkIndex];
+  ChunkName := SourceChunk.Name;
+
+  { Update nav label }
+  if ChunkName = 'title' then
+    FBlindChunkLabel.Caption := 'Title'
+  else
+    FBlindChunkLabel.Caption := 'Verses ' + ChunkName;
+  FBlindPrevBtn.Enabled := FBlindChunkIndex > 0;
+  FBlindNextBtn.Enabled := FBlindChunkIndex < FBlindChunkCount - 1;
+
+  { Build source HTML for this chunk }
+  Dir := FSourceRC.Direction;
+  Html := '<html><body dir="' + Dir + '" style="font-family:Roboto,sans-serif;' +
+    'padding:20px 30px;line-height:1.6;">';
+  Html := Html + UsxToHtml(SourceChunk.Content, '#5C6BC0');
+  Html := Html + '</body></html>';
+
+  SS := TStringStream.Create(Html);
+  try
+    Doc := TIpHtml.Create;
+    Doc.LoadFromStream(SS);
+    FBlindSourceHtml.SetHtml(Doc);
+  finally
+    SS.Free;
+  end;
+
+  { Load existing translation text for this chunk by verse range (no marker scanning) }
+  ChunkText := '';
+  if FProject <> nil then
+    ChunkText := LoadBlindChunkText(SourceChapter, FBlindChunkIndex);
+  { Strip any residual USFM markers that may have come from prior Edit-Review saves }
+  ChunkText := StripUSFMMarkersFromText(ChunkText);
+
+  FBlindTransMemo.OnChange := nil;
+  FBlindTransMemo.Text := ChunkText;
+  FBlindChunkDirty := False;
+  FBlindTransMemo.OnChange := @BlindMemoChange;
+
+  { Set memo direction }
+  if FLayoutDirection = 'rtl' then
+    FBlindTransMemo.BiDiMode := bdRightToLeft
+  else
+    FBlindTransMemo.BiDiMode := bdLeftToRight;
+
+  { Always start showing source }
+  FBlindShowingSource := True;
+  FBlindSourceCard.Visible := True;
+  FBlindTransCard.Visible := False;
+  FBlindFlipLabel.Caption := 'Click the card to translate';
+end;
+
+procedure TProjectEditWindow.SaveBlindEditChunk;
+var
+  SourceChapter: TChapter;
+  GitErr: string;
+begin
+  if not FBlindChunkDirty then Exit;
+  if FSourceRC = nil then Exit;
+  if FProject = nil then Exit;
+  if (FCurrentChapterIndex < 0) or
+     (FCurrentChapterIndex >= FSourceRC.Book.Chapters.Count) then Exit;
+
+  SourceChapter := FSourceRC.Book.Chapters[FCurrentChapterIndex];
+  if (FBlindChunkIndex < 0) or (FBlindChunkIndex >= SourceChapter.Chunks.Count) then
+    Exit;
+
+  { Write translator's plain text directly to the ULB chunk file(s) whose
+    verse range matches this source chunk. No \v marker scanning required. }
+  WriteBlindChunkToProject(SourceChapter, FBlindChunkIndex, FBlindTransMemo.Text);
+
+  CommitProjectChanges(FProject.ProjectDir,
+    rsUpdateChapterPrefix + SourceChapter.ID, GitErr);
+
+  FBlindChunkDirty := False;
+  LogFmt(llInfo, 'BlindEdit: saved chunk %d of chapter %s',
+    [FBlindChunkIndex, SourceChapter.ID]);
+end;
+
+{ Returns the starting verse number for a chunk (0 for title / non-numeric). }
+function TProjectEditWindow.GetSourceChunkVerse(ASourceChapter: TChapter;
+  ChunkIndex: Integer): Integer;
+begin
+  Result := 0;
+  if (ChunkIndex < 0) or (ChunkIndex >= ASourceChapter.Chunks.Count) then Exit;
+  TryStrToInt(ASourceChapter.Chunks[ChunkIndex].Name, Result);
+end;
+
+{ Load the existing translation text for source chunk ChunkIndex by reading
+  English ULB .txt files whose verse range overlaps the source chunk.
+  Returns stripped plain text (no USFM markers). }
+function TProjectEditWindow.LoadBlindChunkText(ASourceChapter: TChapter;
+  ChunkIndex: Integer): string;
+var
+  SrcStart, SrcEnd, ULBVerse, J: Integer;
+  ChapterDir, FilePath, Piece: string;
+  ULBBook: TBook;
+  ULBChapter: TChapter;
+  SL: TStringList;
+begin
+  Result := '';
+
+  { Title chunk: read front/title.txt }
+  if ASourceChapter.Chunks[ChunkIndex].Name = 'title' then
+  begin
+    FilePath := FProject.ProjectDir + 'front' + PathDelim + 'title.txt';
+    if FileExists(FilePath) then
+    begin
+      SL := TStringList.Create;
+      try
+        SL.LoadFromFile(FilePath);
+        Result := StripUSFMMarkersFromText(SL.Text);
+      finally
+        SL.Free;
+      end;
+    end;
+    Exit;
+  end;
+
+  SrcStart := GetSourceChunkVerse(ASourceChapter, ChunkIndex);
+  if ChunkIndex + 1 < ASourceChapter.Chunks.Count then
+    SrcEnd := GetSourceChunkVerse(ASourceChapter, ChunkIndex + 1) - 1
+  else
+    SrcEnd := MaxInt div 2;
+
+  if FEnglishULBContentDir = '' then Exit;
+
+  ULBBook := TBook.Create(FProject.BookCode, 'ulb');
+  try
+    ULBBook.LoadFromToc(FEnglishULBContentDir);
+    ULBChapter := ULBBook.GetChapter(ASourceChapter.ID);
+    if ULBChapter = nil then Exit;
+
+    ChapterDir := IncludeTrailingPathDelimiter(
+      FProject.ProjectDir + ASourceChapter.ID);
+
+    for J := 0 to ULBChapter.Chunks.Count - 1 do
+    begin
+      if not TryStrToInt(ULBChapter.Chunks[J].Name, ULBVerse) then Continue;
+      if ULBVerse < SrcStart then Continue;
+      if ULBVerse > SrcEnd then Break;
+
+      FilePath := ChapterDir + ULBChapter.Chunks[J].Name + '.txt';
+      if not FileExists(FilePath) then Continue;
+
+      SL := TStringList.Create;
+      try
+        SL.LoadFromFile(FilePath);
+        Piece := StripUSFMMarkersFromText(SL.Text);
+      finally
+        SL.Free;
+      end;
+
+      if Piece = '' then Continue;
+      if Result <> '' then Result := Result + ' ';
+      Result := Result + Piece;
+    end;
+  finally
+    ULBBook.Free;
+  end;
+end;
+
+{ Write the translator's plain text for source chunk ChunkIndex directly to
+  the English ULB .txt file(s) covering the same verse range.
+  No \v markers are added or required. }
+procedure TProjectEditWindow.WriteBlindChunkToProject(ASourceChapter: TChapter;
+  ChunkIndex: Integer; const TransText: string);
+var
+  SrcStart, SrcEnd, ULBVerse, J, PrimaryIdx: Integer;
+  ChapterDir, FilePath: string;
+  ULBBook: TBook;
+  ULBChapter: TChapter;
+  SL: TStringList;
+begin
+  { Title chunk: write to front/title.txt }
+  if ASourceChapter.Chunks[ChunkIndex].Name = 'title' then
+  begin
+    ForceDirectories(FProject.ProjectDir + 'front');
+    FilePath := FProject.ProjectDir + 'front' + PathDelim + 'title.txt';
+    SL := TStringList.Create;
+    try
+      SL.Text := TransText;
+      SL.SaveToFile(FilePath);
+    finally
+      SL.Free;
+    end;
+    Exit;
+  end;
+
+  SrcStart := GetSourceChunkVerse(ASourceChapter, ChunkIndex);
+  if ChunkIndex + 1 < ASourceChapter.Chunks.Count then
+    SrcEnd := GetSourceChunkVerse(ASourceChapter, ChunkIndex + 1) - 1
+  else
+    SrcEnd := MaxInt div 2;
+
+  { If no English ULB, write to the source chunk's own file name }
+  if FEnglishULBContentDir = '' then
+  begin
+    ChapterDir := IncludeTrailingPathDelimiter(
+      FProject.ProjectDir + ASourceChapter.ID);
+    ForceDirectories(ChapterDir);
+    FilePath := ChapterDir + ASourceChapter.Chunks[ChunkIndex].Name + '.txt';
+    SL := TStringList.Create;
+    try
+      SL.Text := TransText;
+      SL.SaveToFile(FilePath);
+    finally
+      SL.Free;
+    end;
+    Exit;
+  end;
+
+  ULBBook := TBook.Create(FProject.BookCode, 'ulb');
+  try
+    ULBBook.LoadFromToc(FEnglishULBContentDir);
+    ULBChapter := ULBBook.GetChapter(ASourceChapter.ID);
+    if ULBChapter = nil then Exit;
+
+    ChapterDir := IncludeTrailingPathDelimiter(
+      FProject.ProjectDir + ASourceChapter.ID);
+    ForceDirectories(ChapterDir);
+
+    { Find the primary ULB chunk: largest ulbVerse <= SrcStart }
+    PrimaryIdx := -1;
+    for J := 0 to ULBChapter.Chunks.Count - 1 do
+    begin
+      if not TryStrToInt(ULBChapter.Chunks[J].Name, ULBVerse) then Continue;
+      if ULBVerse <= SrcStart then PrimaryIdx := J;
+      if ULBVerse > SrcStart then Break;
+    end;
+
+    if PrimaryIdx < 0 then Exit;
+
+    SL := TStringList.Create;
+    try
+      { Write translator text to primary ULB chunk }
+      FilePath := ChapterDir + ULBChapter.Chunks[PrimaryIdx].Name + '.txt';
+      SL.Text := TransText;
+      SL.SaveToFile(FilePath);
+
+      { Clear any additional ULB chunks within the source chunk's verse range }
+      for J := PrimaryIdx + 1 to ULBChapter.Chunks.Count - 1 do
+      begin
+        if not TryStrToInt(ULBChapter.Chunks[J].Name, ULBVerse) then Continue;
+        if ULBVerse > SrcEnd then Break;
+        FilePath := ChapterDir + ULBChapter.Chunks[J].Name + '.txt';
+        SL.Clear;
+        SL.SaveToFile(FilePath);
+      end;
+    finally
+      SL.Free;
+    end;
+  finally
+    ULBBook.Free;
+  end;
+end;
+
+procedure TProjectEditWindow.BlindCardClick(Sender: TObject);
+begin
+  if FBlindShowingSource then
+  begin
+    { Flip to translation side }
+    FBlindShowingSource := False;
+    FBlindSourceCard.Visible := False;
+    FBlindTransCard.Visible := True;
+    FBlindFlipLabel.Caption := 'Click here to view source';
+    FBlindTransMemo.SetFocus;
+  end
+  else
+  begin
+    { Flip back to source side — save first }
+    SaveBlindEditChunk;
+    FBlindShowingSource := True;
+    FBlindSourceCard.Visible := True;
+    FBlindTransCard.Visible := False;
+    FBlindFlipLabel.Caption := 'Click the card to translate';
+  end;
+end;
+
+procedure TProjectEditWindow.BlindPrevClick(Sender: TObject);
+begin
+  if FBlindChunkIndex <= 0 then Exit;
+  SaveBlindEditChunk;
+  Dec(FBlindChunkIndex);
+  LoadBlindEditChunk;
+end;
+
+procedure TProjectEditWindow.BlindNextClick(Sender: TObject);
+begin
+  if FBlindChunkIndex >= FBlindChunkCount - 1 then Exit;
+  SaveBlindEditChunk;
+  Inc(FBlindChunkIndex);
+  LoadBlindEditChunk;
+end;
+
+procedure TProjectEditWindow.BlindMemoChange(Sender: TObject);
+begin
+  FBlindChunkDirty := True;
+end;
+
 procedure TProjectEditWindow.lblChapterNumClick(Sender: TObject);
 var
   I: Integer;
@@ -1252,10 +1797,14 @@ begin
   FSelectedChunkIndex := -1;
   FLayoutDirection := 'ltr';
   FLastResourcePos := 0;
-  FCurrentViewMode := vmRead;
+  if GetBlindEditMode then
+    FCurrentViewMode := vmBlindEdit
+  else
+    FCurrentViewMode := vmEditReview;
   ApplyFontRecursive(Self, 'Noto Sans');
   CreateRailControls;
   CreateReadModeControls;
+  CreateBlindEditControls;
   btnMenu.OnClick := @btnMenuClick;
 
   SourceScrollBox.VertScrollBar.Smooth := True;
@@ -1328,6 +1877,12 @@ begin
 
   UpdateRailLayout;
   RecalcAllChunkLayouts;
+
+  { Re-layout Read/Blind mode cards when visible }
+  if (FCurrentViewMode = vmRead) and FReadContainer.Visible then
+    LayoutReadModeCards;
+  if (FCurrentViewMode = vmBlindEdit) and FBlindContainer.Visible then
+    LayoutBlindEditCards;
 end;
 
 procedure TProjectEditWindow.SplitterMoved(Sender: TObject);
@@ -1502,9 +2057,12 @@ begin
     on E: Exception do
       LogFmt(llWarn, 'ProjectEditForm.FormClose: save failed: %s', [E.Message]);
   end;
+  LogInfo('ProjectEditForm.FormClose: saving blind edit chunk');
+  SaveBlindEditChunk;
   LogInfo('ProjectEditForm.FormClose: clearing chunk panels');
   ClearChunkPanels;
   LogInfo('ProjectEditForm.FormClose: freeing FProject and FSourceRC');
+  FreeAndNil(FBlindChunkNames);
   FreeAndNil(FProject);
   FreeAndNil(FSourceRC);
   LogInfo('ProjectEditForm.FormClose: done, setting caHide');
@@ -2175,10 +2733,11 @@ begin
     end;
 
     { Show the appropriate view mode }
-    if FCurrentViewMode = vmRead then
-      ShowReadMode
-    else
-      ShowEditReviewMode;
+    case FCurrentViewMode of
+      vmRead: ShowReadMode;
+      vmBlindEdit: ShowBlindEditMode;
+      vmEditReview: ShowEditReviewMode;
+    end;
     UpdateModeButtons;
 
     { Load first chapter (skip 'front' if present) }
@@ -2341,6 +2900,9 @@ begin
   FSourceRC.Book.LoadContent(FSourceContentDir, '.usx');
   FSourceRC.Direction := ReadResourceDirection(NewSourceDir);
 
+  { Update manifest source_translations to match new source }
+  FProject.SetSourceTranslation(LangCode, ResType);
+
   { Reload project content with new source chunking }
   FProject.LoadContent(FSourceContentDir);
 
@@ -2417,6 +2979,25 @@ begin
     begin
       UpdateChapterNav;
       LoadReadModeContent;
+      UpdateStatus;
+      Exit;
+    end;
+
+    { In Blind Edit mode, reload chunk display for the new chapter }
+    if FCurrentViewMode = vmBlindEdit then
+    begin
+      UpdateChapterNav;
+      SaveBlindEditChunk;
+      FBlindChunkIndex := 0;
+      if (FSourceRC <> nil) and (AIndex >= 0) and
+         (AIndex < FSourceRC.Book.Chapters.Count) then
+      begin
+        FBlindChunkCount := FSourceRC.Book.Chapters[AIndex].Chunks.Count;
+        if (FBlindChunkCount > 1) and
+           (FSourceRC.Book.Chapters[AIndex].Chunks[0].Name = 'title') then
+          FBlindChunkIndex := 1;
+      end;
+      LoadBlindEditChunk;
       UpdateStatus;
       Exit;
     end;
@@ -2572,6 +3153,12 @@ var
   EnglishChapter: TChapter;
   GitErr: string;
 begin
+  { Blind edit saves per-chunk independently }
+  if FCurrentViewMode = vmBlindEdit then
+  begin
+    SaveBlindEditChunk;
+    Exit;
+  end;
   if not FChapterDirty then
     Exit;
   if FProject = nil then
@@ -2815,10 +3402,12 @@ begin
   Result := '';
   if FProject = nil then
     Exit;
-  LangCode := FProject.GetSourceLanguageCode;
+  { Use the currently active source language, not the manifest's original —
+    this ensures resources match when the user switches source texts }
+  LangCode := FSourceLangCode;
   if LangCode = '' then
     LangCode := 'en';
-  Result := GetLibraryPath + LangCode + '_' + FProject.BookCode + '_' + ResourceID;
+  Result := GetLibraryPath + LangCode + '_' + FBookCode + '_' + ResourceID;
   if not DirectoryExists(Result) then
     Result := '';
 end;
