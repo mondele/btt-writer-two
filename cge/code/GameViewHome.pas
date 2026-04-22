@@ -2,31 +2,31 @@
 unit GameViewHome;
 
 { Home screen.
-  Scans for real projects via ProjectScanner and displays them in a
-  scrollable list.  Tapping a row stores the project in GAppState and
-  navigates to the editor view. }
+  Chrome: BTTHeader (top) + BTTSideRail (left) + scrollable project list.
+  Tapping a row stores the project in GAppState and navigates to the editor. }
 
 interface
 
 uses
   Classes,
-  CastleUIControls, CastleControls, CastleColors, CastleVectors,
-  CGEViewBase,
+  CastleUIControls, CastleControls, CastleColors,
+  CGEViewBase, BTTHeader, BTTSideRail,
   ProjectScanner;
 
 type
   TViewHome = class(TCGEViewBase)
   private
-    FHeader     : TCastleRectangleControl;
-    FTitleLbl   : TCastleLabel;
-    FUserLbl    : TCastleLabel;
+    FHeader     : TBTTHeader;
+    FRail       : TBTTSideRail;
     FScrollView : TCastleScrollView;
+    FUserLbl    : TCastleLabel;
     FProjects   : TProjectSummaryList;
 
-    procedure BuildHeader;
+    procedure BuildChrome;
     procedure BuildProjectList;
     procedure UpdateScrollArea;
     procedure ClickProject(Sender: TObject);
+    procedure ClickMenu(Sender: TObject);
   public
     procedure Start; override;
     procedure Resize; override;
@@ -39,16 +39,14 @@ var
 implementation
 
 uses
-  SysUtils,
-  CastleKeysMouse,
+  SysUtils, CastleVectors,
   AppState, BTTTheme,
   GameViewEditor;
 
 const
-  HeaderH  = 60;
-  RowH     = 72;
-  RowGap   = 2;
-  RowPad   = 16;
+  RowH   = 72;
+  RowGap = 2;
+  RowPad = 16;
 
 { TViewHome }
 
@@ -57,64 +55,53 @@ begin
   inherited;
   ApplyBackground;
   FProjects := ScanProjects;
-  BuildHeader;
+  BuildChrome;
   BuildProjectList;
 end;
 
-procedure TViewHome.BuildHeader;
+procedure TViewHome.BuildChrome;
 var
   Pal: TBTTPalette;
 begin
   Pal := P;
 
-  FHeader := TCastleRectangleControl.Create(FreeAtStop);
-  FHeader.Color := Pal.HeaderBg;
-  FHeader.Height := HeaderH;
-  FHeader.WidthFraction := 1;
-  FHeader.Anchor(vpTop, vpTop);
+  FHeader := TBTTHeader.Create(FreeAtStop, Pal);
+  FHeader.SetTitle('BTT-Writer');
   InsertFront(FHeader);
 
-  FTitleLbl := TCastleLabel.Create(FreeAtStop);
-  FTitleLbl.Caption := 'BTT-Writer';
-  FTitleLbl.Color := Pal.HeaderText;
-  FTitleLbl.FontSize := 22;
-  FTitleLbl.Anchor(hpMiddle, hpMiddle);
-  FTitleLbl.Anchor(vpMiddle, vpMiddle);
-  FHeader.InsertFront(FTitleLbl);
-
   FUserLbl := TCastleLabel.Create(FreeAtStop);
-  FUserLbl.Caption := GAppState.UserName;
-  FUserLbl.Color := Pal.TextInverse;
+  FUserLbl.Caption  := GAppState.UserName;
+  FUserLbl.Color    := Pal.TextInverse;
   FUserLbl.FontSize := 13;
-  FUserLbl.Anchor(hpRight, hpRight, -RowPad);
-  FUserLbl.Anchor(vpMiddle, vpMiddle);
-  FHeader.InsertFront(FUserLbl);
+  FHeader.AddRight(FUserLbl);
+
+  FRail := TBTTSideRail.Create(FreeAtStop, Pal);
+  FRail.OnMenuClick := @ClickMenu;
+  InsertFront(FRail);
+
+  FScrollView := TCastleScrollView.Create(FreeAtStop);
+  InsertFront(FScrollView);
 end;
 
 procedure TViewHome.BuildProjectList;
 var
+  Pal: TBTTPalette;
   I: Integer;
   Row: TCastleRectangleControl;
-  NameLbl, DetailLbl: TCastleLabel;
-  EmptyLbl: TCastleLabel;
+  NameLbl, DetailLbl, EmptyLbl: TCastleLabel;
   Btn: TCastleButton;
-  Pal: TBTTPalette;
 begin
   Pal := P;
 
-  FScrollView := TCastleScrollView.Create(FreeAtStop);
-  InsertFront(FScrollView);
-
   if Length(FProjects) = 0 then
   begin
-    { Empty-state label }
     EmptyLbl := TCastleLabel.Create(FreeAtStop);
     EmptyLbl.Caption :=
       'No translation projects found.' + LineEnding +
       'Projects are stored in:' + LineEnding +
       '~/.config/BTT-Writer/targetTranslations/';
-    EmptyLbl.Color := Pal.TextSecondary;
-    EmptyLbl.FontSize := 15;
+    EmptyLbl.Color     := Pal.TextSecondary;
+    EmptyLbl.FontSize  := 15;
     EmptyLbl.Alignment := hpMiddle;
     EmptyLbl.Anchor(hpMiddle, hpMiddle);
     EmptyLbl.Anchor(vpMiddle, vpMiddle);
@@ -125,14 +112,14 @@ begin
   for I := 0 to High(FProjects) do
   begin
     Row := TCastleRectangleControl.Create(FreeAtStop);
-    Row.Color := Pal.PanelBg;
+    Row.Color  := Pal.PanelBg;
     Row.Height := RowH;
-    Row.Tag := I;
+    Row.Tag    := I;
     FScrollView.ScrollArea.InsertFront(Row);
 
     NameLbl := TCastleLabel.Create(FreeAtStop);
     NameLbl.Caption := FProjects[I].BookName + '  (' + FProjects[I].TargetLangCode + ')';
-    NameLbl.Color := Pal.TextPrimary;
+    NameLbl.Color   := Pal.TextPrimary;
     NameLbl.FontSize := 16;
     NameLbl.Anchor(hpLeft, hpLeft, RowPad);
     NameLbl.Anchor(vpTop, vpTop, -14);
@@ -143,17 +130,17 @@ begin
       FProjects[I].ResourceType + '  •  ' +
       IntToStr(FProjects[I].FinishedChunks) + ' / ' +
       IntToStr(FProjects[I].TotalChunks) + ' chunks';
-    DetailLbl.Color := Pal.TextSecondary;
+    DetailLbl.Color   := Pal.TextSecondary;
     DetailLbl.FontSize := 13;
     DetailLbl.Anchor(hpLeft, hpLeft, RowPad);
     DetailLbl.Anchor(vpBottom, vpBottom, 14);
     Row.InsertFront(DetailLbl);
 
     Btn := TCastleButton.Create(FreeAtStop);
-    Btn.Caption := 'Open';
+    Btn.Caption  := 'Open';
     Btn.FontSize := 13;
-    Btn.Tag := I;
-    Btn.OnClick := @ClickProject;
+    Btn.Tag      := I;
+    Btn.OnClick  := @ClickProject;
     Btn.Anchor(hpRight, hpRight, -RowPad);
     Btn.Anchor(vpMiddle, vpMiddle);
     Row.InsertFront(Btn);
@@ -167,16 +154,21 @@ begin
   I := (Sender as TCastleButton).Tag;
   if (I < 0) or (I > High(FProjects)) then Exit;
 
-  GAppState.Screen              := asEditor;
-  GAppState.Editor.ProjectDir   := FProjects[I].FullPath;
-  GAppState.Editor.ProjectTitle :=
+  GAppState.Screen               := asEditor;
+  GAppState.Editor.ProjectDir    := FProjects[I].FullPath;
+  GAppState.Editor.ProjectTitle  :=
     FProjects[I].BookName + ' — ' + FProjects[I].TargetLangCode;
-  GAppState.Editor.BookCode     := FProjects[I].BookCode;
+  GAppState.Editor.BookCode      := FProjects[I].BookCode;
   GAppState.Editor.TargetLangCode := FProjects[I].TargetLangCode;
-  GAppState.Editor.ChapterIndex := 0;
-  GAppState.Editor.ChunkIndex   := -1;
+  GAppState.Editor.ChapterIndex  := 0;
+  GAppState.Editor.ChunkIndex    := -1;
 
   Container.View := ViewEditor;
+end;
+
+procedure TViewHome.ClickMenu(Sender: TObject);
+begin
+  { Phase 2: show main menu popup }
 end;
 
 procedure TViewHome.Resize;
@@ -184,12 +176,25 @@ var
   W, H: Single;
 begin
   inherited;
-  if FScrollView = nil then Exit;
+  if FHeader = nil then Exit;
   W := EffectiveWidth;
   H := EffectiveHeight;
-  FScrollView.Translation := Vector2(0, 0);
-  FScrollView.Width  := W;
-  FScrollView.Height := H - HeaderH;
+
+  { Header: full width across the top }
+  FHeader.Translation := Vector2(0, H - BTT_HEADER_H);
+  FHeader.Width       := W;
+  FHeader.Height      := BTT_HEADER_H;
+
+  { Rail: left column below header }
+  FRail.Translation := Vector2(0, 0);
+  FRail.Width       := BTT_RAIL_W;
+  FRail.Height      := H - BTT_HEADER_H;
+
+  { Scroll view: remaining space }
+  FScrollView.Translation := Vector2(BTT_RAIL_W, 0);
+  FScrollView.Width       := W - BTT_RAIL_W;
+  FScrollView.Height      := H - BTT_HEADER_H;
+
   UpdateScrollArea;
 end;
 
@@ -199,6 +204,8 @@ var
   AreaW, TotalH, CurBottom: Single;
   Row: TCastleUserInterface;
 begin
+  if FScrollView = nil then Exit;
+
   AreaW := FScrollView.EffectiveWidthForChildren
          - FScrollView.EffectiveScrollBarWidth;
 
@@ -219,14 +226,13 @@ begin
     Row := FScrollView.ScrollArea.Controls[I];
     CurBottom := CurBottom - RowH;
     Row.Translation := Vector2(0, CurBottom);
-    Row.Width := AreaW;
-    CurBottom := CurBottom - RowGap;
+    Row.Width       := AreaW;
+    CurBottom       := CurBottom - RowGap;
   end;
 end;
 
 procedure TViewHome.OnThemeChange;
 begin
-  { Rebuild the view from scratch when the theme changes. }
   if Container <> nil then
     Container.View := Self;
 end;

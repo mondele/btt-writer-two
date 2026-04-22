@@ -1,23 +1,22 @@
 {$mode objfpc}{$H+}
 unit GameViewEditor;
 
-{ Editor view — Phase 0 stub.
-  Displays the project title and a "Back" button.
-  Full chunk rendering and editing arrive in Phase 2. }
+{ Editor view — Phase 0/1 stub.
+  Full chunk rendering and editing arrive in Phase 4/5.
+  Currently shows the project header with a functioning Back button. }
 
 interface
 
 uses
   Classes,
-  CastleUIControls, CastleControls, CastleColors, CastleVectors,
-  CGEViewBase;
+  CastleUIControls, CastleControls, CastleColors,
+  CGEViewBase, BTTHeader;
 
 type
   TViewEditor = class(TCGEViewBase)
   private
-    FHeader  : TCastleRectangleControl;
+    FHeader  : TBTTHeader;
     FBackBtn : TCastleButton;
-    FTitleLbl: TCastleLabel;
     FBodyLbl : TCastleLabel;
 
     procedure ClickBack(Sender: TObject);
@@ -34,12 +33,9 @@ var
 implementation
 
 uses
-  SysUtils,
+  SysUtils, CastleVectors,
   AppState, BTTTheme,
   GameViewHome;
-
-const
-  HeaderH = 60;
 
 { TViewEditor }
 
@@ -56,39 +52,24 @@ var
 begin
   Pal := P;
 
-  { Header }
-  FHeader := TCastleRectangleControl.Create(FreeAtStop);
-  FHeader.Color := Pal.HeaderBg;
-  FHeader.Height := HeaderH;
-  FHeader.WidthFraction := 1;
-  FHeader.Anchor(vpTop, vpTop);
+  FHeader := TBTTHeader.Create(FreeAtStop, Pal);
+  FHeader.SetTitle(GAppState.Editor.ProjectTitle);
   InsertFront(FHeader);
 
   FBackBtn := TCastleButton.Create(FreeAtStop);
-  FBackBtn.Caption := '< Home';
+  FBackBtn.Caption  := '< Home';
   FBackBtn.FontSize := 14;
-  FBackBtn.OnClick := @ClickBack;
-  FBackBtn.Anchor(hpLeft, hpLeft, 12);
-  FBackBtn.Anchor(vpMiddle, vpMiddle);
-  FHeader.InsertFront(FBackBtn);
+  FBackBtn.OnClick  := @ClickBack;
+  FHeader.AddLeft(FBackBtn);
 
-  FTitleLbl := TCastleLabel.Create(FreeAtStop);
-  FTitleLbl.Caption := GAppState.Editor.ProjectTitle;
-  FTitleLbl.Color := Pal.HeaderText;
-  FTitleLbl.FontSize := 18;
-  FTitleLbl.Anchor(hpMiddle, hpMiddle);
-  FTitleLbl.Anchor(vpMiddle, vpMiddle);
-  FHeader.InsertFront(FTitleLbl);
-
-  { Phase placeholder }
   FBodyLbl := TCastleLabel.Create(FreeAtStop);
   FBodyLbl.Caption :=
-    'Editor — Phase 2' + LineEnding + LineEnding +
-    'Project:  ' + GAppState.Editor.ProjectDir + LineEnding +
-    'Book:     ' + GAppState.Editor.BookCode + LineEnding +
+    'Editor — Phase 4/5' + LineEnding + LineEnding +
+    'Project:  ' + GAppState.Editor.ProjectDir  + LineEnding +
+    'Book:     ' + GAppState.Editor.BookCode     + LineEnding +
     'Language: ' + GAppState.Editor.TargetLangCode;
-  FBodyLbl.Color := Pal.TextSecondary;
-  FBodyLbl.FontSize := 14;
+  FBodyLbl.Color     := Pal.TextSecondary;
+  FBodyLbl.FontSize  := 14;
   FBodyLbl.Alignment := hpMiddle;
   FBodyLbl.Anchor(hpMiddle, hpMiddle);
   FBodyLbl.Anchor(vpMiddle, vpMiddle);
@@ -103,8 +84,15 @@ begin
 end;
 
 procedure TViewEditor.Resize;
+var
+  W: Single;
 begin
   inherited;
+  if FHeader = nil then Exit;
+  W := EffectiveWidth;
+  FHeader.Translation := Vector2(0, EffectiveHeight - BTT_HEADER_H);
+  FHeader.Width       := W;
+  FHeader.Height      := BTT_HEADER_H;
 end;
 
 procedure TViewEditor.OnThemeChange;
