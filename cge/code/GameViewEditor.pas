@@ -64,6 +64,7 @@ type
     procedure ClickPrev(Sender: TObject);
     procedure ClickNext(Sender: TObject);
     procedure ClickEditChunk(Sender: TObject);
+    procedure ClickToggleFinished(Sender: TObject);
   public
     procedure Start;  override;
     procedure Stop;   override;
@@ -298,6 +299,8 @@ var
   Lbl        : TCastleLabel;
   Card       : TCastleRectangleControl;
   EditBtn    : TCastleButton;
+  FinBtn     : TCastleButton;
+  ChunkDone  : Boolean;
 begin
   FreeAndNil(FChapterContent);
   FChapterContent := TComponent.Create(nil);
@@ -349,16 +352,21 @@ begin
   end
   else
   begin
-    { Translation mode — one card per chunk with Edit button }
+    { Translation mode — one card per chunk with Edit + Finished buttons }
     for I := 0 to Chapter.Chunks.Count - 1 do
     begin
       ChunkText := USFMToRichText(Chapter.Chunks[I].Content, VerseColor);
       if ChunkText = '' then ChunkText := '<i>(empty)</i>';
 
-      { Card owned by FChapterContent; label/button owned by card }
-      Card       := TCastleRectangleControl.Create(FChapterContent);
-      Card.Color := Pal.PanelBg;
-      Card.Tag   := I;
+      ChunkDone := (FProject <> nil) and
+        TProject(FProject).IsFinished(Chapter.ID, Chapter.Chunks[I].Name);
+
+      Card := TCastleRectangleControl.Create(FChapterContent);
+      if ChunkDone then
+        Card.Color := Pal.FinishedBg
+      else
+        Card.Color := Pal.PanelBg;
+      Card.Tag := I;
       FScrollView.ScrollArea.InsertFront(Card);
 
       Lbl          := TCastleLabel.Create(Card);
@@ -366,8 +374,8 @@ begin
       Lbl.Html     := True;
       Lbl.Color    := Pal.TextPrimary;
       Lbl.FontSize := 15;
-      Lbl.Anchor(hpLeft,  hpLeft,  ChunkCardPad);
-      Lbl.Anchor(vpTop,   vpTop,   -ChunkCardPad);
+      Lbl.Anchor(hpLeft, hpLeft, ChunkCardPad);
+      Lbl.Anchor(vpTop,  vpTop,  -ChunkCardPad);
       Card.InsertFront(Lbl);
 
       EditBtn         := TCastleButton.Create(Card);
@@ -375,9 +383,21 @@ begin
       EditBtn.FontSize := 12;
       EditBtn.Tag     := I;
       EditBtn.OnClick := @ClickEditChunk;
-      EditBtn.Anchor(hpRight,  hpRight,  -ChunkCardPad);
+      EditBtn.Anchor(hpRight,  hpRight,  -(ChunkCardPad + 90));
       EditBtn.Anchor(vpBottom, vpBottom,  ChunkCardPad);
       Card.InsertFront(EditBtn);
+
+      FinBtn         := TCastleButton.Create(Card);
+      if ChunkDone then
+        FinBtn.Caption := 'Unfinish'
+      else
+        FinBtn.Caption := 'Mark Done';
+      FinBtn.FontSize := 12;
+      FinBtn.Tag     := I;
+      FinBtn.OnClick := @ClickToggleFinished;
+      FinBtn.Anchor(hpRight,  hpRight,  -ChunkCardPad);
+      FinBtn.Anchor(vpBottom, vpBottom,  ChunkCardPad);
+      Card.InsertFront(FinBtn);
     end;
 
     if Chapter.Chunks.Count = 0 then
@@ -560,6 +580,35 @@ begin
   ViewChunkEdit.InputText := Chapter.Chunks[Idx].Content;
   FChunkEdit := ViewChunkEdit;
   Container.PushView(ViewChunkEdit);
+end;
+
+procedure TViewEditor.ClickToggleFinished(Sender: TObject);
+var
+  ChIdx   : Integer;
+  Chapter : TChapter;
+  Idx     : Integer;
+begin
+  Idx := (Sender as TCastleButton).Tag;
+  if (FProject = nil) or (TProject(FProject).Book = nil) then Exit;
+
+  ChIdx := GAppState.Editor.ChapterIndex;
+  if (ChIdx < 0) or (ChIdx >= FChapterCount) then Exit;
+
+  Chapter := TProject(FProject).Book.Chapters[ChIdx];
+  if (Idx < 0) or (Idx >= Chapter.Chunks.Count) then Exit;
+
+  if TProject(FProject).IsFinished(Chapter.ID, Chapter.Chunks[Idx].Name) then
+  begin
+    TProject(FProject).MarkUnfinished(Chapter.ID, Chapter.Chunks[Idx].Name);
+    LogInfo('Editor: chunk ' + IntToStr(Idx) + ' marked unfinished');
+  end
+  else
+  begin
+    TProject(FProject).MarkFinished(Chapter.ID, Chapter.Chunks[Idx].Name);
+    LogInfo('Editor: chunk ' + IntToStr(Idx) + ' marked finished');
+  end;
+
+  LoadChapterContent;  { refresh card colors and button captions }
 end;
 
 procedure TViewEditor.Resize;

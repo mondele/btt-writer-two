@@ -29,6 +29,7 @@ type
     TextInverse     : TCastleColor;
     HeaderText      : TCastleColor;
     RailText        : TCastleColor;
+    FinishedBg      : TCastleColor;  { tinted card background for finished chunks }
   end;
 
 function GetBTTPalette(ATheme: TAppTheme): TBTTPalette;
@@ -57,6 +58,7 @@ begin
     Result.TextInverse   := HexToColor('1C1C1C');
     Result.HeaderText    := HexToColor('D2D2D2');
     Result.RailText      := HexToColor('1C1C1C');
+    Result.FinishedBg    := HexToColor('1E3D2F');  { dark green tint }
   end
   else
   begin
@@ -77,6 +79,7 @@ begin
     Result.TextInverse   := White;
     Result.HeaderText    := White;
     Result.RailText      := White;
+    Result.FinishedBg    := HexToColor('E6F9F0');  { light green tint }
   end;
 end;
 

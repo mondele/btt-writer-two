@@ -43,6 +43,7 @@ type
     FCardLbl      : TCastleLabel;
     FEmptyLbl     : TCastleLabel;   { "No translation yet" placeholder }
     FEditBtn      : TCastleButton;
+    FFinBtn       : TCastleButton;   { Mark Done / Unfinish }
     FPeekTab      : TCastleButton;
 
     { ── data ── (freed in Stop) }
@@ -71,6 +72,7 @@ type
     procedure ClickNextChunk(Sender: TObject);
     procedure ClickFlip(Sender: TObject);
     procedure ClickEdit(Sender: TObject);
+    procedure ClickToggleFinished(Sender: TObject);
 
     function  CurrentChunkCount: Integer;
     procedure StepChunk(Delta: Integer);
@@ -282,6 +284,15 @@ begin
   FEditBtn.Exists   := False;
   FFrontCard.InsertFront(FEditBtn);
 
+  FFinBtn          := TCastleButton.Create(FreeAtStop);
+  FFinBtn.Caption  := 'Mark Done';
+  FFinBtn.FontSize := 13;
+  FFinBtn.OnClick  := @ClickToggleFinished;
+  FFinBtn.Anchor(hpLeft,   hpLeft,   CardPad);
+  FFinBtn.Anchor(vpBottom, vpBottom, CardPad);
+  FFinBtn.Exists   := False;
+  FFrontCard.InsertFront(FFinBtn);
+
   { Peek tab — a button styled as a flat strip }
   FPeekTab                   := TCastleButton.Create(FreeAtStop);
   FPeekTab.Caption           := 'Show Translation';
@@ -387,6 +398,7 @@ var
   TransText     : string;
   SrcText       : string;
   HasTrans      : Boolean;
+  ChunkDone     : Boolean;
 begin
   if FFrontCard = nil then Exit;
 
@@ -400,6 +412,7 @@ begin
     FCardLbl.Exists  := True;
     FEmptyLbl.Exists := False;
     FEditBtn.Exists  := False;
+    FFinBtn.Exists   := False;
     Exit;
   end;
 
@@ -410,6 +423,7 @@ begin
     FCardLbl.Exists  := True;
     FEmptyLbl.Exists := False;
     FEditBtn.Exists  := False;
+    FFinBtn.Exists   := False;
     Exit;
   end;
 
@@ -428,12 +442,16 @@ begin
   TransText := USFMToRichText(Chapter.Chunks[CkIdx].Content, VerseColor);
   HasTrans  := Trim(Chapter.Chunks[CkIdx].Content) <> '';
 
+  ChunkDone := (FProject <> nil) and
+    ProjectRef(Self).IsFinished(Chapter.ID, Chapter.Chunks[CkIdx].Name);
+
   if FShowingSource then
   begin
     FCardLbl.Caption  := SrcText;
     FCardLbl.Exists   := True;
     FEmptyLbl.Exists  := False;
     FEditBtn.Exists   := False;
+    FFinBtn.Exists    := False;
     FPeekTab.Caption  := 'Show Translation';
     FFrontCard.Color  := P.PanelBg;
     FShadowCard.Color := P.ContentBg;
@@ -442,9 +460,9 @@ begin
   begin
     if HasTrans then
     begin
-      FCardLbl.Caption  := TransText;
-      FCardLbl.Exists   := True;
-      FEmptyLbl.Exists  := False;
+      FCardLbl.Caption := TransText;
+      FCardLbl.Exists  := True;
+      FEmptyLbl.Exists := False;
     end
     else
     begin
@@ -453,8 +471,16 @@ begin
       FEmptyLbl.Exists := True;
     end;
     FEditBtn.Exists  := True;
+    if ChunkDone then
+      FFinBtn.Caption := 'Unfinish'
+    else
+      FFinBtn.Caption := 'Mark Done';
+    FFinBtn.Exists   := True;
     FPeekTab.Caption := 'Show Source';
-    FFrontCard.Color := P.PanelBg;
+    if ChunkDone then
+      FFrontCard.Color := P.FinishedBg
+    else
+      FFrontCard.Color := P.PanelBg;
     FShadowCard.Color := P.ContentBg;
   end;
 end;
@@ -550,6 +576,33 @@ begin
   ViewChunkEdit.InputText := Chapter.Chunks[CkIdx].Content;
   FChunkEdit := ViewChunkEdit;
   Container.PushView(ViewChunkEdit);
+end;
+
+procedure TViewBlindEdit.ClickToggleFinished(Sender: TObject);
+var
+  ChIdx, CkIdx: Integer;
+  Chapter: TChapter;
+begin
+  ChIdx := GAppState.Editor.ChapterIndex;
+  CkIdx := GAppState.Editor.ChunkIndex;
+  if (FProject = nil) or (ProjectRef(Self).Book = nil) then Exit;
+  if (ChIdx < 0) or (ChIdx >= FChapterCount) then Exit;
+  Chapter := ProjectRef(Self).Book.Chapters[ChIdx];
+  if (CkIdx < 0) or (CkIdx >= Chapter.Chunks.Count) then Exit;
+
+  if ProjectRef(Self).IsFinished(Chapter.ID, Chapter.Chunks[CkIdx].Name) then
+  begin
+    ProjectRef(Self).MarkUnfinished(Chapter.ID, Chapter.Chunks[CkIdx].Name);
+    LogInfo('BlindEdit: chunk ' + IntToStr(CkIdx) + ' marked unfinished');
+  end
+  else
+  begin
+    ProjectRef(Self).MarkFinished(Chapter.ID, Chapter.Chunks[CkIdx].Name);
+    LogInfo('BlindEdit: chunk ' + IntToStr(CkIdx) + ' marked finished');
+  end;
+
+  UpdateCardContent;
+  FNeedsRelayout := True;
 end;
 
 procedure TViewBlindEdit.Resume;
