@@ -15,7 +15,7 @@ implementation
 
 uses
   SysUtils,
-  CastleWindow, CastleApplicationProperties, CastleLog,
+  CastleWindow, CastleApplicationProperties, CastleLog, CastleUIControls,
   AppSettings, AppLog, AppState, UserProfile,
   GameViewHome, GameViewEditor, GameViewChunkEdit;
 
@@ -51,8 +51,10 @@ begin
   else
     GAppState.UserName := '(not logged in)';
 
-  { Apply UI scaling from data/CastleSettings.xml. }
-  Window.Container.LoadSettings('castle-data:/CastleSettings.xml');
+  { UI scaling: keep reference size 1280×800 within the window. }
+  Window.Container.UIScaling        := usEncloseReferenceSize;
+  Window.Container.UIReferenceWidth  := 1280;
+  Window.Container.UIReferenceHeight := 800;
 
   { Create views once; they persist for the application lifetime. }
   ViewHome      := TViewHome.Create(Application);
