@@ -4,9 +4,6 @@ unit AppSettings;
 
 interface
 
-uses
-  Forms;
-
 type
   TAppTheme = (atLight, atDark, atSystem);
 

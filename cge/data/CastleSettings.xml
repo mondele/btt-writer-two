@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<castle_settings>
+  <!--
+    usEncloseReferenceSize: scale the UI so the reference size always fits
+    inside the actual window, preserving aspect ratio.
+    Designed at 1280 x 800; will scale down on smaller screens.
+  -->
+  <ui_scaling
+    mode="EncloseReferenceSize"
+    reference_width="1280"
+    reference_height="800"
+  />
+</castle_settings>

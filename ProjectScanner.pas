@@ -5,7 +5,7 @@ unit ProjectScanner;
 interface
 
 uses
-  SysUtils, Classes, fpjson, jsonparser, DataPaths, ProjectCreator;
+  SysUtils, Classes, fpjson, jsonparser, DataPaths, CanonBooks;
 
 type
   TProjectSummary = record
