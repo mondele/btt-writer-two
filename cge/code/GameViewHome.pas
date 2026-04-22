@@ -1,32 +1,59 @@
 {$mode objfpc}{$H+}
 unit GameViewHome;
 
-{ Home screen.
-  Chrome: BTTHeader (top) + BTTSideRail (left) + scrollable project list.
-  Tapping a row stores the project in GAppState and navigates to the editor. }
+{ Home screen — Phase 2.
+  Chrome: BTTHeader (top) | BTTSideRail (left) | content bar + project list.
+  Main menu popup slides in from ⋮; a full-screen backdrop dismisses it on
+  any outside click. }
 
 interface
 
 uses
   Classes,
-  CastleUIControls, CastleControls, CastleColors,
-  CGEViewBase, BTTHeader, BTTSideRail,
+  CastleUIControls, CastleControls, CastleColors, CastleVectors, CastleKeysMouse,
+  CGEViewBase, BTTHeader, BTTSideRail, BTTPopupMenu,
   ProjectScanner;
 
 type
+  { Full-screen dimmer that dismisses the popup on any outside click. }
+  TPopupBackdrop = class(TCastleRectangleControl)
+  private
+    FMenu: TBTTPopupMenu;
+  public
+    function Press(const Event: TInputPressRelease): Boolean; override;
+    property Menu: TBTTPopupMenu read FMenu write FMenu;
+  end;
+
   TViewHome = class(TCGEViewBase)
   private
-    FHeader     : TBTTHeader;
-    FRail       : TBTTSideRail;
-    FScrollView : TCastleScrollView;
-    FUserLbl    : TCastleLabel;
-    FProjects   : TProjectSummaryList;
+    FHeader      : TBTTHeader;
+    FUserLbl     : TCastleLabel;
+    FRail        : TBTTSideRail;
+    FContentBar  : TCastleRectangleControl;
+    FHeadingLbl  : TCastleLabel;
+    FNewProjBtn  : TCastleButton;
+    FScrollView  : TCastleScrollView;
+    FMenuPopup   : TBTTPopupMenu;
+    FBackdrop    : TPopupBackdrop;
+    FProjects    : TProjectSummaryList;
 
     procedure BuildChrome;
+    procedure BuildMenuPopup;
     procedure BuildProjectList;
     procedure UpdateScrollArea;
+
     procedure ClickProject(Sender: TObject);
+    procedure ClickNewProject(Sender: TObject);
     procedure ClickMenu(Sender: TObject);
+
+    { Menu item handlers — each closes the popup then acts. }
+    procedure MenuDismiss;
+    procedure MenuUpdateClick(Sender: TObject);
+    procedure MenuImportClick(Sender: TObject);
+    procedure MenuAcademyClick(Sender: TObject);
+    procedure MenuFeedbackClick(Sender: TObject);
+    procedure MenuLogoutClick(Sender: TObject);
+    procedure MenuSettingsClick(Sender: TObject);
   public
     procedure Start; override;
     procedure Resize; override;
@@ -39,14 +66,29 @@ var
 implementation
 
 uses
-  SysUtils, CastleVectors,
-  AppState, BTTTheme,
+  SysUtils,
+  AppState, BTTTheme, AppLog,
   GameViewEditor;
 
 const
-  RowH   = 72;
-  RowGap = 2;
-  RowPad = 16;
+  RowH         = 72;
+  RowGap       = 2;
+  RowPad       = 16;
+  ContentBarH  = 52;
+
+{ TPopupBackdrop }
+
+function TPopupBackdrop.Press(const Event: TInputPressRelease): Boolean;
+begin
+  Result := inherited Press(Event);
+  if (Event.EventType = itMouseButton) and (Event.MouseButton = buttonLeft) then
+  begin
+    Exists := False;
+    if Assigned(FMenu) then
+      FMenu.Exists := False;
+    Result := True;
+  end;
+end;
 
 { TViewHome }
 
@@ -56,6 +98,7 @@ begin
   ApplyBackground;
   FProjects := ScanProjects;
   BuildChrome;
+  BuildMenuPopup;
   BuildProjectList;
 end;
 
@@ -65,6 +108,37 @@ var
 begin
   Pal := P;
 
+  { Scroll view first (bottommost) }
+  FScrollView := TCastleScrollView.Create(FreeAtStop);
+  InsertFront(FScrollView);
+
+  { Content bar — heading strip above the scroll view }
+  FContentBar := TCastleRectangleControl.Create(FreeAtStop);
+  FContentBar.Color := Pal.ContentBg;
+  InsertFront(FContentBar);
+
+  FHeadingLbl := TCastleLabel.Create(FreeAtStop);
+  FHeadingLbl.Caption  := 'Your Translation Projects';
+  FHeadingLbl.Color    := Pal.TextPrimary;
+  FHeadingLbl.FontSize := 18;
+  FHeadingLbl.Anchor(hpLeft, hpLeft, RowPad);
+  FHeadingLbl.Anchor(vpMiddle, vpMiddle);
+  FContentBar.InsertFront(FHeadingLbl);
+
+  FNewProjBtn := TCastleButton.Create(FreeAtStop);
+  FNewProjBtn.Caption  := '+ New Project';
+  FNewProjBtn.FontSize := 13;
+  FNewProjBtn.OnClick  := @ClickNewProject;
+  FNewProjBtn.Anchor(hpRight, hpRight, -RowPad);
+  FNewProjBtn.Anchor(vpMiddle, vpMiddle);
+  FContentBar.InsertFront(FNewProjBtn);
+
+  { Left rail }
+  FRail := TBTTSideRail.Create(FreeAtStop, Pal);
+  FRail.OnMenuClick := @ClickMenu;
+  InsertFront(FRail);
+
+  { Header on top }
   FHeader := TBTTHeader.Create(FreeAtStop, Pal);
   FHeader.SetTitle('BTT-Writer');
   InsertFront(FHeader);
@@ -75,12 +149,27 @@ begin
   FUserLbl.FontSize := 13;
   FHeader.AddRight(FUserLbl);
 
-  FRail := TBTTSideRail.Create(FreeAtStop, Pal);
-  FRail.OnMenuClick := @ClickMenu;
-  InsertFront(FRail);
+  { Backdrop — hidden, in front of content but behind popup }
+  FBackdrop := TPopupBackdrop.Create(FreeAtStop);
+  FBackdrop.Color  := Vector4(0, 0, 0, 0.18);
+  FBackdrop.Menu   := nil; { set after popup is created }
+  FBackdrop.FullSize := True;
+  FBackdrop.Exists   := False;
+  InsertFront(FBackdrop);
+end;
 
-  FScrollView := TCastleScrollView.Create(FreeAtStop);
-  InsertFront(FScrollView);
+procedure TViewHome.BuildMenuPopup;
+begin
+  FMenuPopup := TBTTPopupMenu.Create(FreeAtStop, P);
+  FMenuPopup.AddItem('Update',             @MenuUpdateClick);
+  FMenuPopup.AddItem('Import ...',         @MenuImportClick);
+  FMenuPopup.AddItem('translationAcademy', @MenuAcademyClick);
+  FMenuPopup.AddItem('Feedback',           @MenuFeedbackClick);
+  FMenuPopup.AddItem('Logout',             @MenuLogoutClick);
+  FMenuPopup.AddItem('Settings',           @MenuSettingsClick);
+  FMenuPopup.Build;
+  InsertFront(FMenuPopup);    { on top of backdrop }
+  FBackdrop.Menu := FMenuPopup;
 end;
 
 procedure TViewHome.BuildProjectList;
@@ -88,8 +177,9 @@ var
   Pal: TBTTPalette;
   I: Integer;
   Row: TCastleRectangleControl;
-  NameLbl, DetailLbl, EmptyLbl: TCastleLabel;
+  NameLbl, DetailLbl, ProgLbl, EmptyLbl: TCastleLabel;
   Btn: TCastleButton;
+  Pct: Integer;
 begin
   Pal := P;
 
@@ -111,13 +201,13 @@ begin
 
   for I := 0 to High(FProjects) do
   begin
-    Row := TCastleRectangleControl.Create(FreeAtStop);
+    Row        := TCastleRectangleControl.Create(FreeAtStop);
     Row.Color  := Pal.PanelBg;
     Row.Height := RowH;
     Row.Tag    := I;
     FScrollView.ScrollArea.InsertFront(Row);
 
-    NameLbl := TCastleLabel.Create(FreeAtStop);
+    NameLbl         := TCastleLabel.Create(FreeAtStop);
     NameLbl.Caption := FProjects[I].BookName + '  (' + FProjects[I].TargetLangCode + ')';
     NameLbl.Color   := Pal.TextPrimary;
     NameLbl.FontSize := 16;
@@ -125,7 +215,7 @@ begin
     NameLbl.Anchor(vpTop, vpTop, -14);
     Row.InsertFront(NameLbl);
 
-    DetailLbl := TCastleLabel.Create(FreeAtStop);
+    DetailLbl         := TCastleLabel.Create(FreeAtStop);
     DetailLbl.Caption :=
       FProjects[I].ResourceType + '  •  ' +
       IntToStr(FProjects[I].FinishedChunks) + ' / ' +
@@ -136,11 +226,24 @@ begin
     DetailLbl.Anchor(vpBottom, vpBottom, 14);
     Row.InsertFront(DetailLbl);
 
-    Btn := TCastleButton.Create(FreeAtStop);
-    Btn.Caption  := 'Open';
-    Btn.FontSize := 13;
-    Btn.Tag      := I;
-    Btn.OnClick  := @ClickProject;
+    { Progress percentage label }
+    if FProjects[I].TotalChunks > 0 then
+      Pct := Round(FProjects[I].FinishedChunks / FProjects[I].TotalChunks * 100)
+    else
+      Pct := 0;
+    ProgLbl         := TCastleLabel.Create(FreeAtStop);
+    ProgLbl.Caption := IntToStr(Pct) + '%';
+    ProgLbl.Color   := Pal.Accent;
+    ProgLbl.FontSize := 14;
+    ProgLbl.Anchor(hpRight, hpRight, -90);
+    ProgLbl.Anchor(vpMiddle, vpMiddle);
+    Row.InsertFront(ProgLbl);
+
+    Btn           := TCastleButton.Create(FreeAtStop);
+    Btn.Caption   := 'Open';
+    Btn.FontSize  := 13;
+    Btn.Tag       := I;
+    Btn.OnClick   := @ClickProject;
     Btn.Anchor(hpRight, hpRight, -RowPad);
     Btn.Anchor(vpMiddle, vpMiddle);
     Row.InsertFront(Btn);
@@ -166,34 +269,95 @@ begin
   Container.View := ViewEditor;
 end;
 
+procedure TViewHome.ClickNewProject(Sender: TObject);
+begin
+  LogInfo('New Project: not yet implemented in CGE view');
+end;
+
 procedure TViewHome.ClickMenu(Sender: TObject);
 begin
-  { Phase 2: show main menu popup }
+  FMenuPopup.Exists := not FMenuPopup.Exists;
+  FBackdrop.Exists  := FMenuPopup.Exists;
+end;
+
+procedure TViewHome.MenuDismiss;
+begin
+  FMenuPopup.Exists := False;
+  FBackdrop.Exists  := False;
+end;
+
+procedure TViewHome.MenuUpdateClick(Sender: TObject);
+begin
+  MenuDismiss;
+  LogInfo('Menu: Update selected (stub)');
+end;
+
+procedure TViewHome.MenuImportClick(Sender: TObject);
+begin
+  MenuDismiss;
+  LogInfo('Menu: Import selected (stub)');
+end;
+
+procedure TViewHome.MenuAcademyClick(Sender: TObject);
+begin
+  MenuDismiss;
+  LogInfo('Menu: translationAcademy selected (stub)');
+end;
+
+procedure TViewHome.MenuFeedbackClick(Sender: TObject);
+begin
+  MenuDismiss;
+  LogInfo('Menu: Feedback selected (stub)');
+end;
+
+procedure TViewHome.MenuLogoutClick(Sender: TObject);
+begin
+  MenuDismiss;
+  GAppState.UserName := '(not logged in)';
+  GAppState.IsLocal  := False;
+  LogInfo('Menu: Logout');
+  { Rebuild home view to reflect new user state }
+  Container.View := Self;
+end;
+
+procedure TViewHome.MenuSettingsClick(Sender: TObject);
+begin
+  MenuDismiss;
+  LogInfo('Menu: Settings selected (stub)');
 end;
 
 procedure TViewHome.Resize;
 var
-  W, H: Single;
+  W, H, ContentW: Single;
 begin
   inherited;
   if FHeader = nil then Exit;
   W := EffectiveWidth;
   H := EffectiveHeight;
+  ContentW := W - BTT_RAIL_W;
 
-  { Header: full width across the top }
+  { Header: full width, top }
   FHeader.Translation := Vector2(0, H - BTT_HEADER_H);
   FHeader.Width       := W;
   FHeader.Height      := BTT_HEADER_H;
 
-  { Rail: left column below header }
+  { Content bar: right of rail, just below header }
+  FContentBar.Translation := Vector2(BTT_RAIL_W, H - BTT_HEADER_H - ContentBarH);
+  FContentBar.Width       := ContentW;
+  FContentBar.Height      := ContentBarH;
+
+  { Rail: left side, full height below header }
   FRail.Translation := Vector2(0, 0);
   FRail.Width       := BTT_RAIL_W;
   FRail.Height      := H - BTT_HEADER_H;
 
-  { Scroll view: remaining space }
+  { Scroll view: remaining content area below content bar }
   FScrollView.Translation := Vector2(BTT_RAIL_W, 0);
-  FScrollView.Width       := W - BTT_RAIL_W;
-  FScrollView.Height      := H - BTT_HEADER_H;
+  FScrollView.Width       := ContentW;
+  FScrollView.Height      := H - BTT_HEADER_H - ContentBarH;
+
+  { Popup: anchored to bottom-left of content area, extends upward }
+  FMenuPopup.Translation := Vector2(BTT_RAIL_W, H - BTT_HEADER_H - FMenuPopup.Height);
 
   UpdateScrollArea;
 end;
@@ -224,10 +388,10 @@ begin
   for I := 0 to FScrollView.ScrollArea.ControlsCount - 1 do
   begin
     Row := FScrollView.ScrollArea.Controls[I];
-    CurBottom := CurBottom - RowH;
+    CurBottom      := CurBottom - RowH;
     Row.Translation := Vector2(0, CurBottom);
     Row.Width       := AreaW;
-    CurBottom       := CurBottom - RowGap;
+    CurBottom      := CurBottom - RowGap;
   end;
 end;
 
