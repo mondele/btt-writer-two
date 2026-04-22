@@ -71,7 +71,8 @@ implementation
 uses
   SysUtils,
   AppState, BTTTheme, AppLog,
-  GameViewEditor;
+  UserProfile,
+  GameViewEditor, GameViewLogin;
 
 const
   RowH         = 72;
@@ -406,10 +407,10 @@ begin
     begin
       GAppState.UserName := '(not logged in)';
       GAppState.IsLocal  := False;
+      ClearUserProfile;
       LogInfo('Logout confirmed');
       FreeAndNil(FConfirmLogout);
-      { Rebuild home view to reflect cleared user state. }
-      Container.View := Self;
+      Container.View := ViewLogin;
       Exit;
     end;
     FreeAndNil(FConfirmLogout);

@@ -17,7 +17,8 @@ uses
   SysUtils,
   CastleWindow, CastleApplicationProperties, CastleLog, CastleUIControls,
   AppSettings, AppLog, AppState, UserProfile,
-  GameViewHome, GameViewEditor, GameViewChunkEdit, GameViewBlindEdit;
+  GameViewHome, GameViewEditor, GameViewChunkEdit, GameViewBlindEdit,
+  GameViewLogin;
 
 var
   Window: TCastleWindow;
@@ -28,6 +29,7 @@ begin
   ViewEditor.OnThemeChange;
   ViewChunkEdit.OnThemeChange;
   ViewBlindEdit.OnThemeChange;
+  ViewLogin.OnThemeChange;
 end;
 
 procedure ApplicationInitialize;
@@ -62,9 +64,13 @@ begin
   ViewEditor    := TViewEditor.Create(Application);
   ViewChunkEdit := TViewChunkEdit.Create(Application);
   ViewBlindEdit := TViewBlindEdit.Create(Application);
+  ViewLogin     := TViewLogin.Create(Application);
 
   GAppState.Screen := asHome;
-  Window.Container.View := ViewHome;
+  if HasUserProfile then
+    Window.Container.View := ViewHome
+  else
+    Window.Container.View := ViewLogin;
 end;
 
 initialization
