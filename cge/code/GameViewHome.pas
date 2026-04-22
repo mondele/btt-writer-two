@@ -1,17 +1,18 @@
 {$mode objfpc}{$H+}
 unit GameViewHome;
 
-{ Home screen — Phase 2.
+{ Home screen — Phase 2/3.
   Chrome: BTTHeader (top) | BTTSideRail (left) | content bar + project list.
   Main menu popup slides in from ⋮; a full-screen backdrop dismisses it on
-  any outside click. }
+  any outside click.
+  Logout uses PushView(TViewConfirm); result is checked in Resume. }
 
 interface
 
 uses
   Classes,
   CastleUIControls, CastleControls, CastleColors, CastleVectors, CastleKeysMouse,
-  CGEViewBase, BTTHeader, BTTSideRail, BTTPopupMenu,
+  CGEViewBase, BTTHeader, BTTSideRail, BTTPopupMenu, GameViewConfirm,
   ProjectScanner;
 
 type
@@ -33,9 +34,10 @@ type
     FHeadingLbl  : TCastleLabel;
     FNewProjBtn  : TCastleButton;
     FScrollView  : TCastleScrollView;
-    FMenuPopup   : TBTTPopupMenu;
-    FBackdrop    : TPopupBackdrop;
-    FProjects    : TProjectSummaryList;
+    FMenuPopup      : TBTTPopupMenu;
+    FBackdrop       : TPopupBackdrop;
+    FProjects       : TProjectSummaryList;
+    FConfirmLogout  : TViewConfirm;
 
     procedure BuildChrome;
     procedure BuildMenuPopup;
@@ -56,6 +58,7 @@ type
     procedure MenuSettingsClick(Sender: TObject);
   public
     procedure Start; override;
+    procedure Resume; override;
     procedure Resize; override;
     procedure OnThemeChange; override;
   end;
@@ -313,11 +316,9 @@ end;
 procedure TViewHome.MenuLogoutClick(Sender: TObject);
 begin
   MenuDismiss;
-  GAppState.UserName := '(not logged in)';
-  GAppState.IsLocal  := False;
-  LogInfo('Menu: Logout');
-  { Rebuild home view to reflect new user state }
-  Container.View := Self;
+  { Push confirmation dialog; result is handled in Resume. }
+  FConfirmLogout := TViewConfirm.Create(Self, 'Log out of BTT-Writer?');
+  Container.PushView(FConfirmLogout);
 end;
 
 procedure TViewHome.MenuSettingsClick(Sender: TObject);
@@ -392,6 +393,26 @@ begin
     Row.Translation := Vector2(0, CurBottom);
     Row.Width       := AreaW;
     CurBottom      := CurBottom - RowGap;
+  end;
+end;
+
+procedure TViewHome.Resume;
+begin
+  inherited;
+  { Returning from the logout confirmation dialog. }
+  if Assigned(FConfirmLogout) then
+  begin
+    if FConfirmLogout.Answer then
+    begin
+      GAppState.UserName := '(not logged in)';
+      GAppState.IsLocal  := False;
+      LogInfo('Logout confirmed');
+      FreeAndNil(FConfirmLogout);
+      { Rebuild home view to reflect cleared user state. }
+      Container.View := Self;
+      Exit;
+    end;
+    FreeAndNil(FConfirmLogout);
   end;
 end;
 

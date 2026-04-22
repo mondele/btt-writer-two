@@ -1,37 +1,67 @@
 {$mode objfpc}{$H+}
 unit CGEViewBase;
 
-{ Base class for all BTT-Writer CGE views.
-  Provides:
-    - Current theme palette via P (shorthand for GetCurrentPalette)
-    - RTL flag via IsRTL (from GAppState.Editor)
-    - ApplyBackground: fills the view with the window background colour
-    - OnThemeChange notification hook (called by GameInitialize when the
-      theme setting changes; override to rebuild themed controls)
+{ Base classes for BTT-Writer CGE views.
+
+  TCGEViewBase — base for all full-screen views.
+    - P (shorthand for current palette)
+    - IsRTL flag
+    - ApplyBackground: opaque window background fill
+    - OnThemeChange notification hook
+
+  TCGEModalBase — base for modal overlay views.
+    - Uses PushView/PopView pattern (see CastleDialogViews docs)
+    - Dimmed semi-transparent overlay; centered content panel
+    - InterceptInput := True blocks input to views behind
+    - Close calls Container.PopView(Self)
+    - PanelWidth / PanelHeight control the card size before Start
 }
 
 interface
 
 uses
-  CastleUIControls, CastleControls, CastleColors,
+  Classes,
+  CastleUIControls, CastleControls, CastleColors, CastleVectors,
   BTTTheme, AppState;
 
 type
+  { Full-screen view base. }
   TCGEViewBase = class(TCastleView)
   private
     FBg: TCastleRectangleControl;
   protected
-    { Shorthand for the current palette — valid after Start. }
     function P: TBTTPalette;
-    { True when the editor is in RTL mode. }
     function IsRTL: Boolean;
-    { Fill the root with the window background colour.
-      Call once in Start before inserting other controls. }
     procedure ApplyBackground;
   public
-    { Called by GameInitialize when the user changes the theme.
-      Default implementation does nothing; override to rebuild UI. }
     procedure OnThemeChange; virtual;
+  end;
+
+  { Modal overlay view base.
+    Usage:
+      Dial := TViewConfirm.Create(Self);
+      Container.PushView(Dial);
+      // parent view's Resume checks Dial.Answer and FreeAndNil(Dial)
+  }
+  TCGEModalBase = class(TCGEViewBase)
+  private
+    FPanel  : TCastleRectangleControl;
+    FPanelW : Single;
+    FPanelH : Single;
+  protected
+    { The content card — subclasses insert child controls here. }
+    property ContentPanel: TCastleRectangleControl read FPanel;
+  public
+    constructor Create(AOwner: TComponent); override;
+    procedure Start; override;
+    procedure Resize; override;
+
+    { Dismiss this modal and return to the view below. }
+    procedure Close;
+
+    { Size of the centered content panel. Set before Start is called. }
+    property PanelWidth : Single read FPanelW write FPanelW;
+    property PanelHeight: Single read FPanelH write FPanelH;
   end;
 
 implementation
@@ -51,14 +81,59 @@ end;
 procedure TCGEViewBase.ApplyBackground;
 begin
   FBg := TCastleRectangleControl.Create(FreeAtStop);
-  FBg.Color := P.WindowBg;
+  FBg.Color    := P.WindowBg;
   FBg.FullSize := True;
   InsertFront(FBg);
 end;
 
 procedure TCGEViewBase.OnThemeChange;
 begin
-  { Nothing by default. }
+end;
+
+{ TCGEModalBase }
+
+constructor TCGEModalBase.Create(AOwner: TComponent);
+begin
+  inherited Create(AOwner);
+  FPanelW := 480;
+  FPanelH := 280;
+end;
+
+procedure TCGEModalBase.Start;
+var
+  Overlay: TCastleRectangleControl;
+  Pal: TBTTPalette;
+begin
+  inherited;
+  Pal := P;
+
+  InterceptInput := True;
+
+  { Semi-transparent dark overlay — lets the view behind show through. }
+  Overlay          := TCastleRectangleControl.Create(FreeAtStop);
+  Overlay.Color    := Vector4(0, 0, 0, 0.45);
+  Overlay.FullSize := True;
+  InsertFront(Overlay);
+
+  { Centered content card. }
+  FPanel       := TCastleRectangleControl.Create(FreeAtStop);
+  FPanel.Color := Pal.PanelBg;
+  FPanel.Width := FPanelW;
+  FPanel.Height := FPanelH;
+  FPanel.Anchor(hpMiddle, hpMiddle);
+  FPanel.Anchor(vpMiddle, vpMiddle);
+  InsertFront(FPanel);
+end;
+
+procedure TCGEModalBase.Resize;
+begin
+  inherited;
+  { Panel centering is handled by anchors; nothing extra needed here. }
+end;
+
+procedure TCGEModalBase.Close;
+begin
+  Container.PopView(Self);
 end;
 
 end.
