@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<project name="btt-spike"
+  standalone_source="bttspike.lpr"
+  game_units="GameInitialize"
+  qualified_name="org.bttwriter.spike"
+  caption="BTT-Writer CGE Spike"
+>
+  <compiler_options>
+    <search_paths>
+      <path value="code/" />
+    </search_paths>
+  </compiler_options>
+</project>
