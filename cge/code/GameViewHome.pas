@@ -12,7 +12,7 @@ interface
 uses
   Classes,
   CastleUIControls, CastleControls, CastleColors, CastleVectors, CastleKeysMouse,
-  CGEViewBase, BTTHeader, BTTSideRail, BTTPopupMenu, GameViewConfirm,
+  CGEViewBase, BTTHeader, BTTSideRail, BTTPopupMenu, BTTStatusBar, GameViewConfirm,
   ProjectScanner;
 
 type
@@ -30,6 +30,7 @@ type
     FHeader      : TBTTHeader;
     FUserLbl     : TCastleLabel;
     FRail        : TBTTSideRail;
+    FStatusBar   : TBTTStatusBar;
     FContentBar  : TCastleRectangleControl;
     FHeadingLbl  : TCastleLabel;
     FNewProjBtn  : TCastleButton;
@@ -155,6 +156,10 @@ begin
   FUserLbl.Color    := Pal.TextInverse;
   FUserLbl.FontSize := 13;
   FHeader.AddRight(FUserLbl);
+
+  { Status bar — pinned to the bottom }
+  FStatusBar := TBTTStatusBar.Create(FreeAtStop, Pal);
+  InsertFront(FStatusBar);
 
   { Backdrop — hidden, in front of content but behind popup }
   FBackdrop := TPopupBackdrop.Create(FreeAtStop);
@@ -346,20 +351,25 @@ begin
   FHeader.Width       := W;
   FHeader.Height      := BTT_HEADER_H;
 
+  { Status bar: full width, bottom }
+  FStatusBar.Translation := Vector2(0, 0);
+  FStatusBar.Width       := W;
+  FStatusBar.Height      := BTT_STATUS_H;
+
   { Content bar: right of rail, just below header }
   FContentBar.Translation := Vector2(BTT_RAIL_W, H - BTT_HEADER_H - ContentBarH);
   FContentBar.Width       := ContentW;
   FContentBar.Height      := ContentBarH;
 
-  { Rail: left side, full height below header }
-  FRail.Translation := Vector2(0, 0);
+  { Rail: left side, above status bar, below header }
+  FRail.Translation := Vector2(0, BTT_STATUS_H);
   FRail.Width       := BTT_RAIL_W;
-  FRail.Height      := H - BTT_HEADER_H;
+  FRail.Height      := H - BTT_HEADER_H - BTT_STATUS_H;
 
-  { Scroll view: remaining content area below content bar }
-  FScrollView.Translation := Vector2(BTT_RAIL_W, 0);
+  { Scroll view: remaining content area below content bar, above status bar }
+  FScrollView.Translation := Vector2(BTT_RAIL_W, BTT_STATUS_H);
   FScrollView.Width       := ContentW;
-  FScrollView.Height      := H - BTT_HEADER_H - ContentBarH;
+  FScrollView.Height      := H - BTT_HEADER_H - ContentBarH - BTT_STATUS_H;
 
   { Popup: anchored to bottom-left of content area, extends upward }
   FMenuPopup.Translation := Vector2(BTT_RAIL_W, H - BTT_HEADER_H - FMenuPopup.Height);

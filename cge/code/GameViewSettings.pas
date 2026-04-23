@@ -17,12 +17,14 @@ interface
 uses
   Classes,
   CastleUIControls, CastleControls, CastleColors,
-  CGEViewBase, BTTHeader;
+  CGEViewBase, BTTHeader, BTTBreadcrumb, BTTStatusBar;
 
 type
   TViewSettings = class(TCGEViewBase)
   private
     FHeader       : TBTTHeader;
+    FCrumb        : TBTTBreadcrumb;
+    FStatusBar    : TBTTStatusBar;
     FScrollView   : TCastleScrollView;
 
     { theme section }
@@ -84,23 +86,24 @@ end;
 
 procedure TViewSettings.BuildChrome;
 var
-  Pal     : TBTTPalette;
-  BackBtn : TCastleButton;
+  Pal : TBTTPalette;
 begin
   Pal := P;
 
   FHeader := TBTTHeader.Create(FreeAtStop, Pal);
-  FHeader.SetTitle('Settings');
+  FHeader.SetTitle('BTT-Writer');
   InsertFront(FHeader);
 
-  BackBtn         := TCastleButton.Create(FreeAtStop);
-  BackBtn.Caption := '< Back';
-  BackBtn.FontSize := 14;
-  BackBtn.OnClick := @ClickBack;
-  FHeader.AddLeft(BackBtn);
+  FCrumb := TBTTBreadcrumb.Create(FreeAtStop, Pal);
+  FCrumb.OnBack := @ClickBack;
+  FCrumb.SetCrumbs(['Home', 'Settings']);
+  InsertFront(FCrumb);
 
   FScrollView := TCastleScrollView.Create(FreeAtStop);
   InsertFront(FScrollView);
+
+  FStatusBar := TBTTStatusBar.Create(FreeAtStop, Pal);
+  InsertFront(FStatusBar);
 
   { ── Theme section ── }
   FThemeHeading          := TCastleLabel.Create(FreeAtStop);
@@ -268,9 +271,17 @@ begin
   FHeader.Width       := W;
   FHeader.Height      := BTT_HEADER_H;
 
-  FScrollView.Translation := Vector2(0, 0);
+  FCrumb.Translation := Vector2(0, H - BTT_HEADER_H - BTT_BREADCRUMB_H);
+  FCrumb.Width       := W;
+  FCrumb.Height      := BTT_BREADCRUMB_H;
+
+  FStatusBar.Translation := Vector2(0, 0);
+  FStatusBar.Width       := W;
+  FStatusBar.Height      := BTT_STATUS_H;
+
+  FScrollView.Translation := Vector2(0, BTT_STATUS_H);
   FScrollView.Width       := W;
-  FScrollView.Height      := H - BTT_HEADER_H;
+  FScrollView.Height      := H - BTT_HEADER_H - BTT_BREADCRUMB_H - BTT_STATUS_H;
 
   FNeedsRelayout := True;
 end;
