@@ -102,6 +102,7 @@ type
     procedure MenuUploadClick(Sender: TObject);
     procedure MenuExportTStudioClick(Sender: TObject);
     procedure MenuExportUSFMClick(Sender: TObject);
+    procedure MenuMarkChapterDoneClick(Sender: TObject);
 
     procedure DoUpload;
     procedure DoExportTStudio;
@@ -334,6 +335,7 @@ end;
 procedure TViewEditor.BuildMenuPopup;
 begin
   FMenuPopup := TBTTPopupMenu.Create(FreeAtStop, P);
+  FMenuPopup.AddItem('Mark Chapter Done', @MenuMarkChapterDoneClick);
   FMenuPopup.AddItem('Upload to Server',  @MenuUploadClick);
   FMenuPopup.AddItem('Export .tstudio',   @MenuExportTStudioClick);
   FMenuPopup.AddItem('Export USFM',       @MenuExportUSFMClick);
@@ -413,6 +415,34 @@ begin
   MenuDismiss;
   FNeedsExportUSFM := True;
   ShowExportOverlay('Exporting USFM…');
+end;
+
+procedure TViewEditor.MenuMarkChapterDoneClick(Sender: TObject);
+var
+  ChIdx   : Integer;
+  Chapter : TChapter;
+  I       : Integer;
+  Count   : Integer;
+begin
+  MenuDismiss;
+  if (FProject = nil) or (ProjectRef(Self).Book = nil) then Exit;
+
+  ChIdx := GAppState.Editor.ChapterIndex;
+  if (ChIdx < 0) or (ChIdx >= FChapterCount) then Exit;
+
+  Chapter := ProjectRef(Self).Book.Chapters[ChIdx];
+  Count := 0;
+  for I := 0 to Chapter.Chunks.Count - 1 do
+  begin
+    if not ProjectRef(Self).IsFinished(Chapter.ID, Chapter.Chunks[I].Name) then
+    begin
+      ProjectRef(Self).MarkFinished(Chapter.ID, Chapter.Chunks[I].Name);
+      Inc(Count);
+    end;
+  end;
+
+  LogInfo('Editor: marked ' + IntToStr(Count) + ' chunks finished in chapter ' + Chapter.ID);
+  LoadChapterContent;
 end;
 
 procedure TViewEditor.DoUpload;
