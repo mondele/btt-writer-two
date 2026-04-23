@@ -30,7 +30,6 @@ type
     FCrumb       : TBTTBreadcrumb;
     FStatusBar   : TBTTStatusBar;
     FCard        : TCastleRectangleControl;
-    FTitleLbl    : TCastleLabel;
     FDescLbl     : TCastleLabel;
 
     { One row per document }
@@ -79,11 +78,9 @@ uses
   GameViewHome, GameViewLogin;
 
 const
-  CardW    = 520;
-  CardH    = 380;
-  Pad      = 24;
+  Pad      = 32;
   RowH     = 52;
-  BtnW     = 110;
+  RowGap   = 14;
 
 { Document metadata }
 const
@@ -120,8 +117,6 @@ procedure TViewTerms.BuildChrome;
 var
   Pal  : TBTTPalette;
   I    : Integer;
-  Row  : TCastleRectangleControl;
-  Lbl  : TCastleLabel;
   Btn  : TCastleButton;
   YPos : Single;
 begin
@@ -138,85 +133,83 @@ begin
   FStatusBar := TBTTStatusBar.Create(FreeAtStop, Pal);
   InsertFront(FStatusBar);
 
-  { ── Centred card ── }
+  { ── Full-bleed white panel below the chrome ── }
   FCard        := TCastleRectangleControl.Create(FreeAtStop);
   FCard.Color  := Pal.PanelBg;
-  FCard.Width  := CardW;
-  FCard.Height := CardH;
-  FCard.Anchor(hpMiddle, hpMiddle);
-  FCard.Anchor(vpMiddle, vpMiddle);
+  { Size and position set in Resize to fill content area. }
   InsertFront(FCard);
 
-  FTitleLbl          := TCastleLabel.Create(FreeAtStop);
-  FTitleLbl.Caption  := 'Terms of Use';
-  FTitleLbl.Color    := Pal.TextPrimary;
-  FTitleLbl.FontSize := 22;
-  FTitleLbl.Anchor(hpMiddle, hpMiddle);
-  FTitleLbl.Anchor(vpTop, vpTop, -Pad);
-  FCard.InsertFront(FTitleLbl);
-
+  { Description paragraph at top }
   FDescLbl          := TCastleLabel.Create(FreeAtStop);
-  FDescLbl.Caption  := 'Please read and agree to each document before continuing.';
-  FDescLbl.Color    := Pal.TextSecondary;
-  FDescLbl.FontSize := 13;
+  FDescLbl.Caption  :=
+    'By using this app you agree with the statement of faith and translation guidelines' + LineEnding +
+    'and to release your work under the terms of the Creative Commons' + LineEnding +
+    'Attribution-ShareAlike 4.0 International License.';
+  FDescLbl.Color     := Pal.TextPrimary;
+  FDescLbl.FontSize  := 14;
+  FDescLbl.Alignment := hpMiddle;
   FDescLbl.Anchor(hpMiddle, hpMiddle);
-  FDescLbl.Anchor(vpTop, vpTop, -(Pad + 34));
+  FDescLbl.Anchor(vpTop, vpTop, -Pad);
   FCard.InsertFront(FDescLbl);
 
-  { Three document rows, stacked from Y = CardH - 96 downward }
+  { Three full-width solid-green document buttons, stacked. }
   for I := 0 to 2 do
   begin
-    YPos := CardH - 96 - I * (RowH + 6);
+    YPos := -(Pad + 80 + I * (RowH + RowGap));  { offset below description }
 
-    Row        := TCastleRectangleControl.Create(FreeAtStop);
-    Row.Color  := Pal.ContentBg;
-    Row.Width  := CardW - Pad * 2;
-    Row.Height := RowH;
-    Row.Translation := Vector2(Pad, YPos);
-    FCard.InsertFront(Row);
-    FDocRow[I] := Row;
-
-    Lbl          := TCastleLabel.Create(FreeAtStop);
-    Lbl.Caption  := DocTitles[I];
-    Lbl.Color    := Pal.TextPrimary;
-    Lbl.FontSize := 14;
-    Lbl.Anchor(hpLeft,   hpLeft,   10);
-    Lbl.Anchor(vpMiddle, vpMiddle);
-    Row.InsertFront(Lbl);
-    FDocLabel[I] := Lbl;
-
-    Btn          := TCastleButton.Create(FreeAtStop);
-    Btn.Caption  := 'Read';
-    Btn.FontSize := 13;
-    Btn.Width    := BtnW;
-    Btn.Anchor(hpRight,  hpRight,  -8);
-    Btn.Anchor(vpMiddle, vpMiddle);
-    Row.InsertFront(Btn);
-    FDocBtn[I] := Btn;
+    Btn              := TCastleButton.Create(FreeAtStop);
+    Btn.Caption      := UpperCase(DocTitles[I]);
+    Btn.FontSize     := 15;
+    Btn.AutoSize     := False;
+    Btn.Height       := RowH;
+    Btn.CustomBackground    := True;
+    Btn.CustomColorNormal   := Pal.Accent;
+    Btn.CustomColorFocused  := Pal.Accent;
+    Btn.CustomColorPressed  := Pal.Accent;
+    Btn.CustomTextColorUse  := True;
+    Btn.CustomTextColor     := Pal.TextInverse;
+    Btn.Anchor(hpLeft,  hpLeft,  Pad);
+    Btn.Anchor(hpRight, hpRight, -Pad);
+    Btn.Anchor(vpTop,   vpTop,   YPos);
+    FCard.InsertFront(Btn);
+    FDocBtn[I]   := Btn;
+    FDocLabel[I] := nil;
+    FDocRow[I]   := nil;
   end;
   FDocBtn[0].OnClick := @ClickDoc0;
   FDocBtn[1].OnClick := @ClickDoc1;
   FDocBtn[2].OnClick := @ClickDoc2;
 
-  { Agree / Decline buttons }
-  FAgreeBtn          := TCastleButton.Create(FreeAtStop);
-  FAgreeBtn.Caption  := 'Agree';
-  FAgreeBtn.FontSize := 14;
-  FAgreeBtn.Width    := 120;
-  FAgreeBtn.Enabled  := False;
-  FAgreeBtn.OnClick  := @ClickAgree;
-  FAgreeBtn.Anchor(hpRight,  hpRight,  -(Pad + 130));
-  FAgreeBtn.Anchor(vpBottom, vpBottom, Pad);
-  FCard.InsertFront(FAgreeBtn);
-
+  { Bottom row — NO THANKS (left-ish) / I AGREE (right-ish), as text-link buttons }
   FDeclineBtn          := TCastleButton.Create(FreeAtStop);
-  FDeclineBtn.Caption  := 'Decline';
+  FDeclineBtn.Caption  := 'NO THANKS';
   FDeclineBtn.FontSize := 14;
-  FDeclineBtn.Width    := 110;
   FDeclineBtn.OnClick  := @ClickDecline;
-  FDeclineBtn.Anchor(hpRight,  hpRight,  -Pad);
+  FDeclineBtn.CustomBackground   := True;
+  FDeclineBtn.CustomColorNormal  := Vector4(0, 0, 0, 0);
+  FDeclineBtn.CustomColorFocused := Vector4(0, 0, 0, 0.05);
+  FDeclineBtn.CustomColorPressed := Vector4(0, 0, 0, 0.10);
+  FDeclineBtn.CustomTextColorUse := True;
+  FDeclineBtn.CustomTextColor    := Pal.TextSecondary;
+  FDeclineBtn.Anchor(hpLeft,  hpLeft,  Pad * 3);
   FDeclineBtn.Anchor(vpBottom, vpBottom, Pad);
   FCard.InsertFront(FDeclineBtn);
+
+  FAgreeBtn          := TCastleButton.Create(FreeAtStop);
+  FAgreeBtn.Caption  := 'I AGREE';
+  FAgreeBtn.FontSize := 14;
+  FAgreeBtn.Enabled  := False;
+  FAgreeBtn.OnClick  := @ClickAgree;
+  FAgreeBtn.CustomBackground    := True;
+  FAgreeBtn.CustomColorNormal   := Vector4(0, 0, 0, 0);
+  FAgreeBtn.CustomColorFocused  := Vector4(0, 0, 0, 0.05);
+  FAgreeBtn.CustomColorPressed  := Vector4(0, 0, 0, 0.10);
+  FAgreeBtn.CustomColorDisabled := Vector4(0, 0, 0, 0);
+  FAgreeBtn.CustomTextColorUse  := True;
+  FAgreeBtn.CustomTextColor     := Pal.TextMuted;
+  FAgreeBtn.Anchor(hpRight, hpRight, -(Pad * 3));
+  FAgreeBtn.Anchor(vpBottom, vpBottom, Pad);
+  FCard.InsertFront(FAgreeBtn);
 
   { ── Detail overlay ── }
   FDetailPanel        := TCastleRectangleControl.Create(FreeAtStop);
@@ -254,7 +247,7 @@ begin
   FDetailText.Color    := Pal.TextPrimary;
   FDetailText.FontSize := 12;
   FDetailText.Alignment := hpLeft;
-  FDetailText.MaxWidth  := CardW - Pad * 2;
+  FDetailText.MaxWidth  := 800;
   FDetailText.Translation := Vector2(Pad, 0);
   FDetailScroll.ScrollArea.InsertFront(FDetailText);
 end;
@@ -271,26 +264,34 @@ begin
   FDetailDocIdx       := DocIdx;
   FDetailTitle.Caption := DocTitles[DocIdx];
   FDetailText.Caption  := DocBody(DocIdx);
-  FDetailText.MaxWidth := CardW - Pad * 2;
+  FDetailText.MaxWidth := 800;
 
   { Size scroll area to the label height }
   TxtH := FDetailText.EffectiveHeight;
   if TxtH < FDetailScroll.Height then TxtH := FDetailScroll.Height;
-  FDetailScroll.ScrollArea.Width  := CardW - Pad * 2;
+  FDetailScroll.ScrollArea.Width  := 800;
   FDetailScroll.ScrollArea.Height := TxtH + Pad;
   FDetailText.Translation := Vector2(0, TxtH + Pad - FDetailText.EffectiveHeight);
 
   FDetailPanel.Exists := True;
 
-  { Mark as read }
-  FDocRead[DocIdx]         := True;
-  FDocBtn[DocIdx].Caption  := 'Read ✓';
+  { Mark as read — no visual change to the button itself (v1 doesn't show a "read" tick). }
+  FDocRead[DocIdx] := True;
   UpdateAgreeButton;
 end;
 
 procedure TViewTerms.UpdateAgreeButton;
+var
+  Pal: TBTTPalette;
+  AllRead: Boolean;
 begin
-  FAgreeBtn.Enabled := FDocRead[0] and FDocRead[1] and FDocRead[2];
+  Pal := P;
+  AllRead := FDocRead[0] and FDocRead[1] and FDocRead[2];
+  FAgreeBtn.Enabled := AllRead;
+  if AllRead then
+    FAgreeBtn.CustomTextColor := Pal.Accent
+  else
+    FAgreeBtn.CustomTextColor := Pal.TextMuted;
 end;
 
 procedure TViewTerms.ClickDoc0(Sender: TObject);
@@ -320,7 +321,7 @@ end;
 
 procedure TViewTerms.Resize;
 var
-  W, H: Single;
+  W, H, CardH: Single;
 begin
   inherited;
   if FHeader = nil then Exit;
@@ -338,6 +339,12 @@ begin
   FStatusBar.Translation := Vector2(0, 0);
   FStatusBar.Width       := W;
   FStatusBar.Height      := BTT_STATUS_H;
+
+  { Full-bleed card fills the area between breadcrumb and status bar. }
+  CardH := H - BTT_HEADER_H - BTT_BREADCRUMB_H - BTT_STATUS_H;
+  FCard.Translation := Vector2(0, BTT_STATUS_H);
+  FCard.Width       := W;
+  FCard.Height      := CardH;
 end;
 
 procedure TViewTerms.OnThemeChange;
