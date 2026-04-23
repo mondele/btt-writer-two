@@ -14,11 +14,14 @@ interface
 uses
   Classes,
   CastleUIControls, CastleControls, CastleColors,
-  CGEViewBase;
+  CGEViewBase, BTTHeader, BTTBreadcrumb, BTTStatusBar;
 
 type
   TViewFeedback = class(TCGEViewBase)
   private
+    FHeader      : TBTTHeader;
+    FCrumb       : TBTTBreadcrumb;
+    FStatusBar   : TBTTStatusBar;
     FCard        : TCastleRectangleControl;
     FWarningLbl  : TCastleLabel;
     FFeedbackEdit: TCastleEdit;
@@ -31,6 +34,7 @@ type
     procedure ClickCancel(Sender: TObject);
   public
     procedure Start; override;
+    procedure Resize; override;
     procedure OnThemeChange; override;
   end;
 
@@ -62,6 +66,18 @@ var
   TitleLbl : TCastleLabel;
 begin
   Pal := P;
+
+  FHeader := TBTTHeader.Create(FreeAtStop, Pal);
+  FHeader.SetTitle('BTT-Writer');
+  InsertFront(FHeader);
+
+  FCrumb := TBTTBreadcrumb.Create(FreeAtStop, Pal);
+  FCrumb.OnBack := @ClickCancel;
+  FCrumb.SetCrumbs(['Home', 'Feedback']);
+  InsertFront(FCrumb);
+
+  FStatusBar := TBTTStatusBar.Create(FreeAtStop, Pal);
+  InsertFront(FStatusBar);
 
   FCard       := TCastleRectangleControl.Create(FreeAtStop);
   FCard.Color := Pal.PanelBg;
@@ -146,6 +162,28 @@ end;
 procedure TViewFeedback.ClickCancel(Sender: TObject);
 begin
   Container.PopView(Self);
+end;
+
+procedure TViewFeedback.Resize;
+var
+  W, H: Single;
+begin
+  inherited;
+  if FHeader = nil then Exit;
+  W := EffectiveWidth;
+  H := EffectiveHeight;
+
+  FHeader.Translation := CastleVectors.Vector2(0, H - BTT_HEADER_H);
+  FHeader.Width       := W;
+  FHeader.Height      := BTT_HEADER_H;
+
+  FCrumb.Translation := CastleVectors.Vector2(0, H - BTT_HEADER_H - BTT_BREADCRUMB_H);
+  FCrumb.Width       := W;
+  FCrumb.Height      := BTT_BREADCRUMB_H;
+
+  FStatusBar.Translation := CastleVectors.Vector2(0, 0);
+  FStatusBar.Width       := W;
+  FStatusBar.Height      := BTT_STATUS_H;
 end;
 
 procedure TViewFeedback.OnThemeChange;

@@ -17,11 +17,14 @@ interface
 uses
   Classes,
   CastleUIControls, CastleControls, CastleColors,
-  CGEViewBase;
+  CGEViewBase, BTTHeader, BTTBreadcrumb, BTTStatusBar;
 
 type
   TViewLogin = class(TCGEViewBase)
   private
+    FHeader       : TBTTHeader;
+    FCrumb        : TBTTBreadcrumb;
+    FStatusBar    : TBTTStatusBar;
     FCard         : TCastleRectangleControl;
 
     { ── main step ── }
@@ -104,6 +107,18 @@ var
   Pal : TBTTPalette;
 begin
   Pal := P;
+
+  { Header / breadcrumb / status bar chrome }
+  FHeader := TBTTHeader.Create(FreeAtStop, Pal);
+  FHeader.SetTitle('BTT-Writer');
+  InsertFront(FHeader);
+
+  FCrumb := TBTTBreadcrumb.Create(FreeAtStop, Pal);
+  FCrumb.SetCrumbs(['User Profile']);
+  InsertFront(FCrumb);
+
+  FStatusBar := TBTTStatusBar.Create(FreeAtStop, Pal);
+  InsertFront(FStatusBar);
 
   { Centred card }
   FCard       := TCastleRectangleControl.Create(FreeAtStop);
@@ -268,6 +283,11 @@ begin
   FLocalBtn.Exists    := True;
   FServerBtn.Exists   := True;
   FShowingLocal       := False;
+  if FCrumb <> nil then
+  begin
+    FCrumb.OnBack := nil;
+    FCrumb.SetCrumbs(['User Profile']);
+  end;
 end;
 
 procedure TViewLogin.ShowLocal;
@@ -280,6 +300,11 @@ begin
   FNameEdit.Text      := '';
   FErrorLbl.Exists    := False;
   FShowingLocal       := True;
+  if FCrumb <> nil then
+  begin
+    FCrumb.OnBack := @ClickBack;
+    FCrumb.SetCrumbs(['User Profile', 'Local Profile']);
+  end;
 end;
 
 procedure TViewLogin.ShowServer;
@@ -295,6 +320,11 @@ begin
   FSrvPassEdit.Text   := '';
   FSrvStatusLbl.Exists := False;
   FShowingLocal        := False;
+  if FCrumb <> nil then
+  begin
+    FCrumb.OnBack := @ClickServerBack;
+    FCrumb.SetCrumbs(['User Profile', 'Server Login']);
+  end;
 end;
 
 procedure TViewLogin.ClickLocal(Sender: TObject);
@@ -430,9 +460,26 @@ begin
 end;
 
 procedure TViewLogin.Resize;
+var
+  W, H: Single;
 begin
   inherited;
-  { Card is centred by anchors; nothing extra needed. }
+  if FHeader = nil then Exit;
+  W := EffectiveWidth;
+  H := EffectiveHeight;
+
+  FHeader.Translation := Vector2(0, H - BTT_HEADER_H);
+  FHeader.Width       := W;
+  FHeader.Height      := BTT_HEADER_H;
+
+  FCrumb.Translation := Vector2(0, H - BTT_HEADER_H - BTT_BREADCRUMB_H);
+  FCrumb.Width       := W;
+  FCrumb.Height      := BTT_BREADCRUMB_H;
+
+  FStatusBar.Translation := Vector2(0, 0);
+  FStatusBar.Width       := W;
+  FStatusBar.Height      := BTT_STATUS_H;
+  { Card centres itself via anchors. }
 end;
 
 procedure TViewLogin.OnThemeChange;

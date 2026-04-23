@@ -19,13 +19,16 @@ interface
 uses
   Classes,
   CastleUIControls, CastleControls, CastleColors,
-  CGEViewBase,
+  CGEViewBase, BTTHeader, BTTBreadcrumb, BTTStatusBar,
   GiteaClient;   { TGiteaRepoInfo, TGiteaRepoArray }
 
 type
   TViewImport = class(TCGEViewBase)
   private
     { ── Chrome ── }
+    FHeader      : TBTTHeader;
+    FCrumb       : TBTTBreadcrumb;
+    FStatusBar   : TBTTStatusBar;
     FCard        : TCastleRectangleControl;
     FTitleLbl    : TCastleLabel;
     FBackBtn     : TCastleButton;
@@ -167,6 +170,18 @@ var
   Pal : TBTTPalette;
 begin
   Pal := P;
+
+  FHeader := TBTTHeader.Create(FreeAtStop, Pal);
+  FHeader.SetTitle('BTT-Writer');
+  InsertFront(FHeader);
+
+  FCrumb := TBTTBreadcrumb.Create(FreeAtStop, Pal);
+  FCrumb.OnBack := @ClickBack;
+  FCrumb.SetCrumbs(['Home', 'Import']);
+  InsertFront(FCrumb);
+
+  FStatusBar := TBTTStatusBar.Create(FreeAtStop, Pal);
+  InsertFront(FStatusBar);
 
   FCard        := TCastleRectangleControl.Create(FreeAtStop);
   FCard.Color  := Pal.PanelBg;
@@ -980,9 +995,26 @@ end;
 { ── Layout ── }
 
 procedure TViewImport.Resize;
+var
+  W, H: Single;
 begin
   inherited;
-  { Card is centred by anchors. }
+  if FHeader = nil then Exit;
+  W := EffectiveWidth;
+  H := EffectiveHeight;
+
+  FHeader.Translation := CastleVectors.Vector2(0, H - BTT_HEADER_H);
+  FHeader.Width       := W;
+  FHeader.Height      := BTT_HEADER_H;
+
+  FCrumb.Translation := CastleVectors.Vector2(0, H - BTT_HEADER_H - BTT_BREADCRUMB_H);
+  FCrumb.Width       := W;
+  FCrumb.Height      := BTT_BREADCRUMB_H;
+
+  FStatusBar.Translation := CastleVectors.Vector2(0, 0);
+  FStatusBar.Width       := W;
+  FStatusBar.Height      := BTT_STATUS_H;
+  { Card centres itself via anchors. }
 end;
 
 procedure TViewImport.OnThemeChange;

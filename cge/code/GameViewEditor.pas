@@ -20,7 +20,7 @@ interface
 uses
   Classes,
   CastleUIControls, CastleControls, CastleColors, CastleKeysMouse,
-  CGEViewBase, BTTHeader, BTTPopupMenu;
+  CGEViewBase, BTTHeader, BTTStatusBar, BTTPopupMenu;
 
 type
   { Backdrop that dismisses the popup on any click outside it. }
@@ -36,6 +36,7 @@ type
   private
     { ── chrome ── }
     FHeader        : TBTTHeader;
+    FStatusBar     : TBTTStatusBar;
     FToggleBtn     : TCastleButton;
     FChapterBar    : TCastleRectangleControl;
     FChInfoLbl     : TCastleLabel;
@@ -244,6 +245,10 @@ begin
   FHeader := TBTTHeader.Create(FreeAtStop, Pal);
   FHeader.SetTitle(GAppState.Editor.ProjectTitle);
   InsertFront(FHeader);
+
+  { Status bar }
+  FStatusBar := TBTTStatusBar.Create(FreeAtStop, Pal);
+  InsertFront(FStatusBar);
 
   { Chapter bar }
   FChapterBar       := TCastleRectangleControl.Create(FreeAtStop);
@@ -1019,11 +1024,15 @@ begin
   FHeader.Width       := W;
   FHeader.Height      := BTT_HEADER_H;
 
+  FStatusBar.Translation := Vector2(0, 0);
+  FStatusBar.Width       := W;
+  FStatusBar.Height      := BTT_STATUS_H;
+
   FChapterBar.Translation := Vector2(0, H - BTT_HEADER_H - ChapterBarH);
   FChapterBar.Width       := W;
   FChapterBar.Height      := ChapterBarH;
 
-  ContentH := H - BTT_HEADER_H - ChapterBarH;
+  ContentH := H - BTT_HEADER_H - ChapterBarH - BTT_STATUS_H;
 
   if FShowSource then
   begin
@@ -1031,21 +1040,21 @@ begin
     TransX   := SrcPaneW + DividerW;
     TransW   := W - TransX;
 
-    FSourceScroll.Translation := Vector2(0, 0);
+    FSourceScroll.Translation := Vector2(0, BTT_STATUS_H);
     FSourceScroll.Width       := SrcPaneW;
     FSourceScroll.Height      := ContentH;
 
-    FDivider.Translation := Vector2(SrcPaneW, 0);
+    FDivider.Translation := Vector2(SrcPaneW, BTT_STATUS_H);
     FDivider.Width       := DividerW;
     FDivider.Height      := ContentH;
 
-    FScrollView.Translation := Vector2(TransX, 0);
+    FScrollView.Translation := Vector2(TransX, BTT_STATUS_H);
     FScrollView.Width       := TransW;
     FScrollView.Height      := ContentH;
   end
   else
   begin
-    FScrollView.Translation := Vector2(0, 0);
+    FScrollView.Translation := Vector2(0, BTT_STATUS_H);
     FScrollView.Width       := W;
     FScrollView.Height      := ContentH;
   end;

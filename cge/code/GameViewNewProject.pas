@@ -16,7 +16,7 @@ interface
 uses
   Classes,
   CastleUIControls, CastleControls, CastleColors, CastleVectors,
-  CGEViewBase, BTTHeader,
+  CGEViewBase, BTTHeader, BTTBreadcrumb, BTTStatusBar,
   ProjectData;
 
 type
@@ -24,6 +24,8 @@ type
   private
     { Chrome (created once in BuildChrome) }
     FHeader      : TBTTHeader;
+    FCrumb       : TBTTBreadcrumb;
+    FStatusBar   : TBTTStatusBar;
     FSubBar      : TCastleRectangleControl;
     FFilterEdit  : TCastleEdit;
     FOTBtn       : TCastleButton;
@@ -158,19 +160,20 @@ end;
 procedure TViewNewProject.BuildChrome;
 var
   Pal    : TBTTPalette;
-  BackBtn: TCastleButton;
 begin
   Pal := P;
 
   FHeader := TBTTHeader.Create(FreeAtStop, Pal);
-  FHeader.SetTitle('New Project');
+  FHeader.SetTitle('BTT-Writer');
   InsertFront(FHeader);
 
-  BackBtn         := TCastleButton.Create(FreeAtStop);
-  BackBtn.Caption := '< Back';
-  BackBtn.FontSize := 14;
-  BackBtn.OnClick := @ClickBack;
-  FHeader.AddLeft(BackBtn);
+  FCrumb := TBTTBreadcrumb.Create(FreeAtStop, Pal);
+  FCrumb.OnBack := @ClickBack;
+  FCrumb.SetCrumbs(['Home', 'Source Texts', 'By Language']);
+  InsertFront(FCrumb);
+
+  FStatusBar := TBTTStatusBar.Create(FreeAtStop, Pal);
+  InsertFront(FStatusBar);
 
   { Sub-bar: holds filter edit (step 1) or OT/NT buttons (step 2) }
   FSubBar       := TCastleRectangleControl.Create(FreeAtStop);
@@ -676,18 +679,29 @@ begin
   FHeader.Width       := W;
   FHeader.Height      := BTT_HEADER_H;
 
-  FSubBar.Translation := Vector2(0, H - BTT_HEADER_H - SubBarH);
+  FCrumb.Translation := Vector2(0, H - BTT_HEADER_H - BTT_BREADCRUMB_H);
+  FCrumb.Width       := W;
+  FCrumb.Height      := BTT_BREADCRUMB_H;
+
+  FStatusBar.Translation := Vector2(0, 0);
+  FStatusBar.Width       := W;
+  FStatusBar.Height      := BTT_STATUS_H;
+
+  FSubBar.Translation := Vector2(0, H - BTT_HEADER_H - BTT_BREADCRUMB_H - SubBarH);
   FSubBar.Width       := W;
   FSubBar.Height      := SubBarH;
 
-  FBotBar.Translation := Vector2(0, 0);
+  FBotBar.Translation := Vector2(0, BTT_STATUS_H);
   FBotBar.Width       := W;
   FBotBar.Height      := BotBarH;
 
-  ContentY := BotBarH;
-  ContentH := H - BTT_HEADER_H - SubBarH - BotBarH;
+  ContentY := BTT_STATUS_H + BotBarH;
+  ContentH := H - BTT_HEADER_H - BTT_BREADCRUMB_H - SubBarH - BotBarH - BTT_STATUS_H;
   if FStep = 4 then
-    ContentH := H - BTT_HEADER_H;
+  begin
+    ContentY := BTT_STATUS_H;
+    ContentH := H - BTT_HEADER_H - BTT_BREADCRUMB_H - BTT_STATUS_H;
+  end;
 
   FScrollView.Translation := Vector2(0, ContentY);
   FScrollView.Width       := W;

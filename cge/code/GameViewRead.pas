@@ -20,13 +20,14 @@ interface
 uses
   Classes,
   CastleUIControls, CastleControls, CastleColors,
-  CGEViewBase, BTTHeader;
+  CGEViewBase, BTTHeader, BTTStatusBar;
 
 type
   TViewRead = class(TCGEViewBase)
   private
     { ── chrome ── }
     FHeader      : TBTTHeader;
+    FStatusBar   : TBTTStatusBar;
     FToggleBtn   : TCastleButton;
     FChapterBar  : TCastleRectangleControl;
     FChInfoLbl   : TCastleLabel;
@@ -135,6 +136,9 @@ begin
   FHeader := TBTTHeader.Create(FreeAtStop, Pal);
   FHeader.SetTitle(GAppState.Editor.ProjectTitle + ' — Read');
   InsertFront(FHeader);
+
+  FStatusBar := TBTTStatusBar.Create(FreeAtStop, Pal);
+  InsertFront(FStatusBar);
 
   FChapterBar       := TCastleRectangleControl.Create(FreeAtStop);
   FChapterBar.Color := Pal.ContentBg;
@@ -400,13 +404,17 @@ begin
   FHeader.Width       := W;
   FHeader.Height      := BTT_HEADER_H;
 
+  FStatusBar.Translation := CastleVectors.Vector2(0, 0);
+  FStatusBar.Width       := W;
+  FStatusBar.Height      := BTT_STATUS_H;
+
   FChapterBar.Translation := CastleVectors.Vector2(0, H - BTT_HEADER_H - ChapterBarH);
   FChapterBar.Width       := W;
   FChapterBar.Height      := ChapterBarH;
 
-  FScrollView.Translation := CastleVectors.Vector2(0, 0);
+  FScrollView.Translation := CastleVectors.Vector2(0, BTT_STATUS_H);
   FScrollView.Width       := W;
-  FScrollView.Height      := H - BTT_HEADER_H - ChapterBarH;
+  FScrollView.Height      := H - BTT_HEADER_H - ChapterBarH - BTT_STATUS_H;
 
   FNeedsLayout := True;
 end;

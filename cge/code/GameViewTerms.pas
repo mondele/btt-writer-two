@@ -21,11 +21,14 @@ interface
 uses
   Classes,
   CastleUIControls, CastleControls, CastleColors,
-  CGEViewBase;
+  CGEViewBase, BTTHeader, BTTBreadcrumb, BTTStatusBar;
 
 type
   TViewTerms = class(TCGEViewBase)
   private
+    FHeader      : TBTTHeader;
+    FCrumb       : TBTTBreadcrumb;
+    FStatusBar   : TBTTStatusBar;
     FCard        : TCastleRectangleControl;
     FTitleLbl    : TCastleLabel;
     FDescLbl     : TCastleLabel;
@@ -123,6 +126,17 @@ var
   YPos : Single;
 begin
   Pal := P;
+
+  FHeader := TBTTHeader.Create(FreeAtStop, Pal);
+  FHeader.SetTitle('BTT-Writer');
+  InsertFront(FHeader);
+
+  FCrumb := TBTTBreadcrumb.Create(FreeAtStop, Pal);
+  FCrumb.SetCrumbs(['Terms of Use']);
+  InsertFront(FCrumb);
+
+  FStatusBar := TBTTStatusBar.Create(FreeAtStop, Pal);
+  InsertFront(FStatusBar);
 
   { ── Centred card ── }
   FCard        := TCastleRectangleControl.Create(FreeAtStop);
@@ -305,9 +319,25 @@ begin
 end;
 
 procedure TViewTerms.Resize;
+var
+  W, H: Single;
 begin
   inherited;
-  { Card is centred by anchors; nothing extra needed. }
+  if FHeader = nil then Exit;
+  W := EffectiveWidth;
+  H := EffectiveHeight;
+
+  FHeader.Translation := Vector2(0, H - BTT_HEADER_H);
+  FHeader.Width       := W;
+  FHeader.Height      := BTT_HEADER_H;
+
+  FCrumb.Translation := Vector2(0, H - BTT_HEADER_H - BTT_BREADCRUMB_H);
+  FCrumb.Width       := W;
+  FCrumb.Height      := BTT_BREADCRUMB_H;
+
+  FStatusBar.Translation := Vector2(0, 0);
+  FStatusBar.Width       := W;
+  FStatusBar.Height      := BTT_STATUS_H;
 end;
 
 procedure TViewTerms.OnThemeChange;
