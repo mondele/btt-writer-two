@@ -133,13 +133,22 @@ begin
   FHeadingLbl.Anchor(vpMiddle, vpMiddle);
   FContentBar.InsertFront(FHeadingLbl);
 
+  { Floating action button — green "+" in the top-right of content area.
+    Added to the main view (not content bar) so it z-orders above both
+    the content bar and the project list. }
   FNewProjBtn := TCastleButton.Create(FreeAtStop);
-  FNewProjBtn.Caption  := '+ New Project';
-  FNewProjBtn.FontSize := 13;
+  FNewProjBtn.Caption  := '+';
+  FNewProjBtn.FontSize := 28;
   FNewProjBtn.OnClick  := @ClickNewProject;
-  FNewProjBtn.Anchor(hpRight, hpRight, -RowPad);
-  FNewProjBtn.Anchor(vpMiddle, vpMiddle);
-  FContentBar.InsertFront(FNewProjBtn);
+  FNewProjBtn.CustomBackground    := True;
+  FNewProjBtn.CustomColorNormal   := Pal.Accent;
+  FNewProjBtn.CustomColorFocused  := Pal.Accent;
+  FNewProjBtn.CustomColorPressed  := Pal.Accent;
+  FNewProjBtn.CustomTextColorUse  := True;
+  FNewProjBtn.CustomTextColor     := Pal.TextInverse;
+  FNewProjBtn.AutoSize := False;
+  FNewProjBtn.Width    := 56;
+  FNewProjBtn.Height   := 56;
 
   { Left rail }
   FRail := TBTTSideRail.Create(FreeAtStop, Pal);
@@ -161,6 +170,9 @@ begin
   FStatusBar := TBTTStatusBar.Create(FreeAtStop, Pal);
   InsertFront(FStatusBar);
 
+  { FAB on top of content area — positioned in Resize. }
+  InsertFront(FNewProjBtn);
+
   { Backdrop — hidden, in front of content but behind popup }
   FBackdrop := TPopupBackdrop.Create(FreeAtStop);
   FBackdrop.Color  := Vector4(0, 0, 0, 0.18);
@@ -173,12 +185,12 @@ end;
 procedure TViewHome.BuildMenuPopup;
 begin
   FMenuPopup := TBTTPopupMenu.Create(FreeAtStop, P);
-  FMenuPopup.AddItem('Update',             @MenuUpdateClick);
-  FMenuPopup.AddItem('Import ...',         @MenuImportClick);
-  FMenuPopup.AddItem('translationAcademy', @MenuAcademyClick);
-  FMenuPopup.AddItem('Feedback',           @MenuFeedbackClick);
-  FMenuPopup.AddItem('Logout',             @MenuLogoutClick);
-  FMenuPopup.AddItem('Settings',           @MenuSettingsClick);
+  FMenuPopup.AddItem('Update',             #$E2#$9F#$B3, @MenuUpdateClick);            { ⟳ U+27F3 }
+  FMenuPopup.AddItem('Import ...',         #$E2#$A4#$93, @MenuImportClick);            { ⤓ U+2913 }
+  FMenuPopup.AddItem('translationAcademy', #$E2#$98#$B0, @MenuAcademyClick);           { ☰ placeholder — would be a book }
+  FMenuPopup.AddItem('Feedback',           #$E2#$9C#$89, @MenuFeedbackClick);          { ✉ U+2709 }
+  FMenuPopup.AddItem('Logout',             #$E2#$86#$AA, @MenuLogoutClick);            { ↪ U+21AA }
+  FMenuPopup.AddItem('Settings',           #$E2#$9A#$99, @MenuSettingsClick);          { ⚙ U+2699 }
   FMenuPopup.Build;
   InsertFront(FMenuPopup);    { on top of backdrop }
   FBackdrop.Menu := FMenuPopup;
@@ -189,7 +201,10 @@ var
   Pal: TBTTPalette;
   I: Integer;
   Row: TCastleRectangleControl;
-  NameLbl, DetailLbl, ProgLbl, EmptyLbl: TCastleLabel;
+  NameLbl, DetailLbl, ProgLbl: TCastleLabel;
+  WelcomeCard: TCastleRectangleControl;
+  WelcomeTitle, WelcomeBody: TCastleLabel;
+  StartBtn: TCastleButton;
   Btn: TCastleButton;
   Pct: Integer;
 begin
@@ -197,17 +212,52 @@ begin
 
   if Length(FProjects) = 0 then
   begin
-    EmptyLbl := TCastleLabel.Create(FreeAtStop);
-    EmptyLbl.Caption :=
-      'No translation projects found.' + LineEnding +
-      'Projects are stored in:' + LineEnding +
-      '~/.config/BTT-Writer/targetTranslations/';
-    EmptyLbl.Color     := Pal.TextSecondary;
-    EmptyLbl.FontSize  := 15;
-    EmptyLbl.Alignment := hpMiddle;
-    EmptyLbl.Anchor(hpMiddle, hpMiddle);
-    EmptyLbl.Anchor(vpMiddle, vpMiddle);
-    FScrollView.ScrollArea.InsertFront(EmptyLbl);
+    { Welcome card — matches v1 home-en.png empty state. }
+    WelcomeCard        := TCastleRectangleControl.Create(FreeAtStop);
+    WelcomeCard.Color  := Pal.PanelBg;
+    WelcomeCard.Width  := 520;
+    WelcomeCard.Height := 210;
+    WelcomeCard.Anchor(hpMiddle, hpMiddle);
+    WelcomeCard.Anchor(vpMiddle, vpMiddle, 60);
+    FScrollView.ScrollArea.InsertFront(WelcomeCard);
+
+    WelcomeTitle          := TCastleLabel.Create(FreeAtStop);
+    WelcomeTitle.Caption  := 'Welcome!';
+    WelcomeTitle.Color    := Pal.TextPrimary;
+    WelcomeTitle.FontSize := 22;
+    WelcomeTitle.Anchor(hpLeft, hpLeft, 32);
+    WelcomeTitle.Anchor(vpTop,  vpTop,  -28);
+    WelcomeCard.InsertFront(WelcomeTitle);
+
+    WelcomeBody          := TCastleLabel.Create(FreeAtStop);
+    WelcomeBody.Caption  :=
+      'This is your Home Screen. When you have translation' + LineEnding +
+      'projects on this device, they will appear here.' + LineEnding + LineEnding +
+      'You can start a new project anytime by tapping the' + LineEnding +
+      'green button in the top right.';
+    WelcomeBody.Color    := Pal.TextPrimary;
+    WelcomeBody.FontSize := 14;
+    WelcomeBody.MaxWidth := 520 - 64;
+    WelcomeBody.Anchor(hpLeft, hpLeft, 32);
+    WelcomeBody.Anchor(vpTop,  vpTop,  -68);
+    WelcomeCard.InsertFront(WelcomeBody);
+
+    StartBtn          := TCastleButton.Create(FreeAtStop);
+    StartBtn.Caption  := 'START A NEW PROJECT';
+    StartBtn.FontSize := 14;
+    StartBtn.OnClick  := @ClickNewProject;
+    StartBtn.CustomBackground    := True;
+    StartBtn.CustomColorNormal   := Pal.Primary;
+    StartBtn.CustomColorFocused  := Pal.PrimaryDark;
+    StartBtn.CustomColorPressed  := Pal.PrimaryDark;
+    StartBtn.CustomTextColorUse  := True;
+    StartBtn.CustomTextColor     := Pal.TextInverse;
+    StartBtn.AutoSize := False;
+    StartBtn.Width    := 220;
+    StartBtn.Height   := 44;
+    StartBtn.Anchor(hpMiddle, hpMiddle);
+    StartBtn.Anchor(vpMiddle, vpMiddle, -100);
+    FScrollView.ScrollArea.InsertFront(StartBtn);
     Exit;
   end;
 
@@ -373,6 +423,11 @@ begin
 
   { Popup: anchored to bottom-left of content area, extends upward }
   FMenuPopup.Translation := Vector2(BTT_RAIL_W, H - BTT_HEADER_H - FMenuPopup.Height);
+
+  { FAB: top-right of content area, straddling the content-bar edge. }
+  FNewProjBtn.Translation := Vector2(
+    W - FNewProjBtn.Width - 28,
+    H - BTT_HEADER_H - ContentBarH + 4);
 
   UpdateScrollArea;
 end;

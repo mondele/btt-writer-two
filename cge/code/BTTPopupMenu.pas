@@ -19,11 +19,12 @@ uses
 
 const
   BTT_POPUP_ITEM_H = 44;
-  BTT_POPUP_W      = 210;
+  BTT_POPUP_W      = 230;
 
 type
   TMenuItemDef = record
     Caption : string;
+    Icon    : string;   { optional single-glyph icon, or '' for none }
     Handler : TNotifyEvent;
   end;
 
@@ -35,7 +36,8 @@ type
     constructor Create(AOwner: TComponent; const APalette: TBTTPalette); reintroduce;
 
     { Register a menu item — call before Build. }
-    procedure AddItem(const ACaption: string; AOnClick: TNotifyEvent);
+    procedure AddItem(const ACaption: string; AOnClick: TNotifyEvent); overload;
+    procedure AddItem(const ACaption, AIcon: string; AOnClick: TNotifyEvent); overload;
 
     { Construct button children from registered items.
       Call once after the last AddItem. }
@@ -57,12 +59,18 @@ begin
 end;
 
 procedure TBTTPopupMenu.AddItem(const ACaption: string; AOnClick: TNotifyEvent);
+begin
+  AddItem(ACaption, '', AOnClick);
+end;
+
+procedure TBTTPopupMenu.AddItem(const ACaption, AIcon: string; AOnClick: TNotifyEvent);
 var
   N: Integer;
 begin
   N := Length(FItemDefs);
   SetLength(FItemDefs, N + 1);
   FItemDefs[N].Caption := ACaption;
+  FItemDefs[N].Icon    := AIcon;
   FItemDefs[N].Handler := AOnClick;
 end;
 
@@ -72,6 +80,7 @@ var
   I: Integer;
   Btn: TCastleButton;
   Div1: TCastleRectangleControl;
+  IconLbl: TCastleLabel;
 begin
   if Length(FItemDefs) = 0 then Exit;
 
@@ -84,13 +93,24 @@ begin
     ItemY := TotalH - (I + 1) * BTT_POPUP_ITEM_H;
 
     Btn              := TCastleButton.Create(Self);
-    Btn.Caption      := FItemDefs[I].Caption;
+    Btn.Caption      := '    ' + FItemDefs[I].Caption;
     Btn.FontSize     := 15;
     Btn.Width        := BTT_POPUP_W;
     Btn.Height       := BTT_POPUP_ITEM_H;
     Btn.Translation  := Vector2(0, ItemY);
     Btn.OnClick      := FItemDefs[I].Handler;
     InsertFront(Btn);
+
+    { Icon overlay — rendered on top of the button, left-aligned. }
+    if FItemDefs[I].Icon <> '' then
+    begin
+      IconLbl          := TCastleLabel.Create(Self);
+      IconLbl.Caption  := FItemDefs[I].Icon;
+      IconLbl.Color    := FPalette.TextSecondary;
+      IconLbl.FontSize := 16;
+      IconLbl.Translation := Vector2(14, ItemY + BTT_POPUP_ITEM_H / 2 - 8);
+      InsertFront(IconLbl);
+    end;
 
     { Separator above all items except the first }
     if I > 0 then
