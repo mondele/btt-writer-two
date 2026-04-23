@@ -11,7 +11,7 @@ uses
   Globals, ProjectScanner, ProjectEditForm, ProjectCreator, ProjectManager,
   TStudioPackage, SplashScreen, AppSettings, SettingsForm, ThemePalette, UIFonts,
   AppLog, UserProfile, LoginForm, GiteaClient, ImportForm, USFMExporter, GitUtils,
-  DataPaths, USFMUtils, BibleBook, BibleChapter, DevToolsForm;
+  DataPaths, USFMUtils, BibleBook, BibleChapter, DevToolsForm, CanonBooks;
 
 resourcestring
   rsProjectDetailsTitle = 'Project Details';

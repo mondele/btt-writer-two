@@ -19,10 +19,19 @@ interface
 
 uses
   Classes,
-  CastleUIControls, CastleControls, CastleColors,
-  CGEViewBase, BTTHeader;
+  CastleUIControls, CastleControls, CastleColors, CastleKeysMouse,
+  CGEViewBase, BTTHeader, BTTPopupMenu;
 
 type
+  { Backdrop that dismisses the popup on any click outside it. }
+  TEditorMenuBackdrop = class(TCastleRectangleControl)
+  private
+    FMenu: TBTTPopupMenu;
+  public
+    function Press(const Event: TInputPressRelease): Boolean; override;
+    property Menu: TBTTPopupMenu read FMenu write FMenu;
+  end;
+
   TViewEditor = class(TCGEViewBase)
   private
     { ── chrome ── }
@@ -35,6 +44,15 @@ type
     FSourceScroll  : TCastleScrollView;   { left pane — source text }
     FDivider       : TCastleRectangleControl;
     FScrollView    : TCastleScrollView;   { right pane — translation cards }
+
+    { ── project menu popup ── }
+    FMenuPopup      : TBTTPopupMenu;
+    FMenuBackdrop   : TEditorMenuBackdrop;
+
+    { ── export/upload status overlay ── }
+    FExportOverlay  : TCastleRectangleControl;
+    FExportStatusLbl: TCastleLabel;
+    FExportCloseBtn : TCastleButton;
 
     { ── data ── (freed in Stop, NOT by FreeAtStop) }
     FProject     : TObject;  { TProject }
@@ -52,13 +70,23 @@ type
     FChunkEdit       : TObject;  { TViewChunkEdit instance while editing }
     FEditingChunkIdx : Integer;
 
+    { ── deferred operations ── }
+    FNeedsUpload         : Boolean;
+    FNeedsExportTStudio  : Boolean;
+    FNeedsExportUSFM     : Boolean;
+
     procedure BuildChrome;
+    procedure BuildMenuPopup;
+    procedure BuildExportOverlay;
     procedure LoadProjectData;
     procedure LoadChapterContent;
     procedure LoadSourceContent;
     procedure UpdateChapterInfo;
     procedure UpdateScrollHeight;
     procedure UpdateSourceScrollHeight;
+
+    procedure MenuDismiss;
+    procedure ShowExportOverlay(const AMsg: string);
 
     procedure ClickBack(Sender: TObject);
     procedure ClickBlindEdit(Sender: TObject);
@@ -68,6 +96,16 @@ type
     procedure ClickNext(Sender: TObject);
     procedure ClickEditChunk(Sender: TObject);
     procedure ClickToggleFinished(Sender: TObject);
+    procedure ClickMenuBtn(Sender: TObject);
+    procedure ClickExportClose(Sender: TObject);
+
+    procedure MenuUploadClick(Sender: TObject);
+    procedure MenuExportTStudioClick(Sender: TObject);
+    procedure MenuExportUSFMClick(Sender: TObject);
+
+    procedure DoUpload;
+    procedure DoExportTStudio;
+    procedure DoExportUSFM;
   public
     procedure Start;  override;
     procedure Stop;   override;
@@ -87,7 +125,8 @@ uses
   AppState, BTTTheme, AppLog,
   DataPaths, ProjectManager, ResourceContainer, ProjectScanner,
   BibleBook, BibleChapter,
-  USFMRenderer,
+  USFMRenderer, USFMExporter, TStudioPackage, GiteaClient, GitUtils,
+  UserProfile, AppSettings,
   GameViewHome, GameViewChunkEdit, GameViewBlindEdit, GameViewRead;
 
 const
@@ -98,6 +137,20 @@ const
   EditBtnH       = 28;
   DividerW       = 2;
   SourcePanePct  = 0.38;  { fraction of content width for source pane }
+
+{ ── TEditorMenuBackdrop ─────────────────────────────────────────────────────── }
+
+function TEditorMenuBackdrop.Press(const Event: TInputPressRelease): Boolean;
+begin
+  Result := inherited Press(Event);
+  if (Event.EventType = itMouseButton) and (Event.MouseButton = buttonLeft) then
+  begin
+    Exists := False;
+    if Assigned(FMenu) then
+      FMenu.Exists := False;
+    Result := True;
+  end;
+end;
 
 { ── helpers ─────────────────────────────────────────────────────────────────── }
 
@@ -117,11 +170,16 @@ procedure TViewEditor.Start;
 begin
   inherited;
   ApplyBackground;
-  FShowSource      := False;
-  FEditingChunkIdx := -1;
-  FChunkEdit       := nil;
-  FSourceContent   := nil;
+  FShowSource           := False;
+  FEditingChunkIdx      := -1;
+  FChunkEdit            := nil;
+  FSourceContent        := nil;
+  FNeedsUpload          := False;
+  FNeedsExportTStudio   := False;
+  FNeedsExportUSFM      := False;
   BuildChrome;
+  BuildMenuPopup;
+  BuildExportOverlay;
   LoadProjectData;
   LoadChapterContent;
   LoadSourceContent;
@@ -257,6 +315,250 @@ begin
   FToggleBtn.FontSize := 13;
   FToggleBtn.OnClick  := @ClickToggle;
   FHeader.AddRight(FToggleBtn);
+
+  { Project menu button (right-most) }
+  BlindBtn          := TCastleButton.Create(FreeAtStop);
+  BlindBtn.Caption  := '⋮';
+  BlindBtn.FontSize := 18;
+  BlindBtn.OnClick  := @ClickMenuBtn;
+  FHeader.AddRight(BlindBtn);
+
+  { Backdrop + popup (built after chrome) }
+  FMenuBackdrop        := TEditorMenuBackdrop.Create(FreeAtStop);
+  FMenuBackdrop.Color  := Vector4(0, 0, 0, 0.18);
+  FMenuBackdrop.FullSize := True;
+  FMenuBackdrop.Exists   := False;
+  InsertFront(FMenuBackdrop);
+end;
+
+procedure TViewEditor.BuildMenuPopup;
+begin
+  FMenuPopup := TBTTPopupMenu.Create(FreeAtStop, P);
+  FMenuPopup.AddItem('Upload to Server',  @MenuUploadClick);
+  FMenuPopup.AddItem('Export .tstudio',   @MenuExportTStudioClick);
+  FMenuPopup.AddItem('Export USFM',       @MenuExportUSFMClick);
+  FMenuPopup.Build;
+  InsertFront(FMenuPopup);
+  FMenuBackdrop.Menu := FMenuPopup;
+end;
+
+procedure TViewEditor.BuildExportOverlay;
+begin
+  FExportOverlay        := TCastleRectangleControl.Create(FreeAtStop);
+  FExportOverlay.Color  := Vector4(0, 0, 0, 0.55);
+  FExportOverlay.FullSize := True;
+  FExportOverlay.Exists   := False;
+  InsertFront(FExportOverlay);
+
+  FExportStatusLbl          := TCastleLabel.Create(FreeAtStop);
+  FExportStatusLbl.Caption  := '';
+  FExportStatusLbl.Color    := Vector4(1, 1, 1, 1);
+  FExportStatusLbl.FontSize := 16;
+  FExportStatusLbl.Alignment := hpMiddle;
+  FExportStatusLbl.Anchor(hpMiddle, hpMiddle);
+  FExportStatusLbl.Anchor(vpMiddle, vpMiddle, 30);
+  FExportOverlay.InsertFront(FExportStatusLbl);
+
+  FExportCloseBtn          := TCastleButton.Create(FreeAtStop);
+  FExportCloseBtn.Caption  := 'OK';
+  FExportCloseBtn.FontSize := 14;
+  FExportCloseBtn.Width    := 100;
+  FExportCloseBtn.OnClick  := @ClickExportClose;
+  FExportCloseBtn.Anchor(hpMiddle, hpMiddle);
+  FExportCloseBtn.Anchor(vpMiddle, vpMiddle, -20);
+  FExportCloseBtn.Exists   := False;
+  FExportOverlay.InsertFront(FExportCloseBtn);
+end;
+
+procedure TViewEditor.MenuDismiss;
+begin
+  FMenuPopup.Exists    := False;
+  FMenuBackdrop.Exists := False;
+end;
+
+procedure TViewEditor.ShowExportOverlay(const AMsg: string);
+begin
+  FExportStatusLbl.Caption := AMsg;
+  FExportCloseBtn.Exists   := False;
+  FExportOverlay.Exists    := True;
+end;
+
+procedure TViewEditor.ClickMenuBtn(Sender: TObject);
+begin
+  FMenuPopup.Exists    := not FMenuPopup.Exists;
+  FMenuBackdrop.Exists := FMenuPopup.Exists;
+end;
+
+procedure TViewEditor.ClickExportClose(Sender: TObject);
+begin
+  FExportOverlay.Exists := False;
+end;
+
+procedure TViewEditor.MenuUploadClick(Sender: TObject);
+begin
+  MenuDismiss;
+  FNeedsUpload := True;
+  ShowExportOverlay('Uploading to server…');
+end;
+
+procedure TViewEditor.MenuExportTStudioClick(Sender: TObject);
+begin
+  MenuDismiss;
+  FNeedsExportTStudio := True;
+  ShowExportOverlay('Exporting .tstudio…');
+end;
+
+procedure TViewEditor.MenuExportUSFMClick(Sender: TObject);
+begin
+  MenuDismiss;
+  FNeedsExportUSFM := True;
+  ShowExportOverlay('Exporting USFM…');
+end;
+
+procedure TViewEditor.DoUpload;
+var
+  Profile   : TUserProfile;
+  RepoName  : string;
+  CloneURL  : string;
+  RemoteURL : string;
+  ServerURL : string;
+  Err       : string;
+  OutText, ErrText: string;
+  ExitCode  : Integer;
+begin
+  FNeedsUpload := False;
+  Profile := LoadUserProfile;
+
+  if Profile.IsLocal or (Profile.ServerURL = '') then
+  begin
+    FExportStatusLbl.Caption := 'Upload requires a server account. Please log in with a server profile.';
+    FExportCloseBtn.Exists := True;
+    Exit;
+  end;
+
+  ServerURL := Profile.ServerURL;
+  RepoName  := ExtractFileName(ExcludeTrailingPathDelimiter(GAppState.Editor.ProjectDir));
+
+  if not EnsureProjectCommitted(GAppState.Editor.ProjectDir, Err) then
+  begin
+    FExportStatusLbl.Caption := 'Commit failed: ' + Err;
+    FExportCloseBtn.Exists := True;
+    Exit;
+  end;
+
+  if not GiteaRepoExists(ServerURL, Profile.Token, Profile.Username, RepoName) then
+  begin
+    if not GiteaCreateRepo(ServerURL, Profile.Token, RepoName, CloneURL, Err) then
+    begin
+      FExportStatusLbl.Caption := 'Could not create repo: ' + Err;
+      FExportCloseBtn.Exists := True;
+      Exit;
+    end;
+  end;
+
+  RemoteURL := StringReplace(ServerURL, 'https://', 'https://' + Profile.Token + '@', []);
+  RemoteURL := RemoteURL + '/' + Profile.Username + '/' + RepoName + '.git';
+
+  RunCommandCapture('git', ['-C', GAppState.Editor.ProjectDir, 'remote', 'remove', 'origin'],
+    '', OutText, ErrText, ExitCode);
+  if not RunCommandCapture('git', ['-C', GAppState.Editor.ProjectDir, 'remote', 'add', 'origin', RemoteURL],
+    '', OutText, ErrText, ExitCode) then
+  begin
+    FExportStatusLbl.Caption := 'Could not set remote: ' + ErrText;
+    FExportCloseBtn.Exists := True;
+    Exit;
+  end;
+
+  if not RunCommandCapture('git', ['-C', GAppState.Editor.ProjectDir, 'push', '-u', 'origin', 'master'],
+    '', OutText, ErrText, ExitCode) or (ExitCode <> 0) then
+  begin
+    FExportStatusLbl.Caption := 'Push failed: ' + Trim(ErrText);
+    FExportCloseBtn.Exists := True;
+    Exit;
+  end;
+
+  FExportStatusLbl.Caption := 'Uploaded: ' + Profile.Username + '/' + RepoName;
+  LogInfo('Editor: uploaded ' + RepoName + ' to ' + ServerURL);
+  FExportCloseBtn.Exists := True;
+end;
+
+procedure TViewEditor.DoExportTStudio;
+var
+  ExportDir : string;
+  Slug      : string;
+  OutPath   : string;
+  Err       : string;
+begin
+  FNeedsExportTStudio := False;
+  ExportDir := GetBackupLocation;
+  if ExportDir = '' then
+    ExportDir := GetEnvironmentVariable('HOME') + '/BTT-Writer';
+  ExportDir := ExportDir + '/exports';
+  if not DirectoryExists(ExportDir) then
+    CreateDir(ExportDir);
+
+  Slug    := ExtractFileName(ExcludeTrailingPathDelimiter(GAppState.Editor.ProjectDir));
+  OutPath := ExportDir + '/' + Slug + '.tstudio';
+
+  if not CreateTStudioPackage(GAppState.Editor.ProjectDir, OutPath, Err) then
+  begin
+    FExportStatusLbl.Caption := 'Export failed: ' + Err;
+    FExportCloseBtn.Exists := True;
+    Exit;
+  end;
+
+  FExportStatusLbl.Caption := 'Saved: ' + OutPath;
+  LogInfo('Editor: exported .tstudio to ' + OutPath);
+  FExportCloseBtn.Exists := True;
+end;
+
+procedure TViewEditor.DoExportUSFM;
+var
+  ExportDir  : string;
+  Slug       : string;
+  OutPath    : string;
+  SourceDir  : string;
+  SrcLang    : string;
+  SrcRes     : string;
+  Err        : string;
+begin
+  FNeedsExportUSFM := False;
+  if FProject = nil then
+  begin
+    FExportStatusLbl.Caption := 'No project loaded.';
+    FExportCloseBtn.Exists := True;
+    Exit;
+  end;
+
+  ExportDir := GetBackupLocation;
+  if ExportDir = '' then
+    ExportDir := GetEnvironmentVariable('HOME') + '/BTT-Writer';
+  ExportDir := ExportDir + '/exports';
+  if not DirectoryExists(ExportDir) then
+    CreateDir(ExportDir);
+
+  SrcLang := ProjectRef(Self).GetSourceLanguageCode;
+  if SrcLang = '' then SrcLang := 'en';
+  SrcRes  := ProjectRef(Self).GetSourceResourceType;
+  if SrcRes = '' then SrcRes := 'ulb';
+
+  SourceDir := GetLibraryPath +
+    SrcLang + '_' + GAppState.Editor.BookCode + '_' + SrcRes +
+    DirectorySeparator + 'content';
+
+  Slug    := GAppState.Editor.BookCode + '-' + GAppState.Editor.TargetLangCode;
+  OutPath := ExportDir + '/' + Slug + '.usfm';
+
+  if not ExportProjectToUSFM(GAppState.Editor.ProjectDir, SourceDir, OutPath, Err) then
+  begin
+    FExportStatusLbl.Caption := 'Export failed: ' + Err;
+    FExportCloseBtn.Exists := True;
+    Exit;
+  end;
+
+  FExportStatusLbl.Caption := 'Saved: ' + OutPath;
+  LogInfo('Editor: exported USFM to ' + OutPath);
+  FExportCloseBtn.Exists := True;
 end;
 
 procedure TViewEditor.LoadProjectData;
@@ -718,6 +1020,10 @@ begin
     FScrollView.Height      := ContentH;
   end;
 
+  { Popup: top-right corner below header }
+  if FMenuPopup <> nil then
+    FMenuPopup.Translation := Vector2(W - BTT_POPUP_W, H - BTT_HEADER_H - FMenuPopup.Height);
+
   FNeedsRelayout := True;
 end;
 
@@ -731,6 +1037,9 @@ begin
     UpdateScrollHeight;
     UpdateSourceScrollHeight;
   end;
+  if FNeedsUpload        then DoUpload;
+  if FNeedsExportTStudio then DoExportTStudio;
+  if FNeedsExportUSFM    then DoExportUSFM;
 end;
 
 procedure TViewEditor.OnThemeChange;

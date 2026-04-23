@@ -13,7 +13,7 @@ function ExportProjectToUSFM(const ProjectDir, SourceContentDir, OutputPath: str
 implementation
 
 uses
-  fpjson, jsonparser, ProjectManager, ProjectCreator, AppLog;
+  fpjson, jsonparser, ProjectManager, CanonBooks, AppLog;
 
 function ReadBookTitle(const ProjectDir: string): string;
 var

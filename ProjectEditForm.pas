@@ -9,7 +9,7 @@ uses
   ExtCtrls, StdCtrls, Buttons, ComCtrls, Types, Menus,
   fpjson, jsonparser, IpHtml,
   ProjectManager, ResourceContainer, ProjectScanner,
-  BibleBook, BibleChapter, BibleChunk, USFMUtils, DataPaths, ProjectCreator,
+  BibleBook, BibleChapter, BibleChunk, USFMUtils, DataPaths, ProjectCreator, CanonBooks,
   AppSettings, SettingsForm, ThemePalette, UIFonts, AppLog,
   IndexDatabase, SourceExtractor;
 
