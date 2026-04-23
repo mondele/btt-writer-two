@@ -75,7 +75,7 @@ uses
   AppState, BTTTheme, AppLog,
   UserProfile,
   GameViewEditor, GameViewLogin, GameViewSettings, GameViewNewProject,
-  GameViewImport;
+  GameViewImport, GameViewFeedback;
 
 const
   RowH         = 72;
@@ -314,7 +314,7 @@ end;
 procedure TViewHome.MenuFeedbackClick(Sender: TObject);
 begin
   MenuDismiss;
-  LogInfo('Menu: Feedback selected (stub)');
+  Container.PushView(ViewFeedback);
 end;
 
 procedure TViewHome.MenuLogoutClick(Sender: TObject);

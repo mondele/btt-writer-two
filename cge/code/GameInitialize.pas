@@ -19,7 +19,7 @@ uses
   AppSettings, AppLog, AppState, UserProfile,
   GameViewHome, GameViewEditor, GameViewChunkEdit, GameViewBlindEdit,
   GameViewLogin, GameViewSettings, GameViewNewProject, GameViewTerms,
-  GameViewImport, GameViewRead;
+  GameViewImport, GameViewRead, GameViewFeedback;
 
 var
   Window: TCastleWindow;
@@ -36,6 +36,7 @@ begin
   ViewTerms.OnThemeChange;
   ViewImport.OnThemeChange;
   ViewRead.OnThemeChange;
+  ViewFeedback.OnThemeChange;
 end;
 
 procedure ApplicationInitialize;
@@ -76,6 +77,7 @@ begin
   ViewTerms      := TViewTerms.Create(Application);
   ViewImport     := TViewImport.Create(Application);
   ViewRead       := TViewRead.Create(Application);
+  ViewFeedback   := TViewFeedback.Create(Application);
 
   GAppState.Screen := asHome;
   if not HasUserProfile then
