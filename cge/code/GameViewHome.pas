@@ -72,7 +72,8 @@ uses
   SysUtils,
   AppState, BTTTheme, AppLog,
   UserProfile,
-  GameViewEditor, GameViewLogin, GameViewSettings, GameViewNewProject;
+  GameViewEditor, GameViewLogin, GameViewSettings, GameViewNewProject,
+  GameViewImport;
 
 const
   RowH         = 72;
@@ -299,7 +300,7 @@ end;
 procedure TViewHome.MenuImportClick(Sender: TObject);
 begin
   MenuDismiss;
-  LogInfo('Menu: Import selected (stub)');
+  Container.View := ViewImport;
 end;
 
 procedure TViewHome.MenuAcademyClick(Sender: TObject);
