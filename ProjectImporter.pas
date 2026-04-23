@@ -46,11 +46,20 @@ function CloneAndImport(const CloneURL, Token: string;
   DupAction: TDuplicateAction;
   out ProjectName: string; out ErrorMsg: string): TImportOutcome;
 
+{ Import a USFM file as a new text project.
+  TargetLangCode is used for both the directory name and the manifest.
+  Source text is assumed to be English ULB (standard chunk structure).
+  On success, ProjectName receives the canonical directory name. }
+function ImportUSFMFile(const FilePath, TargetLangCode: string;
+  DupAction: TDuplicateAction;
+  out ProjectName: string; out ErrorMsg: string): TImportOutcome;
+
 implementation
 
 uses
-  SysUtils, DateUtils,
-  TStudioPackage, GitUtils, DataPaths, ProjectScanner;
+  SysUtils, Classes, DateUtils,
+  TStudioPackage, GitUtils, DataPaths, ProjectScanner,
+  USFMUtils, ProjectData, BibleBook, BibleChapter, CanonBooks, AppLog;
 
 { ── Helpers ── }
 
@@ -326,6 +335,186 @@ begin
     Cleanup(TempDir);   { always clean temp root; repo was moved out already }
 
   Result := Outcome;
+end;
+
+{ Write parsed USFM verses into chunk .txt files in ProjectDir, using the
+  English ULB toc for chunk boundary mapping. }
+procedure WriteUSFMVersesToChunks(const ParseResult: TUSFMParseResult;
+  const ProjectDir, EnglishULBContentDir: string);
+var
+  ULBBook         : TBook;
+  ULBChapter      : TChapter;
+  I, J            : Integer;
+  ChapterNum      : Integer;
+  VerseNum        : Integer;
+  ChunkStart      : Integer;
+  NextChunkStart  : Integer;
+  ChDir, ChunkPath, ChunkContent, ChapterStr: string;
+  SL              : TStringList;
+begin
+  ULBBook := nil;
+  if EnglishULBContentDir <> '' then
+  begin
+    ULBBook := TBook.Create('', 'ulb');
+    ULBBook.LoadFromToc(EnglishULBContentDir);
+  end;
+  try
+    for I := 0 to Length(ParseResult.Verses) - 1 do
+    begin
+      ChapterNum := ParseResult.Verses[I].Chapter;
+      VerseNum   := ParseResult.Verses[I].Verse;
+      if ChapterNum <= 0 then Continue;
+
+      ChapterStr := Format('%.2d', [ChapterNum]);
+      ChDir := IncludeTrailingPathDelimiter(ProjectDir) + ChapterStr;
+      ForceDirectories(ChDir);
+
+      ChunkStart := VerseNum;
+      if ULBBook <> nil then
+      begin
+        ULBChapter := ULBBook.GetChapter(ChapterStr);
+        if ULBChapter <> nil then
+        begin
+          ChunkStart := VerseNum;
+          for J := 0 to ULBChapter.Chunks.Count - 1 do
+          begin
+            if not TryStrToInt(ULBChapter.Chunks[J].Name, ChunkStart) then
+              Continue;
+            if J < ULBChapter.Chunks.Count - 1 then
+            begin
+              if TryStrToInt(ULBChapter.Chunks[J + 1].Name, NextChunkStart) then
+              begin
+                if (VerseNum >= ChunkStart) and (VerseNum < NextChunkStart) then
+                  Break;
+              end;
+            end
+            else
+            begin
+              if VerseNum >= ChunkStart then Break;
+            end;
+          end;
+        end;
+      end;
+
+      ChunkPath    := IncludeTrailingPathDelimiter(ChDir) + Format('%.2d', [ChunkStart]) + '.txt';
+      ChunkContent := ParseResult.Verses[I].Content;
+      SL := TStringList.Create;
+      try
+        if FileExists(ChunkPath) then
+          SL.LoadFromFile(ChunkPath);
+        if Trim(SL.Text) = '' then
+          SL.Text := ChunkContent
+        else
+          SL.Text := SL.Text + ChunkContent;
+        SL.SaveToFile(ChunkPath);
+      finally
+        SL.Free;
+      end;
+    end;
+  finally
+    FreeAndNil(ULBBook);
+  end;
+end;
+
+function ImportUSFMFile(const FilePath, TargetLangCode: string;
+  DupAction: TDuplicateAction;
+  out ProjectName: string; out ErrorMsg: string): TImportOutcome;
+var
+  ParseResult : TUSFMParseResult;
+  BookCode    : string;
+  SourceOpt   : TSourceTextOption;
+  ExistingDir : string;
+  NewProjectDir: string;
+  SourceDir   : string;
+  TempDir     : string;
+  TempProjDir : string;
+  HasConflicts: Boolean;
+  GitErr      : string;
+  OutText, ErrText: string;
+  ExitCode    : Integer;
+begin
+  Result      := ioError;
+  ProjectName := '';
+  ErrorMsg    := '';
+
+  if not ParseUSFMFile(FilePath, ParseResult, ErrorMsg) then
+    Exit;
+
+  BookCode := LowerCase(Trim(ParseResult.BookID));
+  if not IsCanonicalBibleBookCode(BookCode) then
+  begin
+    ErrorMsg := 'Unrecognized book code: ' + ParseResult.BookID;
+    Exit;
+  end;
+
+  if Trim(TargetLangCode) = '' then
+  begin
+    ErrorMsg := 'Target language code is required.';
+    Exit;
+  end;
+
+  { Build source text option using English ULB }
+  SourceOpt := Default(TSourceTextOption);
+  SourceOpt.SourceLangCode := 'en';
+  SourceOpt.BookCode       := BookCode;
+  SourceOpt.ResourceID     := 'ulb';
+
+  ExistingDir := IncludeTrailingPathDelimiter(GetTargetTranslationsPath) +
+    Trim(TargetLangCode) + '_' + BookCode + '_text_reg';
+
+  if DirectoryExists(ExistingDir) then
+  begin
+    if DupAction = daNone then
+    begin
+      ProjectName := ExtractFileName(ExcludeTrailingPathDelimiter(ExistingDir));
+      Result := ioDuplicateExists;
+      Exit;
+    end;
+
+    if DupAction = daOverwrite then
+    begin
+      RunCommandCapture('bash', ['-lc', 'rm -rf ' + ShellQuote(ExistingDir)],
+        '', OutText, ErrText, ExitCode);
+    end
+    else if DupAction = daMerge then
+    begin
+      TempDir     := GetTempDir + 'bttw_usfm_' + TempTag;
+      TempProjDir := IncludeTrailingPathDelimiter(TempDir) +
+        Trim(TargetLangCode) + '_' + BookCode + '_text_reg';
+      ForceDirectories(TempProjDir);
+      RunCommandCapture('git', ['-C', TempProjDir, 'init'],
+        '', OutText, ErrText, ExitCode);
+      SourceDir := FindEnglishULBContentDir(BookCode);
+      WriteUSFMVersesToChunks(ParseResult, TempProjDir, SourceDir);
+      EnsureProjectCommitted(TempProjDir, GitErr);
+      if not MergeImportedProject(ExistingDir, TempProjDir, HasConflicts, ErrorMsg) then
+      begin
+        Cleanup(TempDir);
+        Exit;
+      end;
+      Cleanup(TempDir);
+      ProjectName := ExtractFileName(ExcludeTrailingPathDelimiter(ExistingDir));
+      LogInfo('USFM import merged: ' + ProjectName);
+      if HasConflicts then
+        Result := ioMergedWithConflicts
+      else
+        Result := ioSuccess;
+      Exit;
+    end;
+  end;
+
+  { Create the project (new or after overwrite) }
+  if not CreateProjectFromSource(Trim(TargetLangCode), Trim(TargetLangCode),
+    SourceOpt, ptText, NewProjectDir, ErrorMsg) then
+    Exit;
+
+  SourceDir := FindEnglishULBContentDir(BookCode);
+  WriteUSFMVersesToChunks(ParseResult, NewProjectDir, SourceDir);
+  CommitProjectChanges(NewProjectDir, 'Import from USFM', GitErr);
+
+  ProjectName := ExtractFileName(ExcludeTrailingPathDelimiter(NewProjectDir));
+  LogInfo('USFM import: ' + ProjectName);
+  Result := ioSuccess;
 end;
 
 end.

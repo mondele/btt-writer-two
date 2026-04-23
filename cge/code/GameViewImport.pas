@@ -56,7 +56,14 @@ type
     FSelRepoIdx   : Integer;
     FNeedsSearch  : Boolean;
 
-    { ── Step N: stub ── }
+    { ── Step 3: USFM import ── }
+    FUSFMPanel    : TCastleRectangleControl;
+    FUSFMPathEdit : TCastleEdit;
+    FUSFMLangEdit : TCastleEdit;
+    FUSFMImportBtn: TCastleButton;
+    FUSFMStatusLbl: TCastleLabel;
+
+    { ── Step 4: stub (source text) ── }
     FStubPanel    : TCastleRectangleControl;
     FStubLbl      : TCastleLabel;
 
@@ -67,13 +74,15 @@ type
     FDupCancelBtn : TCastleButton;
     FDupPendingPath : string;    { pending .tstudio path when dup found }
     FDupPendingRepo : Integer;   { pending repo index when dup found     }
+    FDupPendingLang : string;    { pending lang code for USFM import     }
 
-    FStep : Integer;  { 0=choice 1=tstudio 2=server 3=stub }
+    FStep : Integer;  { 0=choice 1=tstudio 2=server 3=usfm 4=stub }
 
     procedure BuildChrome;
     procedure BuildChoice;
     procedure BuildTStudio;
     procedure BuildServer;
+    procedure BuildUSFM;
     procedure BuildStub;
     procedure BuildDupOverlay;
 
@@ -82,6 +91,7 @@ type
     procedure HideDupOverlay;
 
     procedure SetStatus(const Msg: string; IsError: Boolean = False);
+    procedure SetUSFMStatus(const Msg: string; IsError: Boolean = False);
     procedure SetServerStatus(const Msg: string; IsError: Boolean = False);
     procedure RebuildRepoList;
 
@@ -91,6 +101,7 @@ type
     procedure ClickUSFM(Sender: TObject);
     procedure ClickSource(Sender: TObject);
     procedure ClickImportTStudio(Sender: TObject);
+    procedure ClickImportUSFM(Sender: TObject);
     procedure ClickSearch(Sender: TObject);
     procedure ClickRepo(Sender: TObject);
     procedure ClickServerImport(Sender: TObject);
@@ -100,6 +111,7 @@ type
 
     procedure DoTStudioImport(const FilePath: string; DupAction: Integer);
     procedure DoServerImport(RepoIdx: Integer; DupAction: Integer);
+    procedure DoUSFMImport(const FilePath, LangCode: string; DupAction: Integer);
   public
     procedure Start;    override;
     procedure Update(const SecondsPassed: Single; var HandleInput: Boolean); override;
@@ -137,10 +149,12 @@ begin
   FNeedsSearch := False;
   FSelRepoIdx := -1;
   FListContent := nil;
+  FDupPendingLang := '';
   BuildChrome;
   BuildChoice;
   BuildTStudio;
   BuildServer;
+  BuildUSFM;
   BuildStub;
   BuildDupOverlay;
   ShowStep(0);
@@ -372,7 +386,73 @@ begin
   FServerPanel.InsertFront(FServerImport);
 end;
 
-{ ── Stub panel (USFM / Source Text) ── }
+{ ── USFM import panel ── }
+
+procedure TViewImport.BuildUSFM;
+var
+  Pal     : TBTTPalette;
+  HintLbl : TCastleLabel;
+begin
+  Pal := P;
+
+  FUSFMPanel       := TCastleRectangleControl.Create(FreeAtStop);
+  FUSFMPanel.Color := Pal.PanelBg;
+  FUSFMPanel.FullSize := True;
+  FUSFMPanel.Exists   := False;
+  FCard.InsertFront(FUSFMPanel);
+
+  HintLbl          := TCastleLabel.Create(FreeAtStop);
+  HintLbl.Caption  := 'Enter the full path to the .usfm file:';
+  HintLbl.Color    := Pal.TextSecondary;
+  HintLbl.FontSize := 13;
+  HintLbl.Anchor(hpLeft, hpLeft, Pad);
+  HintLbl.Anchor(vpTop,  vpTop,  -Pad);
+  FUSFMPanel.InsertFront(HintLbl);
+
+  FUSFMPathEdit             := TCastleEdit.Create(FreeAtStop);
+  FUSFMPathEdit.Placeholder := '/path/to/file.usfm';
+  FUSFMPathEdit.Width       := CardW - Pad * 2;
+  FUSFMPathEdit.FontSize    := 14;
+  FUSFMPathEdit.Anchor(hpMiddle, hpMiddle);
+  FUSFMPathEdit.Anchor(vpTop,    vpTop,    -(Pad + 30));
+  FUSFMPanel.InsertFront(FUSFMPathEdit);
+
+  HintLbl          := TCastleLabel.Create(FreeAtStop);
+  HintLbl.Caption  := 'Target language code (e.g. fr, ru, id):';
+  HintLbl.Color    := Pal.TextSecondary;
+  HintLbl.FontSize := 13;
+  HintLbl.Anchor(hpLeft, hpLeft, Pad);
+  HintLbl.Anchor(vpTop,  vpTop,  -(Pad + 80));
+  FUSFMPanel.InsertFront(HintLbl);
+
+  FUSFMLangEdit             := TCastleEdit.Create(FreeAtStop);
+  FUSFMLangEdit.Placeholder := 'Language code';
+  FUSFMLangEdit.Width       := 180;
+  FUSFMLangEdit.FontSize    := 14;
+  FUSFMLangEdit.Anchor(hpLeft, hpLeft, Pad);
+  FUSFMLangEdit.Anchor(vpTop, vpTop, -(Pad + 110));
+  FUSFMPanel.InsertFront(FUSFMLangEdit);
+
+  FUSFMStatusLbl          := TCastleLabel.Create(FreeAtStop);
+  FUSFMStatusLbl.Caption  := '';
+  FUSFMStatusLbl.Color    := Pal.TextSecondary;
+  FUSFMStatusLbl.FontSize := 13;
+  FUSFMStatusLbl.MaxWidth := CardW - Pad * 2;
+  FUSFMStatusLbl.Anchor(hpMiddle, hpMiddle);
+  FUSFMStatusLbl.Anchor(vpBottom, vpBottom, Pad + BtnH + 8);
+  FUSFMPanel.InsertFront(FUSFMStatusLbl);
+
+  FUSFMImportBtn          := TCastleButton.Create(FreeAtStop);
+  FUSFMImportBtn.Caption  := 'Import';
+  FUSFMImportBtn.FontSize := 14;
+  FUSFMImportBtn.Width    := 120;
+  FUSFMImportBtn.OnClick  := @ClickImportUSFM;
+  FUSFMImportBtn.Anchor(hpRight, hpRight, -Pad);
+  FUSFMImportBtn.Anchor(vpBottom, vpBottom, Pad);
+  FUSFMPanel.InsertFront(FUSFMImportBtn);
+end;
+
+{ ── Stub panel (Source Text) ── }
 
 procedure TViewImport.BuildStub;
 var
@@ -456,13 +536,15 @@ begin
   FChoicePanel.Exists  := (S = 0);
   FTStudioPanel.Exists := (S = 1);
   FServerPanel.Exists  := (S = 2);
-  FStubPanel.Exists    := (S = 3);
+  FUSFMPanel.Exists    := (S = 3);
+  FStubPanel.Exists    := (S = 4);
   FBackBtn.Exists      := (S > 0);
   case S of
     0: FTitleLbl.Caption := 'Import';
     1: FTitleLbl.Caption := 'Import Project File';
     2: FTitleLbl.Caption := 'Import from Server';
-    3: FTitleLbl.Caption := 'Import';
+    3: FTitleLbl.Caption := 'Import USFM File';
+    4: FTitleLbl.Caption := 'Import';
   end;
 end;
 
@@ -476,6 +558,7 @@ begin
   FDupOverlay.Exists  := False;
   FDupPendingPath     := '';
   FDupPendingRepo     := -1;
+  FDupPendingLang     := '';
 end;
 
 { ── Status helpers ── }
@@ -490,6 +573,18 @@ begin
     FStatusLbl.Color := CastleVectors.Vector4(0.85, 0.2, 0.2, 1)
   else
     FStatusLbl.Color := Pal.TextSecondary;
+end;
+
+procedure TViewImport.SetUSFMStatus(const Msg: string; IsError: Boolean);
+var
+  Pal : TBTTPalette;
+begin
+  Pal := P;
+  FUSFMStatusLbl.Caption := Msg;
+  if IsError then
+    FUSFMStatusLbl.Color := CastleVectors.Vector4(0.85, 0.2, 0.2, 1)
+  else
+    FUSFMStatusLbl.Color := Pal.TextSecondary;
 end;
 
 procedure TViewImport.SetServerStatus(const Msg: string; IsError: Boolean);
@@ -596,10 +691,9 @@ end;
 
 procedure TViewImport.ClickUSFM(Sender: TObject);
 begin
-  FStubLbl.Caption :=
-    'USFM import requires selecting a target language and source text.' + LineEnding +
-    'This is not yet available in the standalone app.' + LineEnding + LineEnding +
-    'Use the desktop (Lazarus) version for USFM import.';
+  FUSFMPathEdit.Text := '';
+  FUSFMLangEdit.Text := '';
+  SetUSFMStatus('');
   ShowStep(3);
 end;
 
@@ -608,7 +702,7 @@ begin
   FStubLbl.Caption :=
     'Source texts are managed through the New Project flow.' + LineEnding + LineEnding +
     'Return to Home and use "+ New Project" to add a source text.';
-  ShowStep(3);
+  ShowStep(4);
 end;
 
 procedure TViewImport.DoTStudioImport(const FilePath: string; DupAction: Integer);
@@ -661,6 +755,65 @@ begin
     Exit;
   end;
   DoTStudioImport(FilePath, Ord(daNone));
+end;
+
+procedure TViewImport.ClickImportUSFM(Sender: TObject);
+var
+  FilePath, LangCode : string;
+begin
+  FilePath := Trim(FUSFMPathEdit.Text);
+  LangCode := Trim(FUSFMLangEdit.Text);
+  if FilePath = '' then
+  begin
+    SetUSFMStatus('Please enter the path to the .usfm file.', True);
+    Exit;
+  end;
+  if not FileExists(FilePath) then
+  begin
+    SetUSFMStatus('File not found: ' + FilePath, True);
+    Exit;
+  end;
+  if LangCode = '' then
+  begin
+    SetUSFMStatus('Please enter a target language code.', True);
+    Exit;
+  end;
+  DoUSFMImport(FilePath, LangCode, Ord(daNone));
+end;
+
+procedure TViewImport.DoUSFMImport(const FilePath, LangCode: string; DupAction: Integer);
+var
+  ProjName, ErrMsg : string;
+  Outcome          : TImportOutcome;
+begin
+  SetUSFMStatus('Importing...');
+  FUSFMImportBtn.Enabled := False;
+
+  Outcome := ImportUSFMFile(FilePath, LangCode, TDuplicateAction(DupAction),
+    ProjName, ErrMsg);
+
+  FUSFMImportBtn.Enabled := True;
+  case Outcome of
+    ioSuccess:
+    begin
+      SetUSFMStatus('Imported: ' + ProjName);
+      LogInfo('Import: USFM imported as ' + ProjName);
+    end;
+    ioMergedWithConflicts:
+    begin
+      SetUSFMStatus('Merged with conflicts: ' + ProjName +
+        '. Open the project to resolve.', True);
+    end;
+    ioDuplicateExists:
+    begin
+      FDupPendingPath := FilePath;
+      FDupPendingLang := LangCode;
+      FDupPendingRepo := -1;
+      ShowDupOverlay;
+    end;
+    ioError:
+      SetUSFMStatus(ErrMsg, True);
+  end;
 end;
 
 procedure TViewImport.ClickSearch(Sender: TObject);
@@ -752,21 +905,37 @@ begin
 end;
 
 procedure TViewImport.ClickDupMerge(Sender: TObject);
+var
+  PendingPath, PendingLang: string;
+  PendingRepo: Integer;
 begin
+  PendingPath := FDupPendingPath;
+  PendingLang := FDupPendingLang;
+  PendingRepo := FDupPendingRepo;
   HideDupOverlay;
-  if FDupPendingPath <> '' then
-    DoTStudioImport(FDupPendingPath, Ord(daMerge))
-  else if FDupPendingRepo >= 0 then
-    DoServerImport(FDupPendingRepo, Ord(daMerge));
+  if (PendingPath <> '') and (PendingLang <> '') then
+    DoUSFMImport(PendingPath, PendingLang, Ord(daMerge))
+  else if PendingPath <> '' then
+    DoTStudioImport(PendingPath, Ord(daMerge))
+  else if PendingRepo >= 0 then
+    DoServerImport(PendingRepo, Ord(daMerge));
 end;
 
 procedure TViewImport.ClickDupOverwrite(Sender: TObject);
+var
+  PendingPath, PendingLang: string;
+  PendingRepo: Integer;
 begin
+  PendingPath := FDupPendingPath;
+  PendingLang := FDupPendingLang;
+  PendingRepo := FDupPendingRepo;
   HideDupOverlay;
-  if FDupPendingPath <> '' then
-    DoTStudioImport(FDupPendingPath, Ord(daOverwrite))
-  else if FDupPendingRepo >= 0 then
-    DoServerImport(FDupPendingRepo, Ord(daOverwrite));
+  if (PendingPath <> '') and (PendingLang <> '') then
+    DoUSFMImport(PendingPath, PendingLang, Ord(daOverwrite))
+  else if PendingPath <> '' then
+    DoTStudioImport(PendingPath, Ord(daOverwrite))
+  else if PendingRepo >= 0 then
+    DoServerImport(PendingRepo, Ord(daOverwrite));
 end;
 
 procedure TViewImport.ClickDupCancel(Sender: TObject);
