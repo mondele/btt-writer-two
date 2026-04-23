@@ -38,18 +38,33 @@ type
     FBackBtn      : TCastleButton;
     FErrorLbl     : TCastleLabel;
 
-    FShowingLocal : Boolean;
+    { ── server-login step ── }
+    FServerPanel    : TCastleRectangleControl;
+    FSrvURLEdit     : TCastleEdit;
+    FSrvUserEdit    : TCastleEdit;
+    FSrvPassEdit    : TCastleEdit;
+    FSrvLoginBtn    : TCastleButton;
+    FSrvBackBtn     : TCastleButton;
+    FSrvStatusLbl   : TCastleLabel;
+
+    FShowingLocal  : Boolean;
+    FNeedsLogin    : Boolean;   { deferred server login flag }
 
     procedure BuildChrome;
     procedure ShowMain;
     procedure ShowLocal;
+    procedure ShowServer;
 
     procedure ClickLocal(Sender: TObject);
     procedure ClickServer(Sender: TObject);
     procedure ClickSubmit(Sender: TObject);
     procedure ClickBack(Sender: TObject);
+    procedure ClickServerLogin(Sender: TObject);
+    procedure ClickServerBack(Sender: TObject);
+    procedure DoServerLogin;
   public
     procedure Start;  override;
+    procedure Update(const SecondsPassed: Single; var HandleInput: Boolean); override;
     procedure Resize; override;
     procedure OnThemeChange; override;
   end;
@@ -64,6 +79,7 @@ uses
   AppState, BTTTheme, AppLog,
   UserProfile,
   AppSettings,
+  GiteaClient,
   GameViewHome, GameViewTerms;
 
 const
@@ -78,6 +94,7 @@ begin
   inherited;
   ApplyBackground;
   FShowingLocal := False;
+  FNeedsLogin   := False;
   BuildChrome;
   ShowMain;
 end;
@@ -181,16 +198,76 @@ begin
   FBackBtn.Anchor(hpMiddle, hpMiddle, -70);
   FBackBtn.Anchor(vpMiddle, vpMiddle, -30);
   FLocalPanel.InsertFront(FBackBtn);
+
+  { ── Server-login step (hidden initially) ── }
+  FServerPanel       := TCastleRectangleControl.Create(FreeAtStop);
+  FServerPanel.Color := Pal.PanelBg;
+  FServerPanel.FullSize := True;
+  FServerPanel.Exists   := False;
+  FCard.InsertFront(FServerPanel);
+
+  FSrvURLEdit             := TCastleEdit.Create(FreeAtStop);
+  FSrvURLEdit.Placeholder := 'Server URL';
+  FSrvURLEdit.Width       := EditW;
+  FSrvURLEdit.FontSize    := 14;
+  FSrvURLEdit.Anchor(hpMiddle, hpMiddle);
+  FSrvURLEdit.Anchor(vpMiddle, vpMiddle, 75);
+  FServerPanel.InsertFront(FSrvURLEdit);
+
+  FSrvUserEdit             := TCastleEdit.Create(FreeAtStop);
+  FSrvUserEdit.Placeholder := 'Username';
+  FSrvUserEdit.Width       := EditW;
+  FSrvUserEdit.FontSize    := 14;
+  FSrvUserEdit.Anchor(hpMiddle, hpMiddle);
+  FSrvUserEdit.Anchor(vpMiddle, vpMiddle, 30);
+  FServerPanel.InsertFront(FSrvUserEdit);
+
+  FSrvPassEdit             := TCastleEdit.Create(FreeAtStop);
+  FSrvPassEdit.Placeholder := 'Password';
+  FSrvPassEdit.Width       := EditW;
+  FSrvPassEdit.FontSize    := 14;
+  FSrvPassEdit.PasswordChar := '*';
+  FSrvPassEdit.Anchor(hpMiddle, hpMiddle);
+  FSrvPassEdit.Anchor(vpMiddle, vpMiddle, -15);
+  FServerPanel.InsertFront(FSrvPassEdit);
+
+  FSrvStatusLbl          := TCastleLabel.Create(FreeAtStop);
+  FSrvStatusLbl.Caption  := '';
+  FSrvStatusLbl.Color    := Vector4(0.85, 0.2, 0.2, 1);
+  FSrvStatusLbl.FontSize := 12;
+  FSrvStatusLbl.Anchor(hpMiddle, hpMiddle);
+  FSrvStatusLbl.Anchor(vpMiddle, vpMiddle, -48);
+  FSrvStatusLbl.Exists   := False;
+  FServerPanel.InsertFront(FSrvStatusLbl);
+
+  FSrvLoginBtn          := TCastleButton.Create(FreeAtStop);
+  FSrvLoginBtn.Caption  := 'Login';
+  FSrvLoginBtn.FontSize := 14;
+  FSrvLoginBtn.Width    := 120;
+  FSrvLoginBtn.OnClick  := @ClickServerLogin;
+  FSrvLoginBtn.Anchor(hpMiddle, hpMiddle, 70);
+  FSrvLoginBtn.Anchor(vpMiddle, vpMiddle, -70);
+  FServerPanel.InsertFront(FSrvLoginBtn);
+
+  FSrvBackBtn          := TCastleButton.Create(FreeAtStop);
+  FSrvBackBtn.Caption  := 'Back';
+  FSrvBackBtn.FontSize := 14;
+  FSrvBackBtn.Width    := 100;
+  FSrvBackBtn.OnClick  := @ClickServerBack;
+  FSrvBackBtn.Anchor(hpMiddle, hpMiddle, -70);
+  FSrvBackBtn.Anchor(vpMiddle, vpMiddle, -70);
+  FServerPanel.InsertFront(FSrvBackBtn);
 end;
 
 procedure TViewLogin.ShowMain;
 begin
-  FLocalPanel.Exists := False;
-  FTitleLbl.Exists   := True;
+  FLocalPanel.Exists  := False;
+  FServerPanel.Exists := False;
+  FTitleLbl.Exists    := True;
   FSubtitleLbl.Exists := True;
-  FLocalBtn.Exists   := True;
-  FServerBtn.Exists  := True;
-  FShowingLocal      := False;
+  FLocalBtn.Exists    := True;
+  FServerBtn.Exists   := True;
+  FShowingLocal       := False;
 end;
 
 procedure TViewLogin.ShowLocal;
@@ -205,6 +282,21 @@ begin
   FShowingLocal       := True;
 end;
 
+procedure TViewLogin.ShowServer;
+begin
+  FTitleLbl.Exists    := False;
+  FSubtitleLbl.Exists := False;
+  FLocalBtn.Exists    := False;
+  FServerBtn.Exists   := False;
+  FLocalPanel.Exists  := False;
+  FServerPanel.Exists := True;
+  FSrvURLEdit.Text    := GetDataServer;
+  FSrvUserEdit.Text   := '';
+  FSrvPassEdit.Text   := '';
+  FSrvStatusLbl.Exists := False;
+  FShowingLocal        := False;
+end;
+
 procedure TViewLogin.ClickLocal(Sender: TObject);
 begin
   ShowLocal;
@@ -212,9 +304,90 @@ end;
 
 procedure TViewLogin.ClickServer(Sender: TObject);
 begin
-  { Stub — server login not yet implemented in the CGE UI. }
-  LogInfo('Login: server login not yet implemented');
-  FServerBtn.Caption := 'Not yet available';
+  ShowServer;
+end;
+
+procedure TViewLogin.ClickServerLogin(Sender: TObject);
+begin
+  FSrvLoginBtn.Enabled := False;
+  FSrvBackBtn.Enabled  := False;
+  FSrvStatusLbl.Caption := 'Logging in…';
+  FSrvStatusLbl.Color  := Vector4(0.3, 0.6, 0.3, 1);
+  FSrvStatusLbl.Exists := True;
+  FNeedsLogin := True;
+end;
+
+procedure TViewLogin.ClickServerBack(Sender: TObject);
+begin
+  ShowMain;
+end;
+
+procedure TViewLogin.DoServerLogin;
+var
+  SrvURL    : string;
+  Username  : string;
+  Password  : string;
+  UserInfo  : TGiteaUserInfo;
+  Token     : TGiteaTokenInfo;
+  Profile   : TUserProfile;
+begin
+  FNeedsLogin := False;
+  SrvURL   := Trim(FSrvURLEdit.Text);
+  Username := Trim(FSrvUserEdit.Text);
+  Password := FSrvPassEdit.Text;
+
+  if SrvURL = '' then
+  begin
+    FSrvStatusLbl.Caption := 'Please enter a server URL.';
+    FSrvStatusLbl.Color   := Vector4(0.85, 0.2, 0.2, 1);
+    FSrvStatusLbl.Exists  := True;
+    FSrvLoginBtn.Enabled  := True;
+    FSrvBackBtn.Enabled   := True;
+    Exit;
+  end;
+  if Username = '' then
+  begin
+    FSrvStatusLbl.Caption := 'Please enter a username.';
+    FSrvStatusLbl.Color   := Vector4(0.85, 0.2, 0.2, 1);
+    FSrvStatusLbl.Exists  := True;
+    FSrvLoginBtn.Enabled  := True;
+    FSrvBackBtn.Enabled   := True;
+    Exit;
+  end;
+
+  try
+    GiteaLogin(SrvURL, Username, Password, UserInfo, Token);
+  except
+    on E: Exception do
+    begin
+      LogFmt(llWarn, 'Server login failed: %s', [E.Message]);
+      FSrvStatusLbl.Caption := 'Login failed: ' + E.Message;
+      FSrvStatusLbl.Color   := Vector4(0.85, 0.2, 0.2, 1);
+      FSrvStatusLbl.Exists  := True;
+      FSrvLoginBtn.Enabled  := True;
+      FSrvBackBtn.Enabled   := True;
+      Exit;
+    end;
+  end;
+
+  Profile          := Default(TUserProfile);
+  Profile.Username := UserInfo.Username;
+  Profile.FullName := UserInfo.FullName;
+  Profile.Email    := UserInfo.Email;
+  Profile.Token    := Token.SHA1;
+  Profile.TokenID  := Token.ID;
+  Profile.IsLocal  := False;
+  Profile.ServerURL := SrvURL;
+  SaveUserProfile(Profile);
+
+  GAppState.UserName := UserInfo.FullName;
+  if GAppState.UserName = '' then
+    GAppState.UserName := UserInfo.Username;
+  GAppState.IsLocal := False;
+  LogInfo('Login: server login successful for ' + Profile.Username);
+
+  SetTermsAccepted(False);
+  Container.View := ViewTerms;
 end;
 
 procedure TViewLogin.ClickSubmit(Sender: TObject);
@@ -247,6 +420,13 @@ end;
 procedure TViewLogin.ClickBack(Sender: TObject);
 begin
   ShowMain;
+end;
+
+procedure TViewLogin.Update(const SecondsPassed: Single; var HandleInput: Boolean);
+begin
+  inherited;
+  if FNeedsLogin then
+    DoServerLogin;
 end;
 
 procedure TViewLogin.Resize;
