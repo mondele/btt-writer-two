@@ -239,10 +239,9 @@ begin
   GAppState.IsLocal  := True;
   LogInfo('Login: local profile created for ' + DisplayName);
 
-  if GetTermsAccepted then
-    Container.View := ViewHome
-  else
-    Container.View := ViewTerms;
+  { New profiles always need to accept Terms, regardless of any saved state. }
+  SetTermsAccepted(False);
+  Container.View := ViewTerms;
 end;
 
 procedure TViewLogin.ClickBack(Sender: TObject);

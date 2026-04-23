@@ -36,8 +36,9 @@ type
     FScrollView  : TCastleScrollView;
     FMenuPopup      : TBTTPopupMenu;
     FBackdrop       : TPopupBackdrop;
-    FProjects       : TProjectSummaryList;
-    FConfirmLogout  : TViewConfirm;
+    FProjects         : TProjectSummaryList;
+    FConfirmLogout    : TViewConfirm;
+    FPendingLogout    : Boolean;  { deferred from Resume to avoid lifecycle crash }
 
     procedure BuildChrome;
     procedure BuildMenuPopup;
@@ -59,6 +60,7 @@ type
   public
     procedure Start; override;
     procedure Resume; override;
+    procedure Update(const SecondsPassed: Single; var HandleInput: Boolean); override;
     procedure Resize; override;
     procedure OnThemeChange; override;
   end;
@@ -401,7 +403,8 @@ end;
 procedure TViewHome.Resume;
 begin
   inherited;
-  { Returning from the logout confirmation dialog. }
+  { Returning from the logout confirmation dialog.
+    Cannot call Container.View here (lifecycle method) — set a flag instead. }
   if Assigned(FConfirmLogout) then
   begin
     if FConfirmLogout.Answer then
@@ -410,11 +413,19 @@ begin
       GAppState.IsLocal  := False;
       ClearUserProfile;
       LogInfo('Logout confirmed');
-      FreeAndNil(FConfirmLogout);
-      Container.View := ViewLogin;
-      Exit;
+      FPendingLogout := True;
     end;
     FreeAndNil(FConfirmLogout);
+  end;
+end;
+
+procedure TViewHome.Update(const SecondsPassed: Single; var HandleInput: Boolean);
+begin
+  inherited;
+  if FPendingLogout then
+  begin
+    FPendingLogout := False;
+    Container.View := ViewLogin;
   end;
 end;
 

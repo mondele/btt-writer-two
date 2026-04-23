@@ -3,7 +3,10 @@ unit BTTHeader;
 
 { Reusable BTT-Writer header bar.
   Fixed height strip at the top of any view; provides a centered title
-  and left/right anchor slots for buttons and labels. }
+  and left/right anchor slots for buttons and labels.
+
+  Multiple controls can be added to each side; they are packed into
+  horizontal groups so they flow naturally without overlapping. }
 
 interface
 
@@ -18,27 +21,23 @@ const
 type
   TBTTHeader = class(TCastleRectangleControl)
   private
-    FTitleLbl: TCastleLabel;
+    FTitleLbl  : TCastleLabel;
+    FLeftGroup : TCastleHorizontalGroup;
+    FRightGroup: TCastleHorizontalGroup;
   public
-    { Create a styled header and insert it into the parent view.
-      Caller is responsible for setting Translation/Width in Resize. }
     constructor Create(AOwner: TComponent; const APalette: TBTTPalette); reintroduce;
-
-    { Update the centred title text. }
     procedure SetTitle(const ATitle: string);
-
-    { Anchor a control to the left edge (e.g. back button).
-      The caller must have already created the control with FreeAtStop. }
+    { Append a control to the left group (e.g. back button). }
     procedure AddLeft(AControl: TCastleUserInterface);
-
-    { Anchor a control to the right edge (e.g. user-name label). }
+    { Append a control to the right group (e.g. mode buttons). }
     procedure AddRight(AControl: TCastleUserInterface);
   end;
 
 implementation
 
 const
-  SlotPad = 12;
+  SlotPad = 10;
+  BtnGap  = 6;
 
 constructor TBTTHeader.Create(AOwner: TComponent; const APalette: TBTTPalette);
 begin
@@ -46,12 +45,29 @@ begin
   Color  := APalette.HeaderBg;
   Height := BTT_HEADER_H;
 
+  { Centred title }
   FTitleLbl := TCastleLabel.Create(Self);
   FTitleLbl.Color    := APalette.HeaderText;
   FTitleLbl.FontSize := 20;
   FTitleLbl.Anchor(hpMiddle, hpMiddle);
   FTitleLbl.Anchor(vpMiddle, vpMiddle);
   InsertFront(FTitleLbl);
+
+  { Left group — left-anchored, children added left-to-right }
+  FLeftGroup        := TCastleHorizontalGroup.Create(Self);
+  FLeftGroup.Spacing := BtnGap;
+  FLeftGroup.Anchor(hpLeft, hpLeft, SlotPad);
+  FLeftGroup.Anchor(vpMiddle, vpMiddle);
+  InsertFront(FLeftGroup);
+
+  { Right group — right-anchored, children added left-to-right.
+    The last added button ends up closest to the right edge because
+    TCastleHorizontalGroup grows leftward when right-anchored. }
+  FRightGroup        := TCastleHorizontalGroup.Create(Self);
+  FRightGroup.Spacing := BtnGap;
+  FRightGroup.Anchor(hpRight, hpRight, -SlotPad);
+  FRightGroup.Anchor(vpMiddle, vpMiddle);
+  InsertFront(FRightGroup);
 end;
 
 procedure TBTTHeader.SetTitle(const ATitle: string);
@@ -61,16 +77,12 @@ end;
 
 procedure TBTTHeader.AddLeft(AControl: TCastleUserInterface);
 begin
-  AControl.Anchor(hpLeft, hpLeft, SlotPad);
-  AControl.Anchor(vpMiddle, vpMiddle);
-  InsertFront(AControl);
+  FLeftGroup.InsertFront(AControl);
 end;
 
 procedure TBTTHeader.AddRight(AControl: TCastleUserInterface);
 begin
-  AControl.Anchor(hpRight, hpRight, -SlotPad);
-  AControl.Anchor(vpMiddle, vpMiddle);
-  InsertFront(AControl);
+  FRightGroup.InsertFront(AControl);
 end;
 
 end.
