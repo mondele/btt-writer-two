@@ -62,6 +62,7 @@ type
 
     procedure ClickBack(Sender: TObject);
     procedure ClickBlindEdit(Sender: TObject);
+    procedure ClickRead(Sender: TObject);
     procedure ClickToggle(Sender: TObject);
     procedure ClickPrev(Sender: TObject);
     procedure ClickNext(Sender: TObject);
@@ -87,7 +88,7 @@ uses
   DataPaths, ProjectManager, ResourceContainer, ProjectScanner,
   BibleBook, BibleChapter,
   USFMRenderer,
-  GameViewHome, GameViewChunkEdit, GameViewBlindEdit;
+  GameViewHome, GameViewChunkEdit, GameViewBlindEdit, GameViewRead;
 
 const
   ChapterBarH    = 44;
@@ -235,6 +236,13 @@ begin
   BackBtn.FontSize := 14;
   BackBtn.OnClick  := @ClickBack;
   FHeader.AddLeft(BackBtn);
+
+  { Read mode button — reuse BlindBtn variable (already declared) }
+  BlindBtn          := TCastleButton.Create(FreeAtStop);
+  BlindBtn.Caption  := 'Read';
+  BlindBtn.FontSize := 13;
+  BlindBtn.OnClick  := @ClickRead;
+  FHeader.AddRight(BlindBtn);
 
   { Blind Edit mode button }
   BlindBtn          := TCastleButton.Create(FreeAtStop);
@@ -574,6 +582,11 @@ begin
   GAppState.Screen := asHome;
   ResetEditorState;
   Container.View := ViewHome;
+end;
+
+procedure TViewEditor.ClickRead(Sender: TObject);
+begin
+  Container.View := ViewRead;
 end;
 
 procedure TViewEditor.ClickBlindEdit(Sender: TObject);
