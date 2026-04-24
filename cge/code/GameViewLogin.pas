@@ -16,10 +16,20 @@ interface
 
 uses
   Classes,
-  CastleUIControls, CastleControls, CastleColors,
-  CGEViewBase, BTTHeader, BTTBreadcrumb, BTTStatusBar;
+  CastleUIControls, CastleControls, CastleColors, CastleKeysMouse,
+  CGEViewBase, BTTHeader, BTTBreadcrumb, BTTStatusBar, BTTTheme;
 
 type
+  { Clickable row used in the chooser card.
+    Wraps a title + description and fires OnOptionClick on left-press. }
+  TLoginOptionRow = class(TCastleRectangleControl)
+  private
+    FOnOptionClick: TNotifyEvent;
+  public
+    function Press(const Event: TInputPressRelease): Boolean; override;
+    property OnOptionClick: TNotifyEvent read FOnOptionClick write FOnOptionClick;
+  end;
+
   TViewLogin = class(TCGEViewBase)
   private
     FHeader       : TBTTHeader;
@@ -27,43 +37,56 @@ type
     FStatusBar    : TBTTStatusBar;
     FCard         : TCastleRectangleControl;
 
-    { ── main step ── }
-    FTitleLbl     : TCastleLabel;
-    FSubtitleLbl  : TCastleLabel;
-    FLocalBtn     : TCastleButton;
-    FServerBtn    : TCastleButton;
+    { ── chooser step ── }
+    FChooserPanel : TCastleRectangleControl;
+    FChooserIntro : TCastleLabel;
+    FRowServer    : TLoginOptionRow;
+    FRowCreateSrv : TLoginOptionRow;
+    FRowLocal     : TLoginOptionRow;
 
     { ── local-profile step ── }
     FLocalPanel   : TCastleRectangleControl;
-    FPromptLbl    : TCastleLabel;
+    FLocalTitle   : TCastleLabel;
+    FLocalDesc    : TCastleLabel;
+    FLocalSep     : TCastleRectangleControl;
     FNameEdit     : TCastleEdit;
-    FSubmitBtn    : TCastleButton;
-    FBackBtn      : TCastleButton;
     FErrorLbl     : TCastleLabel;
+    FSubmitBtn    : TCastleButton;          { green OK, outside card }
+    FLocalToSrvBtn: TCastleButton;          { text link, outside card }
 
     { ── server-login step ── }
-    FServerPanel    : TCastleRectangleControl;
-    FSrvURLEdit     : TCastleEdit;
-    FSrvUserEdit    : TCastleEdit;
-    FSrvPassEdit    : TCastleEdit;
-    FSrvLoginBtn    : TCastleButton;
-    FSrvBackBtn     : TCastleButton;
-    FSrvStatusLbl   : TCastleLabel;
+    FServerPanel   : TCastleRectangleControl;
+    FServerTitle   : TCastleLabel;
+    FServerNetLbl  : TCastleLabel;
+    FServerSep     : TCastleRectangleControl;
+    FSrvUserEdit   : TCastleEdit;
+    FSrvPassEdit   : TCastleEdit;
+    FSrvStatusLbl  : TCastleLabel;
+    FSrvLoginBtn   : TCastleButton;         { green LOGIN, outside card }
+    FSrvCreateBtn  : TCastleButton;         { text link, outside card }
 
     FShowingLocal  : Boolean;
     FNeedsLogin    : Boolean;   { deferred server login flag }
 
     procedure BuildChrome;
+    procedure BuildChooser(const Pal: TBTTPalette);
+    procedure BuildLocalPanel(const Pal: TBTTPalette);
+    procedure BuildServerPanel(const Pal: TBTTPalette);
     procedure ShowMain;
     procedure ShowLocal;
     procedure ShowServer;
 
+    procedure StyleLinkButton(Btn: TCastleButton; const Pal: TBTTPalette);
+    procedure StylePrimaryButton(Btn: TCastleButton; const Pal: TBTTPalette);
+
     procedure ClickLocal(Sender: TObject);
     procedure ClickServer(Sender: TObject);
+    procedure ClickCreateServer(Sender: TObject);
     procedure ClickSubmit(Sender: TObject);
     procedure ClickBack(Sender: TObject);
     procedure ClickServerLogin(Sender: TObject);
     procedure ClickServerBack(Sender: TObject);
+    procedure ClickCreateServerAcct(Sender: TObject);
     procedure DoServerLogin;
   public
     procedure Start;  override;
@@ -79,18 +102,32 @@ implementation
 
 uses
   SysUtils, CastleVectors,
-  AppState, BTTTheme, AppLog,
+  AppState, AppLog,
   UserProfile,
   AppSettings,
-  GiteaClient,
+  GiteaClient, CGEStrings,
   GameViewHome, GameViewTerms;
 
 const
-  CardW   = 440;
-  CardH   = 320;
-  Pad     = 28;
-  EditW   = 280;
-  EditH   = 36;
+  CardW      = 560;
+  CardH      = 360;
+  Pad        = 24;
+  OptionH    = 96;    { height of each chooser option row }
+  SepH       = 1;
+  EditH      = 38;
+
+{ ── TLoginOptionRow ───────────────────────────────────────────────────────── }
+
+function TLoginOptionRow.Press(const Event: TInputPressRelease): Boolean;
+begin
+  Result := inherited Press(Event);
+  if (Event.EventType = itMouseButton) and (Event.MouseButton = buttonLeft) then
+  begin
+    if Assigned(FOnOptionClick) then
+      FOnOptionClick(Self);
+    Result := True;
+  end;
+end;
 
 procedure TViewLogin.Start;
 begin
@@ -102,6 +139,29 @@ begin
   ShowMain;
 end;
 
+procedure TViewLogin.StyleLinkButton(Btn: TCastleButton; const Pal: TBTTPalette);
+begin
+  Btn.CustomBackground    := True;
+  Btn.CustomColorNormal   := Vector4(0, 0, 0, 0);
+  Btn.CustomColorFocused  := Vector4(0, 0, 0, 0.05);
+  Btn.CustomColorPressed  := Vector4(0, 0, 0, 0.10);
+  Btn.CustomColorDisabled := Vector4(0, 0, 0, 0);
+  Btn.CustomTextColorUse  := True;
+  Btn.CustomTextColor     := Pal.TextSecondary;
+end;
+
+procedure TViewLogin.StylePrimaryButton(Btn: TCastleButton; const Pal: TBTTPalette);
+begin
+  Btn.CustomBackground    := True;
+  Btn.CustomColorNormal   := Pal.Accent;
+  Btn.CustomColorFocused  := Pal.Accent;
+  Btn.CustomColorPressed  := Pal.Accent;
+  Btn.CustomTextColorUse  := True;
+  Btn.CustomTextColor     := Pal.TextInverse;
+  Btn.AutoSize := False;
+  Btn.Height   := 44;
+end;
+
 procedure TViewLogin.BuildChrome;
 var
   Pal : TBTTPalette;
@@ -110,17 +170,17 @@ begin
 
   { Header / breadcrumb / status bar chrome }
   FHeader := TBTTHeader.Create(FreeAtStop, Pal);
-  FHeader.SetTitle('BTT-Writer');
+  FHeader.SetTitle(rsAppName);
   InsertFront(FHeader);
 
   FCrumb := TBTTBreadcrumb.Create(FreeAtStop, Pal);
-  FCrumb.SetCrumbs(['User Profile']);
+  FCrumb.SetCrumbs([rsLoginCrumb]);
   InsertFront(FCrumb);
 
   FStatusBar := TBTTStatusBar.Create(FreeAtStop, Pal);
   InsertFront(FStatusBar);
 
-  { Centred card }
+  { Centred card — holds whichever step is active. Size set in Resize. }
   FCard       := TCastleRectangleControl.Create(FreeAtStop);
   FCard.Color := Pal.PanelBg;
   FCard.Width  := CardW;
@@ -129,201 +189,284 @@ begin
   FCard.Anchor(vpMiddle, vpMiddle);
   InsertFront(FCard);
 
-  { ── Main step ── }
-  FTitleLbl          := TCastleLabel.Create(FreeAtStop);
-  FTitleLbl.Caption  := 'BTT-Writer';
-  FTitleLbl.Color    := Pal.TextPrimary;
-  FTitleLbl.FontSize := 26;
-  FTitleLbl.Anchor(hpMiddle, hpMiddle);
-  FTitleLbl.Anchor(vpTop,    vpTop,    -Pad);
-  FCard.InsertFront(FTitleLbl);
+  BuildChooser(Pal);
+  BuildLocalPanel(Pal);
+  BuildServerPanel(Pal);
+end;
 
-  FSubtitleLbl          := TCastleLabel.Create(FreeAtStop);
-  FSubtitleLbl.Caption  := 'Bible Translation Tool';
-  FSubtitleLbl.Color    := Pal.TextSecondary;
-  FSubtitleLbl.FontSize := 14;
-  FSubtitleLbl.Anchor(hpMiddle, hpMiddle);
-  FSubtitleLbl.Anchor(vpTop,    vpTop,    -(Pad + 38));
-  FCard.InsertFront(FSubtitleLbl);
+procedure TViewLogin.BuildChooser(const Pal: TBTTPalette);
 
-  FLocalBtn          := TCastleButton.Create(FreeAtStop);
-  FLocalBtn.Caption  := 'Create Local Profile';
-  FLocalBtn.FontSize := 15;
-  FLocalBtn.Width    := EditW;
-  FLocalBtn.OnClick  := @ClickLocal;
-  FLocalBtn.Anchor(hpMiddle, hpMiddle);
-  FLocalBtn.Anchor(vpMiddle, vpMiddle, 30);
-  FCard.InsertFront(FLocalBtn);
+  function MakeOptionRow(const ATitle, ADesc: string;
+    OnClickHandler: TNotifyEvent; RowIdx: Integer): TLoginOptionRow;
+  var
+    TitleLbl, DescLbl : TCastleLabel;
+    Sep               : TCastleRectangleControl;
+    YBase             : Single;
+  begin
+    Result := TLoginOptionRow.Create(FreeAtStop);
+    Result.Color := Pal.PanelBg;
+    Result.OnOptionClick := OnClickHandler;
+    FChooserPanel.InsertFront(Result);
 
-  FServerBtn          := TCastleButton.Create(FreeAtStop);
-  FServerBtn.Caption  := 'Login with Server Account';
-  FServerBtn.FontSize := 14;
-  FServerBtn.Width    := EditW;
-  FServerBtn.OnClick  := @ClickServer;
-  FServerBtn.Anchor(hpMiddle, hpMiddle);
-  FServerBtn.Anchor(vpMiddle, vpMiddle, -20);
-  FCard.InsertFront(FServerBtn);
+    TitleLbl          := TCastleLabel.Create(FreeAtStop);
+    TitleLbl.Caption  := ATitle;
+    TitleLbl.Color    := Pal.TextPrimary;
+    TitleLbl.FontSize := 17;
+    TitleLbl.Alignment := hpMiddle;
+    TitleLbl.Anchor(hpMiddle, hpMiddle);
+    TitleLbl.Anchor(vpTop, vpTop, -18);
+    Result.InsertFront(TitleLbl);
 
-  { ── Local-profile step (hidden initially) ── }
-  FLocalPanel       := TCastleRectangleControl.Create(FreeAtStop);
-  FLocalPanel.Color := Pal.PanelBg;
+    DescLbl          := TCastleLabel.Create(FreeAtStop);
+    DescLbl.Caption  := ADesc;
+    DescLbl.Color    := Pal.TextSecondary;
+    DescLbl.FontSize := 13;
+    DescLbl.Alignment := hpMiddle;
+    DescLbl.Anchor(hpMiddle, hpMiddle);
+    DescLbl.Anchor(vpBottom, vpBottom, 22);
+    Result.InsertFront(DescLbl);
+
+    YBase := RowIdx * OptionH;
+    Result.Anchor(hpLeft, hpLeft, 0);
+    Result.Anchor(vpTop,  vpTop,  -YBase);
+
+    { Hairline separator above the row (except first). }
+    if RowIdx > 0 then
+    begin
+      Sep        := TCastleRectangleControl.Create(FreeAtStop);
+      Sep.Color  := Pal.Border;
+      Sep.Height := SepH;
+      Sep.Anchor(hpLeft,  hpLeft,  24);
+      Sep.Anchor(hpRight, hpRight, -24);
+      Sep.Anchor(vpTop,   vpTop,   -YBase);
+      FChooserPanel.InsertFront(Sep);
+    end;
+  end;
+
+begin
+  FChooserPanel        := TCastleRectangleControl.Create(FreeAtStop);
+  FChooserPanel.Color  := Pal.PanelBg;
+  FChooserPanel.FullSize := True;
+  FCard.InsertFront(FChooserPanel);
+
+  FChooserIntro          := TCastleLabel.Create(FreeAtStop);
+  FChooserIntro.Caption  := rsLoginChooserTitle;
+  FChooserIntro.Color    := Pal.TextPrimary;
+  FChooserIntro.FontSize := 15;
+  FChooserIntro.Alignment := hpMiddle;
+  FChooserIntro.Anchor(hpMiddle, hpMiddle);
+  FChooserIntro.Anchor(vpTop, vpTop, -22);
+  FChooserPanel.InsertFront(FChooserIntro);
+
+  { Option rows — stacked, offset below the intro via Resize. }
+  FRowServer    := MakeOptionRow(rsLoginOptServerTitle,
+                                 rsLoginOptServerDesc,     @ClickServer,       0);
+  FRowCreateSrv := MakeOptionRow(rsLoginOptCreateServerTitle,
+                                 rsLoginOptCreateServerDesc, @ClickCreateServer, 1);
+  FRowLocal     := MakeOptionRow(rsLoginOptLocalTitle,
+                                 rsLoginOptLocalDesc,      @ClickLocal,        2);
+end;
+
+procedure TViewLogin.BuildLocalPanel(const Pal: TBTTPalette);
+begin
+  FLocalPanel        := TCastleRectangleControl.Create(FreeAtStop);
+  FLocalPanel.Color  := Pal.PanelBg;
   FLocalPanel.FullSize := True;
-  FLocalPanel.Exists   := False;
+  FLocalPanel.Exists := False;
   FCard.InsertFront(FLocalPanel);
 
-  FPromptLbl          := TCastleLabel.Create(FreeAtStop);
-  FPromptLbl.Caption  := 'Your display name:';
-  FPromptLbl.Color    := Pal.TextPrimary;
-  FPromptLbl.FontSize := 15;
-  FPromptLbl.Anchor(hpMiddle, hpMiddle);
-  FPromptLbl.Anchor(vpMiddle, vpMiddle, 60);
-  FLocalPanel.InsertFront(FPromptLbl);
+  FLocalTitle          := TCastleLabel.Create(FreeAtStop);
+  FLocalTitle.Caption  := rsLoginLocalHeading;
+  FLocalTitle.Color    := Pal.TextPrimary;
+  FLocalTitle.FontSize := 20;
+  FLocalTitle.Alignment := hpMiddle;
+  FLocalTitle.Anchor(hpMiddle, hpMiddle);
+  FLocalTitle.Anchor(vpTop, vpTop, -22);
+  FLocalPanel.InsertFront(FLocalTitle);
+
+  FLocalDesc          := TCastleLabel.Create(FreeAtStop);
+  FLocalDesc.Caption  := rsLoginLocalDesc;
+  FLocalDesc.Color    := Pal.TextPrimary;
+  FLocalDesc.FontSize := 13;
+  FLocalDesc.Alignment := hpMiddle;
+  FLocalDesc.Anchor(hpMiddle, hpMiddle);
+  FLocalDesc.Anchor(vpTop, vpTop, -56);
+  FLocalPanel.InsertFront(FLocalDesc);
+
+  FLocalSep        := TCastleRectangleControl.Create(FreeAtStop);
+  FLocalSep.Color  := Pal.Border;
+  FLocalSep.Height := SepH;
+  FLocalSep.Anchor(hpLeft,  hpLeft,  24);
+  FLocalSep.Anchor(hpRight, hpRight, -24);
+  FLocalSep.Anchor(vpTop, vpTop, -156);
+  FLocalPanel.InsertFront(FLocalSep);
 
   FNameEdit             := TCastleEdit.Create(FreeAtStop);
-  FNameEdit.Placeholder := 'Full name or pseudonym';
-  FNameEdit.Width       := EditW;
-  FNameEdit.FontSize    := 15;
-  FNameEdit.Anchor(hpMiddle, hpMiddle);
-  FNameEdit.Anchor(vpMiddle, vpMiddle, 20);
+  FNameEdit.Placeholder := rsLoginLocalPlaceholder;
+  FNameEdit.FontSize    := 16;
+  FNameEdit.Anchor(hpLeft,  hpLeft,  Pad);
+  FNameEdit.Anchor(vpTop, vpTop, -186);
   FLocalPanel.InsertFront(FNameEdit);
 
   FErrorLbl          := TCastleLabel.Create(FreeAtStop);
-  FErrorLbl.Caption  := 'Please enter a name.';
+  FErrorLbl.Caption  := rsLoginLocalError;
   FErrorLbl.Color    := Vector4(0.85, 0.2, 0.2, 1);
   FErrorLbl.FontSize := 13;
   FErrorLbl.Anchor(hpMiddle, hpMiddle);
-  FErrorLbl.Anchor(vpMiddle, vpMiddle, 0);
+  FErrorLbl.Anchor(vpBottom, vpBottom, 16);
   FErrorLbl.Exists   := False;
   FLocalPanel.InsertFront(FErrorLbl);
 
+  { Outside the card: LOGIN WITH SERVER text-link and green OK button.
+    Positioned in Resize so they sit beneath the card's bottom-right. }
+  FLocalToSrvBtn          := TCastleButton.Create(FreeAtStop);
+  FLocalToSrvBtn.Caption  := rsLoginLocalToServer;
+  FLocalToSrvBtn.FontSize := 13;
+  FLocalToSrvBtn.OnClick  := @ClickServer;
+  StyleLinkButton(FLocalToSrvBtn, Pal);
+  FLocalToSrvBtn.Exists   := False;
+  InsertFront(FLocalToSrvBtn);
+
   FSubmitBtn          := TCastleButton.Create(FreeAtStop);
-  FSubmitBtn.Caption  := 'Continue';
+  FSubmitBtn.Caption  := rsLoginLocalSubmit;
   FSubmitBtn.FontSize := 14;
-  FSubmitBtn.Width    := 120;
+  FSubmitBtn.Width    := 100;
   FSubmitBtn.OnClick  := @ClickSubmit;
-  FSubmitBtn.Anchor(hpMiddle, hpMiddle, 70);
-  FSubmitBtn.Anchor(vpMiddle, vpMiddle, -30);
-  FLocalPanel.InsertFront(FSubmitBtn);
+  StylePrimaryButton(FSubmitBtn, Pal);
+  FSubmitBtn.Exists   := False;
+  InsertFront(FSubmitBtn);
+end;
 
-  FBackBtn          := TCastleButton.Create(FreeAtStop);
-  FBackBtn.Caption  := 'Back';
-  FBackBtn.FontSize := 14;
-  FBackBtn.Width    := 100;
-  FBackBtn.OnClick  := @ClickBack;
-  FBackBtn.Anchor(hpMiddle, hpMiddle, -70);
-  FBackBtn.Anchor(vpMiddle, vpMiddle, -30);
-  FLocalPanel.InsertFront(FBackBtn);
-
-  { ── Server-login step (hidden initially) ── }
-  FServerPanel       := TCastleRectangleControl.Create(FreeAtStop);
-  FServerPanel.Color := Pal.PanelBg;
+procedure TViewLogin.BuildServerPanel(const Pal: TBTTPalette);
+begin
+  FServerPanel        := TCastleRectangleControl.Create(FreeAtStop);
+  FServerPanel.Color  := Pal.PanelBg;
   FServerPanel.FullSize := True;
-  FServerPanel.Exists   := False;
+  FServerPanel.Exists := False;
   FCard.InsertFront(FServerPanel);
 
-  FSrvURLEdit             := TCastleEdit.Create(FreeAtStop);
-  FSrvURLEdit.Placeholder := 'Server URL';
-  FSrvURLEdit.Width       := EditW;
-  FSrvURLEdit.FontSize    := 14;
-  FSrvURLEdit.Anchor(hpMiddle, hpMiddle);
-  FSrvURLEdit.Anchor(vpMiddle, vpMiddle, 75);
-  FServerPanel.InsertFront(FSrvURLEdit);
+  FServerTitle          := TCastleLabel.Create(FreeAtStop);
+  FServerTitle.Caption  := rsLoginServerHeading;
+  FServerTitle.Color    := Pal.TextPrimary;
+  FServerTitle.FontSize := 20;
+  FServerTitle.Alignment := hpMiddle;
+  FServerTitle.Anchor(hpMiddle, hpMiddle);
+  FServerTitle.Anchor(vpTop, vpTop, -22);
+  FServerPanel.InsertFront(FServerTitle);
+
+  FServerNetLbl          := TCastleLabel.Create(FreeAtStop);
+  FServerNetLbl.Caption  := #$E2#$9F#$B3 + '  ' + rsLoginServerNetWarning;  { ⟳ placeholder for wifi glyph }
+  FServerNetLbl.Color    := Pal.TextPrimary;
+  FServerNetLbl.FontSize := 13;
+  FServerNetLbl.Alignment := hpMiddle;
+  FServerNetLbl.Anchor(hpMiddle, hpMiddle);
+  FServerNetLbl.Anchor(vpTop, vpTop, -56);
+  FServerPanel.InsertFront(FServerNetLbl);
+
+  FServerSep        := TCastleRectangleControl.Create(FreeAtStop);
+  FServerSep.Color  := Pal.Border;
+  FServerSep.Height := SepH;
+  FServerSep.Anchor(hpLeft,  hpLeft,  24);
+  FServerSep.Anchor(hpRight, hpRight, -24);
+  FServerSep.Anchor(vpTop, vpTop, -90);
+  FServerPanel.InsertFront(FServerSep);
 
   FSrvUserEdit             := TCastleEdit.Create(FreeAtStop);
-  FSrvUserEdit.Placeholder := 'Username';
-  FSrvUserEdit.Width       := EditW;
-  FSrvUserEdit.FontSize    := 14;
-  FSrvUserEdit.Anchor(hpMiddle, hpMiddle);
-  FSrvUserEdit.Anchor(vpMiddle, vpMiddle, 30);
+  FSrvUserEdit.Placeholder := rsLoginServerUser;
+  FSrvUserEdit.FontSize    := 16;
+  FSrvUserEdit.Anchor(hpLeft, hpLeft, Pad);
+  FSrvUserEdit.Anchor(vpTop, vpTop, -120);
   FServerPanel.InsertFront(FSrvUserEdit);
 
   FSrvPassEdit             := TCastleEdit.Create(FreeAtStop);
-  FSrvPassEdit.Placeholder := 'Password';
-  FSrvPassEdit.Width       := EditW;
-  FSrvPassEdit.FontSize    := 14;
+  FSrvPassEdit.Placeholder := rsLoginServerPass;
+  FSrvPassEdit.FontSize    := 16;
   FSrvPassEdit.PasswordChar := '*';
-  FSrvPassEdit.Anchor(hpMiddle, hpMiddle);
-  FSrvPassEdit.Anchor(vpMiddle, vpMiddle, -15);
+  FSrvPassEdit.Anchor(hpLeft, hpLeft, Pad);
+  FSrvPassEdit.Anchor(vpTop, vpTop, -168);
   FServerPanel.InsertFront(FSrvPassEdit);
 
   FSrvStatusLbl          := TCastleLabel.Create(FreeAtStop);
   FSrvStatusLbl.Caption  := '';
   FSrvStatusLbl.Color    := Vector4(0.85, 0.2, 0.2, 1);
-  FSrvStatusLbl.FontSize := 12;
+  FSrvStatusLbl.FontSize := 13;
   FSrvStatusLbl.Anchor(hpMiddle, hpMiddle);
-  FSrvStatusLbl.Anchor(vpMiddle, vpMiddle, -48);
+  FSrvStatusLbl.Anchor(vpBottom, vpBottom, 16);
   FSrvStatusLbl.Exists   := False;
   FServerPanel.InsertFront(FSrvStatusLbl);
 
-  FSrvLoginBtn          := TCastleButton.Create(FreeAtStop);
-  FSrvLoginBtn.Caption  := 'Login';
-  FSrvLoginBtn.FontSize := 14;
-  FSrvLoginBtn.Width    := 120;
-  FSrvLoginBtn.OnClick  := @ClickServerLogin;
-  FSrvLoginBtn.Anchor(hpMiddle, hpMiddle, 70);
-  FSrvLoginBtn.Anchor(vpMiddle, vpMiddle, -70);
-  FServerPanel.InsertFront(FSrvLoginBtn);
+  { Outside the card: CREATE A NEW ACCOUNT text-link and green LOGIN button. }
+  FSrvCreateBtn          := TCastleButton.Create(FreeAtStop);
+  FSrvCreateBtn.Caption  := rsLoginServerCreate;
+  FSrvCreateBtn.FontSize := 13;
+  FSrvCreateBtn.OnClick  := @ClickCreateServerAcct;
+  StyleLinkButton(FSrvCreateBtn, Pal);
+  FSrvCreateBtn.Exists   := False;
+  InsertFront(FSrvCreateBtn);
 
-  FSrvBackBtn          := TCastleButton.Create(FreeAtStop);
-  FSrvBackBtn.Caption  := 'Back';
-  FSrvBackBtn.FontSize := 14;
-  FSrvBackBtn.Width    := 100;
-  FSrvBackBtn.OnClick  := @ClickServerBack;
-  FSrvBackBtn.Anchor(hpMiddle, hpMiddle, -70);
-  FSrvBackBtn.Anchor(vpMiddle, vpMiddle, -70);
-  FServerPanel.InsertFront(FSrvBackBtn);
+  FSrvLoginBtn          := TCastleButton.Create(FreeAtStop);
+  FSrvLoginBtn.Caption  := rsLoginServerSubmit;
+  FSrvLoginBtn.FontSize := 14;
+  FSrvLoginBtn.Width    := 110;
+  FSrvLoginBtn.OnClick  := @ClickServerLogin;
+  StylePrimaryButton(FSrvLoginBtn, Pal);
+  FSrvLoginBtn.Exists   := False;
+  InsertFront(FSrvLoginBtn);
 end;
 
 procedure TViewLogin.ShowMain;
 begin
-  FLocalPanel.Exists  := False;
-  FServerPanel.Exists := False;
-  FTitleLbl.Exists    := True;
-  FSubtitleLbl.Exists := True;
-  FLocalBtn.Exists    := True;
-  FServerBtn.Exists   := True;
-  FShowingLocal       := False;
+  FChooserPanel.Exists := True;
+  FLocalPanel.Exists   := False;
+  FServerPanel.Exists  := False;
+  FSubmitBtn.Exists     := False;
+  FLocalToSrvBtn.Exists := False;
+  FSrvLoginBtn.Exists   := False;
+  FSrvCreateBtn.Exists  := False;
+  FShowingLocal        := False;
   if FCrumb <> nil then
   begin
     FCrumb.OnBack := nil;
-    FCrumb.SetCrumbs(['User Profile']);
+    FCrumb.SetCrumbs([rsLoginCrumb]);
   end;
 end;
 
 procedure TViewLogin.ShowLocal;
 begin
-  FTitleLbl.Exists    := False;
-  FSubtitleLbl.Exists := False;
-  FLocalBtn.Exists    := False;
-  FServerBtn.Exists   := False;
-  FLocalPanel.Exists  := True;
-  FNameEdit.Text      := '';
-  FErrorLbl.Exists    := False;
-  FShowingLocal       := True;
+  FChooserPanel.Exists := False;
+  FServerPanel.Exists  := False;
+  FLocalPanel.Exists   := True;
+  FNameEdit.Text       := '';
+  FErrorLbl.Exists     := False;
+  FSubmitBtn.Exists    := True;
+  FLocalToSrvBtn.Exists := True;
+  FSrvLoginBtn.Exists  := False;
+  FSrvCreateBtn.Exists := False;
+  FShowingLocal        := True;
   if FCrumb <> nil then
   begin
     FCrumb.OnBack := @ClickBack;
-    FCrumb.SetCrumbs(['User Profile', 'Local Profile']);
+    FCrumb.SetCrumbs([rsLoginCrumb, rsLoginLocalCrumb]);
   end;
 end;
 
 procedure TViewLogin.ShowServer;
 begin
-  FTitleLbl.Exists    := False;
-  FSubtitleLbl.Exists := False;
-  FLocalBtn.Exists    := False;
-  FServerBtn.Exists   := False;
-  FLocalPanel.Exists  := False;
-  FServerPanel.Exists := True;
-  FSrvURLEdit.Text    := GetDataServer;
-  FSrvUserEdit.Text   := '';
-  FSrvPassEdit.Text   := '';
+  FChooserPanel.Exists := False;
+  FLocalPanel.Exists   := False;
+  FServerPanel.Exists  := True;
+  FSrvUserEdit.Text    := '';
+  FSrvPassEdit.Text    := '';
   FSrvStatusLbl.Exists := False;
+  FSubmitBtn.Exists     := False;
+  FLocalToSrvBtn.Exists := False;
+  FSrvLoginBtn.Exists  := True;
+  FSrvCreateBtn.Exists := True;
   FShowingLocal        := False;
   if FCrumb <> nil then
   begin
     FCrumb.OnBack := @ClickServerBack;
-    FCrumb.SetCrumbs(['User Profile', 'Server Login']);
+    FCrumb.SetCrumbs([rsLoginCrumb, rsLoginServerCrumb]);
   end;
 end;
 
@@ -337,13 +480,25 @@ begin
   ShowServer;
 end;
 
+procedure TViewLogin.ClickCreateServer(Sender: TObject);
+begin
+  { Create-a-server-account: same flow as login-to-server for now. }
+  ShowServer;
+end;
+
+procedure TViewLogin.ClickCreateServerAcct(Sender: TObject);
+begin
+  { Stub: open signup URL in browser. No-op for now. }
+  LogInfo('Login: "Create a new account" tapped (browser launch not yet implemented)');
+end;
+
 procedure TViewLogin.ClickServerLogin(Sender: TObject);
 begin
-  FSrvLoginBtn.Enabled := False;
-  FSrvBackBtn.Enabled  := False;
-  FSrvStatusLbl.Caption := 'Logging in…';
-  FSrvStatusLbl.Color  := Vector4(0.3, 0.6, 0.3, 1);
-  FSrvStatusLbl.Exists := True;
+  FSrvLoginBtn.Enabled  := False;
+  FSrvCreateBtn.Enabled := False;
+  FSrvStatusLbl.Caption := rsStatusLoggingIn;
+  FSrvStatusLbl.Color   := Vector4(0.3, 0.6, 0.3, 1);
+  FSrvStatusLbl.Exists  := True;
   FNeedsLogin := True;
 end;
 
@@ -362,26 +517,19 @@ var
   Profile   : TUserProfile;
 begin
   FNeedsLogin := False;
-  SrvURL   := Trim(FSrvURLEdit.Text);
+  SrvURL   := GetDataServer;
+  if SrvURL = '' then
+    SrvURL := DefaultDataServerURL;
   Username := Trim(FSrvUserEdit.Text);
   Password := FSrvPassEdit.Text;
 
-  if SrvURL = '' then
-  begin
-    FSrvStatusLbl.Caption := 'Please enter a server URL.';
-    FSrvStatusLbl.Color   := Vector4(0.85, 0.2, 0.2, 1);
-    FSrvStatusLbl.Exists  := True;
-    FSrvLoginBtn.Enabled  := True;
-    FSrvBackBtn.Enabled   := True;
-    Exit;
-  end;
   if Username = '' then
   begin
-    FSrvStatusLbl.Caption := 'Please enter a username.';
+    FSrvStatusLbl.Caption := rsLoginServerNeedUser;
     FSrvStatusLbl.Color   := Vector4(0.85, 0.2, 0.2, 1);
     FSrvStatusLbl.Exists  := True;
     FSrvLoginBtn.Enabled  := True;
-    FSrvBackBtn.Enabled   := True;
+    FSrvCreateBtn.Enabled := True;
     Exit;
   end;
 
@@ -391,11 +539,11 @@ begin
     on E: Exception do
     begin
       LogFmt(llWarn, 'Server login failed: %s', [E.Message]);
-      FSrvStatusLbl.Caption := 'Login failed: ' + E.Message;
+      FSrvStatusLbl.Caption := Format(rsLoginServerFailed, [E.Message]);
       FSrvStatusLbl.Color   := Vector4(0.85, 0.2, 0.2, 1);
       FSrvStatusLbl.Exists  := True;
       FSrvLoginBtn.Enabled  := True;
-      FSrvBackBtn.Enabled   := True;
+      FSrvCreateBtn.Enabled := True;
       Exit;
     end;
   end;
@@ -461,7 +609,7 @@ end;
 
 procedure TViewLogin.Resize;
 var
-  W, H: Single;
+  W, H, CardX, CardY, EditW: Single;
 begin
   inherited;
   if FHeader = nil then Exit;
@@ -479,7 +627,48 @@ begin
   FStatusBar.Translation := Vector2(0, 0);
   FStatusBar.Width       := W;
   FStatusBar.Height      := BTT_STATUS_H;
-  { Card centres itself via anchors. }
+
+  { Card is centred by its anchors. Compute its screen-space origin so
+    we can place the external buttons (OK / LOGIN / text links) just
+    beneath its bottom-right edge. }
+  CardX := (W - CardW) / 2;
+  CardY := (H - CardH) / 2;
+  EditW := CardW - Pad * 2;
+
+  { Size chooser option rows (opposite-anchor bug — set width explicitly). }
+  if FRowServer <> nil then
+  begin
+    FRowServer.Width    := CardW;
+    FRowServer.Height   := OptionH;
+    FRowCreateSrv.Width := CardW;
+    FRowCreateSrv.Height := OptionH;
+    FRowLocal.Width     := CardW;
+    FRowLocal.Height    := OptionH;
+  end;
+
+  { Local panel: name field fills card width minus padding. }
+  if FNameEdit <> nil then
+    FNameEdit.Width := EditW;
+
+  { Server panel: user + pass fields. }
+  if FSrvUserEdit <> nil then
+    FSrvUserEdit.Width := EditW;
+  if FSrvPassEdit <> nil then
+    FSrvPassEdit.Width := EditW;
+
+  { External buttons — positioned ~20px below the card's bottom-right. }
+  if FSubmitBtn.Exists then
+  begin
+    FSubmitBtn.Translation   := Vector2(CardX + CardW - FSubmitBtn.Width, CardY - 56);
+    FLocalToSrvBtn.Translation :=
+      Vector2(CardX + CardW - FSubmitBtn.Width - 220, CardY - 48);
+  end;
+  if FSrvLoginBtn.Exists then
+  begin
+    FSrvLoginBtn.Translation := Vector2(CardX + CardW - FSrvLoginBtn.Width, CardY - 56);
+    FSrvCreateBtn.Translation :=
+      Vector2(CardX + CardW - FSrvLoginBtn.Width - 210, CardY - 48);
+  end;
 end;
 
 procedure TViewLogin.OnThemeChange;
