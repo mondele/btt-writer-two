@@ -3,9 +3,12 @@ unit GameViewFeedback;
 
 { Feedback dialog view.
 
-  Centered card with a text field for the user to describe a problem.
+  Compact centered card matching v1 feedback-form-en.png: title,
+  internet-connection subtitle, hairline separator, text input area,
+  and CANCEL / SEND text-links at the bottom-right.
+
   Send logs the feedback locally (server submission is a future TODO).
-  Cancel returns to the previous view.
+  Cancel pops the view.
 
   Reached via Container.PushView(ViewFeedback) from Home or Editor. }
 
@@ -14,7 +17,7 @@ interface
 uses
   Classes,
   CastleUIControls, CastleControls, CastleColors,
-  CGEViewBase, BTTHeader, BTTBreadcrumb, BTTStatusBar;
+  CGEViewBase, BTTHeader, BTTBreadcrumb, BTTStatusBar, BTTTheme;
 
 type
   TViewFeedback = class(TCGEViewBase)
@@ -23,13 +26,16 @@ type
     FCrumb       : TBTTBreadcrumb;
     FStatusBar   : TBTTStatusBar;
     FCard        : TCastleRectangleControl;
-    FWarningLbl  : TCastleLabel;
+    FTitleLbl    : TCastleLabel;
+    FNetLbl      : TCastleLabel;
+    FSeparator   : TCastleRectangleControl;
     FFeedbackEdit: TCastleEdit;
     FSendBtn     : TCastleButton;
     FCancelBtn   : TCastleButton;
     FStatusLbl   : TCastleLabel;
 
     procedure BuildChrome;
+    procedure StyleLink(Btn: TCastleButton; const Pal: TBTTPalette; EmphAccent: Boolean);
     procedure ClickSend(Sender: TObject);
     procedure ClickCancel(Sender: TObject);
   public
@@ -45,13 +51,13 @@ implementation
 
 uses
   SysUtils, CastleVectors,
-  BTTTheme, AppLog;
+  AppLog, CGEStrings;
 
 const
-  CardW = 480;
-  CardH = 280;
+  CardW = 560;
+  CardH = 360;
   Pad   = 28;
-  EditW = CardW - Pad * 2;
+  SepH  = 1;
 
 procedure TViewFeedback.Start;
 begin
@@ -60,25 +66,40 @@ begin
   BuildChrome;
 end;
 
+procedure TViewFeedback.StyleLink(Btn: TCastleButton; const Pal: TBTTPalette;
+  EmphAccent: Boolean);
+begin
+  Btn.CustomBackground    := True;
+  Btn.CustomColorNormal   := Vector4(0, 0, 0, 0);
+  Btn.CustomColorFocused  := Vector4(0, 0, 0, 0.05);
+  Btn.CustomColorPressed  := Vector4(0, 0, 0, 0.10);
+  Btn.CustomColorDisabled := Vector4(0, 0, 0, 0);
+  Btn.CustomTextColorUse  := True;
+  if EmphAccent then
+    Btn.CustomTextColor := Pal.Primary
+  else
+    Btn.CustomTextColor := Pal.TextSecondary;
+end;
+
 procedure TViewFeedback.BuildChrome;
 var
-  Pal      : TBTTPalette;
-  TitleLbl : TCastleLabel;
+  Pal : TBTTPalette;
 begin
   Pal := P;
 
   FHeader := TBTTHeader.Create(FreeAtStop, Pal);
-  FHeader.SetTitle('BTT-Writer');
+  FHeader.SetTitle(rsAppName);
   InsertFront(FHeader);
 
   FCrumb := TBTTBreadcrumb.Create(FreeAtStop, Pal);
   FCrumb.OnBack := @ClickCancel;
-  FCrumb.SetCrumbs(['Home', 'Feedback']);
+  FCrumb.SetCrumbs([rsNewProjCrumbHome, rsFeedbackCrumb]);
   InsertFront(FCrumb);
 
   FStatusBar := TBTTStatusBar.Create(FreeAtStop, Pal);
   InsertFront(FStatusBar);
 
+  { Centred card. }
   FCard       := TCastleRectangleControl.Create(FreeAtStop);
   FCard.Color := Pal.PanelBg;
   FCard.Width  := CardW;
@@ -87,56 +108,71 @@ begin
   FCard.Anchor(vpMiddle, vpMiddle);
   InsertFront(FCard);
 
-  TitleLbl          := TCastleLabel.Create(FreeAtStop);
-  TitleLbl.Caption  := 'Feedback';
-  TitleLbl.Color    := Pal.TextPrimary;
-  TitleLbl.FontSize := 20;
-  TitleLbl.Anchor(hpMiddle, hpMiddle);
-  TitleLbl.Anchor(vpTop, vpTop, -Pad);
-  FCard.InsertFront(TitleLbl);
+  { Title — centred at top. }
+  FTitleLbl          := TCastleLabel.Create(FreeAtStop);
+  FTitleLbl.Caption  := rsFeedbackHeading;
+  FTitleLbl.Color    := Pal.TextPrimary;
+  FTitleLbl.FontSize := 20;
+  FTitleLbl.Alignment := hpMiddle;
+  FTitleLbl.Anchor(hpMiddle, hpMiddle);
+  FTitleLbl.Anchor(vpTop, vpTop, -22);
+  FCard.InsertFront(FTitleLbl);
 
-  FWarningLbl          := TCastleLabel.Create(FreeAtStop);
-  FWarningLbl.Caption  := 'Describe the problem you are experiencing:';
-  FWarningLbl.Color    := Pal.TextSecondary;
-  FWarningLbl.FontSize := 13;
-  FWarningLbl.Anchor(hpLeft, hpLeft, Pad);
-  FWarningLbl.Anchor(vpTop, vpTop, -(Pad + 36));
-  FCard.InsertFront(FWarningLbl);
+  { "This will use your internet connection" — centred subtitle. }
+  FNetLbl          := TCastleLabel.Create(FreeAtStop);
+  FNetLbl.Caption  := #$E2#$9F#$B3 + '  ' + rsFeedbackNetWarning;
+  FNetLbl.Color    := Pal.TextPrimary;
+  FNetLbl.FontSize := 13;
+  FNetLbl.Alignment := hpMiddle;
+  FNetLbl.Anchor(hpMiddle, hpMiddle);
+  FNetLbl.Anchor(vpTop, vpTop, -54);
+  FCard.InsertFront(FNetLbl);
 
+  { Hairline separator. }
+  FSeparator        := TCastleRectangleControl.Create(FreeAtStop);
+  FSeparator.Color  := Pal.Border;
+  FSeparator.Height := SepH;
+  FSeparator.Anchor(hpLeft,  hpLeft,  0);
+  FSeparator.Anchor(vpTop,   vpTop,   -86);
+  FCard.InsertFront(FSeparator);
+
+  { Input field — single-line (CGE limitation); see rsFeedbackPlaceholder.
+    Size set in Resize so it stretches card-wide. }
   FFeedbackEdit             := TCastleEdit.Create(FreeAtStop);
-  FFeedbackEdit.Placeholder := 'Enter your feedback here...';
-  FFeedbackEdit.Width       := EditW;
-  FFeedbackEdit.FontSize    := 14;
-  FFeedbackEdit.Anchor(hpMiddle, hpMiddle);
-  FFeedbackEdit.Anchor(vpMiddle, vpMiddle, 20);
+  FFeedbackEdit.Placeholder := rsFeedbackPlaceholder;
+  FFeedbackEdit.FontSize    := 15;
+  FFeedbackEdit.Anchor(hpLeft, hpLeft, Pad);
+  FFeedbackEdit.Anchor(vpTop,  vpTop,  -108);
   FCard.InsertFront(FFeedbackEdit);
 
+  { Inline status message (empty / error / success). }
   FStatusLbl          := TCastleLabel.Create(FreeAtStop);
   FStatusLbl.Caption  := '';
   FStatusLbl.Color    := Vector4(0.3, 0.65, 0.3, 1);
   FStatusLbl.FontSize := 13;
-  FStatusLbl.Anchor(hpMiddle, hpMiddle);
-  FStatusLbl.Anchor(vpMiddle, vpMiddle, -18);
+  FStatusLbl.Anchor(hpLeft, hpLeft, Pad);
+  FStatusLbl.Anchor(vpBottom, vpBottom, 58);
   FStatusLbl.Exists   := False;
   FCard.InsertFront(FStatusLbl);
 
-  FSendBtn          := TCastleButton.Create(FreeAtStop);
-  FSendBtn.Caption  := 'Send';
-  FSendBtn.FontSize := 14;
-  FSendBtn.Width    := 100;
-  FSendBtn.OnClick  := @ClickSend;
-  FSendBtn.Anchor(hpRight, hpRight, -Pad);
-  FSendBtn.Anchor(vpBottom, vpBottom, Pad);
-  FCard.InsertFront(FSendBtn);
-
+  { CANCEL + SEND as text-link buttons at bottom-right. }
   FCancelBtn          := TCastleButton.Create(FreeAtStop);
-  FCancelBtn.Caption  := 'Cancel';
+  FCancelBtn.Caption  := rsFeedbackCancel;
   FCancelBtn.FontSize := 14;
-  FCancelBtn.Width    := 100;
   FCancelBtn.OnClick  := @ClickCancel;
-  FCancelBtn.Anchor(hpRight, hpRight, -(Pad + 110));
-  FCancelBtn.Anchor(vpBottom, vpBottom, Pad);
+  StyleLink(FCancelBtn, Pal, False);
+  FCancelBtn.Anchor(hpRight,  hpRight,  -(Pad + 90));
+  FCancelBtn.Anchor(vpBottom, vpBottom, 18);
   FCard.InsertFront(FCancelBtn);
+
+  FSendBtn          := TCastleButton.Create(FreeAtStop);
+  FSendBtn.Caption  := rsFeedbackSend;
+  FSendBtn.FontSize := 14;
+  FSendBtn.OnClick  := @ClickSend;
+  StyleLink(FSendBtn, Pal, True);
+  FSendBtn.Anchor(hpRight,  hpRight,  -Pad);
+  FSendBtn.Anchor(vpBottom, vpBottom, 18);
+  FCard.InsertFront(FSendBtn);
 end;
 
 procedure TViewFeedback.ClickSend(Sender: TObject);
@@ -146,13 +182,13 @@ begin
   Text := Trim(FFeedbackEdit.Text);
   if Text = '' then
   begin
-    FStatusLbl.Caption := 'Please enter a message before sending.';
+    FStatusLbl.Caption := rsFeedbackEmpty;
     FStatusLbl.Color   := Vector4(0.85, 0.2, 0.2, 1);
     FStatusLbl.Exists  := True;
     Exit;
   end;
   LogFmt(llInfo, 'User feedback: %s', [Text]);
-  FStatusLbl.Caption := 'Thank you! Your feedback has been recorded.';
+  FStatusLbl.Caption := rsFeedbackSent;
   FStatusLbl.Color   := Vector4(0.3, 0.65, 0.3, 1);
   FStatusLbl.Exists  := True;
   FSendBtn.Enabled   := False;
@@ -184,6 +220,12 @@ begin
   FStatusBar.Translation := CastleVectors.Vector2(0, 0);
   FStatusBar.Width       := W;
   FStatusBar.Height      := BTT_STATUS_H;
+
+  { Stretch the separator and input to the card's width. }
+  if FSeparator <> nil then
+    FSeparator.Width := FCard.EffectiveWidth;
+  if FFeedbackEdit <> nil then
+    FFeedbackEdit.Width := FCard.EffectiveWidth - Pad * 2;
 end;
 
 procedure TViewFeedback.OnThemeChange;
