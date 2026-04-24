@@ -118,9 +118,11 @@ begin
   FStatusBar := TBTTStatusBar.Create(FreeAtStop, Pal);
   InsertFront(FStatusBar);
 
-  { Owner for all row controls — single free clears the list. }
+  { Owner for all row controls — manually sized in LayoutList.
+    (FullSize would pin it to ScrollArea's visible size, breaking scrolling.) }
   FRows := TCastleUserInterface.Create(FreeAtStop);
-  FRows.FullSize := True;
+  FRows.Anchor(hpLeft, hpLeft, 0);
+  FRows.Anchor(vpBottom, vpBottom, 0);
   FScrollView.ScrollArea.InsertFront(FRows);
 end;
 
