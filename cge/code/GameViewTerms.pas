@@ -227,7 +227,7 @@ begin
   FDetailPanel.InsertFront(FDetailTitle);
 
   FDetailClose          := TCastleButton.Create(FreeAtStop);
-  FDetailClose.Caption  := 'Back';
+  FDetailClose.Caption  := rsCommonBack;
   FDetailClose.FontSize := 13;
   FDetailClose.Width    := 80;
   FDetailClose.OnClick  := @ClickClose;
@@ -236,10 +236,9 @@ begin
   FDetailPanel.InsertFront(FDetailClose);
 
   FDetailScroll := TCastleScrollView.Create(FreeAtStop);
-  FDetailScroll.Anchor(hpLeft,   hpLeft,   0);
-  FDetailScroll.Anchor(hpRight,  hpRight,  0);
+  { Size set in Resize — opposite-edge anchors don't stretch in CGE. }
+  FDetailScroll.Anchor(hpLeft, hpLeft, 0);
   FDetailScroll.Anchor(vpBottom, vpBottom, 0);
-  FDetailScroll.Anchor(vpTop,    vpTop,    -60);
   FDetailPanel.InsertFront(FDetailScroll);
 
   FDetailText          := TCastleLabel.Create(FreeAtStop);
@@ -259,19 +258,22 @@ end;
 
 procedure TViewTerms.ShowDetail(DocIdx: Integer);
 var
-  TxtH : Single;
+  TxtH, AreaW : Single;
 begin
   FDetailDocIdx       := DocIdx;
   FDetailTitle.Caption := DocTitle(DocIdx);
   FDetailText.Caption  := DocBody(DocIdx);
-  FDetailText.MaxWidth := 800;
+
+  AreaW := FDetailScroll.EffectiveWidthForChildren - FDetailScroll.EffectiveScrollBarWidth;
+  if AreaW < 100 then AreaW := FDetailScroll.Width - 24;  { fallback if Resize has not fired }
+  FDetailText.MaxWidth := AreaW - Pad * 2;
 
   { Size scroll area to the label height }
   TxtH := FDetailText.EffectiveHeight;
   if TxtH < FDetailScroll.Height then TxtH := FDetailScroll.Height;
-  FDetailScroll.ScrollArea.Width  := 800;
+  FDetailScroll.ScrollArea.Width  := AreaW;
   FDetailScroll.ScrollArea.Height := TxtH + Pad;
-  FDetailText.Translation := Vector2(0, TxtH + Pad - FDetailText.EffectiveHeight);
+  FDetailText.Translation := Vector2(Pad, TxtH + Pad - FDetailText.EffectiveHeight);
 
   FDetailPanel.Exists := True;
 
@@ -351,6 +353,13 @@ begin
   for I := 0 to 2 do
     if FDocBtn[I] <> nil then
       FDocBtn[I].Width := W - Pad * 2;
+
+  { Detail overlay: scroll view fills below the 60px title/back-button strip. }
+  if FDetailScroll <> nil then
+  begin
+    FDetailScroll.Width  := W;
+    FDetailScroll.Height := CardH - 60;
+  end;
 end;
 
 procedure TViewTerms.OnThemeChange;
