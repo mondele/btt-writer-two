@@ -152,7 +152,7 @@ begin
   FDescLbl.Anchor(vpTop, vpTop, -Pad);
   FCard.InsertFront(FDescLbl);
 
-  { Three full-width solid-green document buttons, stacked. }
+  { Three full-width solid-green document buttons, stacked. Width set in Resize. }
   for I := 0 to 2 do
   begin
     YPos := -(Pad + 80 + I * (RowH + RowGap));  { offset below description }
@@ -168,9 +168,8 @@ begin
     Btn.CustomColorPressed  := Pal.Accent;
     Btn.CustomTextColorUse  := True;
     Btn.CustomTextColor     := Pal.TextInverse;
-    Btn.Anchor(hpLeft,  hpLeft,  Pad);
-    Btn.Anchor(hpRight, hpRight, -Pad);
-    Btn.Anchor(vpTop,   vpTop,   YPos);
+    Btn.Anchor(hpLeft, hpLeft, Pad);
+    Btn.Anchor(vpTop,  vpTop,  YPos);
     FCard.InsertFront(Btn);
     FDocBtn[I]   := Btn;
     FDocLabel[I] := nil;
@@ -322,6 +321,7 @@ end;
 procedure TViewTerms.Resize;
 var
   W, H, CardH: Single;
+  I: Integer;
 begin
   inherited;
   if FHeader = nil then Exit;
@@ -345,6 +345,11 @@ begin
   FCard.Translation := Vector2(0, BTT_STATUS_H);
   FCard.Width       := W;
   FCard.Height      := CardH;
+
+  { Doc buttons: full-width within the card. }
+  for I := 0 to 2 do
+    if FDocBtn[I] <> nil then
+      FDocBtn[I].Width := W - Pad * 2;
 end;
 
 procedure TViewTerms.OnThemeChange;

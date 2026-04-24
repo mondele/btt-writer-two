@@ -10,4 +10,18 @@
     reference_width="1280"
     reference_height="800"
   />
+
+  <!--
+    Default UI font family. Noto Sans ships with our data directory so it's
+    available on every platform regardless of system fonts.
+    OptimalSize = 20 at the reference UI size (scaled down on smaller screens).
+  -->
+  <default_font>
+    <regular url="castle-data:/fonts/NotoSans-Regular.ttf"
+             size="20"
+             anti_aliased="true"/>
+    <bold    url="castle-data:/fonts/NotoSans-Bold.ttf"
+             size="20"
+             anti_aliased="true"/>
+  </default_font>
 </castle_settings>

@@ -61,10 +61,8 @@ begin
   else
     GAppState.UserName := '(not logged in)';
 
-  { UI scaling: keep reference size 1280×800 within the window. }
-  Window.Container.UIScaling        := usEncloseReferenceSize;
-  Window.Container.UIReferenceWidth  := 1280;
-  Window.Container.UIReferenceHeight := 800;
+  { Load UI scaling and default font from data/CastleSettings.xml }
+  Window.Container.LoadSettings('castle-data:/CastleSettings.xml');
 
   { Create views once; they persist for the application lifetime. }
   ViewHome       := TViewHome.Create(Application);
