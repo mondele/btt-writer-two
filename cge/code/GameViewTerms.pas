@@ -74,7 +74,7 @@ implementation
 uses
   SysUtils, CastleVectors,
   AppSettings, AppLog, BTTTheme,
-  LegalTexts,
+  LegalTexts, CGEStrings,
   GameViewHome, GameViewLogin;
 
 const
@@ -82,13 +82,17 @@ const
   RowH     = 52;
   RowGap   = 14;
 
-{ Document metadata }
-const
-  DocTitles : array[0..2] of string = (
-    'License Agreement',
-    'Translation Guidelines',
-    'Statement of Faith'
-  );
+{ Document titles — resolved at call time so language changes take effect. }
+function DocTitle(Idx: Integer): string;
+begin
+  case Idx of
+    0: Result := rsTermsLicenseAgreement;
+    1: Result := rsTermsTranslationGuide;
+    2: Result := rsTermsStatementOfFaith;
+  else
+    Result := '';
+  end;
+end;
 
 function DocBody(Idx: Integer): string;
 begin
@@ -123,11 +127,11 @@ begin
   Pal := P;
 
   FHeader := TBTTHeader.Create(FreeAtStop, Pal);
-  FHeader.SetTitle('BTT-Writer');
+  FHeader.SetTitle(rsAppName);
   InsertFront(FHeader);
 
   FCrumb := TBTTBreadcrumb.Create(FreeAtStop, Pal);
-  FCrumb.SetCrumbs(['Terms of Use']);
+  FCrumb.SetCrumbs([rsTermsCrumb]);
   InsertFront(FCrumb);
 
   FStatusBar := TBTTStatusBar.Create(FreeAtStop, Pal);
@@ -141,10 +145,7 @@ begin
 
   { Description paragraph at top }
   FDescLbl          := TCastleLabel.Create(FreeAtStop);
-  FDescLbl.Caption  :=
-    'By using this app you agree with the statement of faith and translation guidelines' + LineEnding +
-    'and to release your work under the terms of the Creative Commons' + LineEnding +
-    'Attribution-ShareAlike 4.0 International License.';
+  FDescLbl.Caption  := rsTermsIntro;
   FDescLbl.Color     := Pal.TextPrimary;
   FDescLbl.FontSize  := 14;
   FDescLbl.Alignment := hpMiddle;
@@ -158,7 +159,7 @@ begin
     YPos := -(Pad + 80 + I * (RowH + RowGap));  { offset below description }
 
     Btn              := TCastleButton.Create(FreeAtStop);
-    Btn.Caption      := UpperCase(DocTitles[I]);
+    Btn.Caption      := UpperCase(DocTitle(I));
     Btn.FontSize     := 15;
     Btn.AutoSize     := False;
     Btn.Height       := RowH;
@@ -181,7 +182,7 @@ begin
 
   { Bottom row — NO THANKS (left-ish) / I AGREE (right-ish), as text-link buttons }
   FDeclineBtn          := TCastleButton.Create(FreeAtStop);
-  FDeclineBtn.Caption  := 'NO THANKS';
+  FDeclineBtn.Caption  := rsTermsNoThanks;
   FDeclineBtn.FontSize := 14;
   FDeclineBtn.OnClick  := @ClickDecline;
   FDeclineBtn.CustomBackground   := True;
@@ -195,7 +196,7 @@ begin
   FCard.InsertFront(FDeclineBtn);
 
   FAgreeBtn          := TCastleButton.Create(FreeAtStop);
-  FAgreeBtn.Caption  := 'I AGREE';
+  FAgreeBtn.Caption  := rsTermsAgree;
   FAgreeBtn.FontSize := 14;
   FAgreeBtn.Enabled  := False;
   FAgreeBtn.OnClick  := @ClickAgree;
@@ -261,7 +262,7 @@ var
   TxtH : Single;
 begin
   FDetailDocIdx       := DocIdx;
-  FDetailTitle.Caption := DocTitles[DocIdx];
+  FDetailTitle.Caption := DocTitle(DocIdx);
   FDetailText.Caption  := DocBody(DocIdx);
   FDetailText.MaxWidth := 800;
 

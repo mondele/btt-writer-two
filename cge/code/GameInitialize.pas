@@ -18,6 +18,7 @@ uses
   CastleWindow, CastleApplicationProperties, CastleLog, CastleUIControls,
   CastleFilesUtils, CastleUriUtils,
   AppSettings, AppLog, AppState, UserProfile,
+  CGEStrings,
   GameViewHome, GameViewEditor, GameViewChunkEdit, GameViewBlindEdit,
   GameViewLogin, GameViewSettings, GameViewNewProject, GameViewTerms,
   GameViewImport, GameViewRead, GameViewFeedback;
