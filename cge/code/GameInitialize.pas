@@ -16,6 +16,7 @@ implementation
 uses
   SysUtils,
   CastleWindow, CastleApplicationProperties, CastleLog, CastleUIControls,
+  CastleFilesUtils, CastleUriUtils,
   AppSettings, AppLog, AppState, UserProfile,
   GameViewHome, GameViewEditor, GameViewChunkEdit, GameViewBlindEdit,
   GameViewLogin, GameViewSettings, GameViewNewProject, GameViewTerms,
@@ -42,6 +43,7 @@ end;
 procedure ApplicationInitialize;
 var
   Profile: TUserProfile;
+  DataDir: string;
 begin
   { Settings must be first — other units read from it. }
   InitializeAppSettings;
@@ -61,8 +63,28 @@ begin
   else
     GAppState.UserName := '(not logged in)';
 
-  { Load UI scaling and default font from data/CastleSettings.xml }
-  Window.Container.LoadSettings('castle-data:/CastleSettings.xml');
+  { Pin castle-data:/ to the data/ folder next to the executable (not CWD).
+    CGE's default Linux resolver falls back to GetCurrentDir, so running from
+    the repo root would miss cge/data/. This makes the binary portable:
+    ./btt-writer-cge works from any CWD as long as data/ sits beside it. }
+  DataDir := ExtractFilePath(ParamStr(0)) + 'data' + PathDelim;
+  if DirectoryExists(DataDir) then
+    ApplicationDataOverride := FilenameToUriSafe(DataDir);
+
+  { Load UI scaling and default font from data/CastleSettings.xml.
+    Guard against missing data: fall back to hardcoded scaling so the
+    app still runs (with the bitmap fallback font). }
+  try
+    Window.Container.LoadSettings('castle-data:/CastleSettings.xml');
+  except
+    on E: Exception do
+    begin
+      LogFmt(llWarn, 'LoadSettings failed (%s); using fallback UI scaling', [E.Message]);
+      Window.Container.UIScaling        := usEncloseReferenceSize;
+      Window.Container.UIReferenceWidth  := 1280;
+      Window.Container.UIReferenceHeight := 800;
+    end;
+  end;
 
   { Create views once; they persist for the application lifetime. }
   ViewHome       := TViewHome.Create(Application);
