@@ -5,7 +5,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: btt-writer-cge\n"
-"POT-Creation-Date: 2026-04-24T10:20-0400\n"
+"POT-Creation-Date: 2026-04-24T10:35-0400\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
