@@ -15,12 +15,15 @@ implementation
 
 uses
   Forms, Controls, StdCtrls, ComCtrls, ExtCtrls, Dialogs, Graphics,
-  Classes, SysUtils, Process, Globals, DataPaths, LegalTexts, ThemePalette;
+  Classes, SysUtils, Process, Globals, DataPaths, LegalTexts, ThemePalette,
+  LocaleManager;
 
 resourcestring
   rsSettingsCaption = 'Settings';
   rsOK = 'OK';
   rsCancel = 'Cancel';
+  rsLangRestartTitle = 'Restart Required';
+  rsLangRestartMsg = 'The interface language change will take effect the next time BTT-Writer is started.';
 
   { General tab }
   rsTabGeneral = 'General';
@@ -278,11 +281,14 @@ var
   lblSuite: TLabel;
   chkDevTools: TCheckBox;
   DummyLabel: TLabel;
+
+  OldLang, NewLang: string;
 begin
   Result := False;
   Pal := GetThemePalette(GetEffectiveTheme);
   OldTheme := GetAppTheme;
   OldSuite := GetServerSuite;
+  OldLang := GetInterfaceLanguage;
 
   Helper := TSettingsHelper.Create;
   try
@@ -346,8 +352,7 @@ begin
       cmbLang.Top := Y + 20;
       cmbLang.Width := 300;
       cmbLang.Style := csDropDownList;
-      cmbLang.Items.Add('English');
-      cmbLang.ItemIndex := 0;
+      PopulateLanguageCombo(cmbLang);
 
       Y := Y + 60;
 
@@ -627,8 +632,17 @@ begin
         else
           NewSuite := 'wacs';
 
+        { Read selected language — combo stores lang code as Items[i]. }
+        if cmbLang.ItemIndex >= 0 then
+          NewLang := cmbLang.Items[cmbLang.ItemIndex]
+        else
+          NewLang := OldLang;
+
         { Persist everything }
         SetAppTheme(NewTheme, True);
+        SetInterfaceLanguage(NewLang);
+        if NewLang <> OldLang then
+          MessageDlg(rsLangRestartTitle, rsLangRestartMsg, mtInformation, [mbOK], 0);
         SetGatewayLanguageMode(chkGateway.Checked);
         SetBlindEditMode(chkBlindEdit.Checked);
         SetDeveloperTools(chkDevTools.Checked);

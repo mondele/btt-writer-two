@@ -30,7 +30,7 @@ Goal: language switching works end-to-end, with five non-English translations pr
 | 3 | `tools/extract-pot.sh` — rsj→po per unit via rstconv, deduped per unit with msguniq, merged across units via msgcat. Emits `cge/locale/btt-writer.pot` (232 msgids from 12 units) | COMPLETE |
 | 4 | `tools/mine_v1_translations.py` — builds en_text→{lang:text} index from v1 JSON, walks .pot, emits seeded `cge/locale/{lang}/btt-writer.po`. ~31% match rate on first run (68-69 of 216 single-line msgids per lang) | COMPLETE |
 | 5 | `LocaleManager.pas` — `ApplyInterfaceLanguage` reads `GetInterfaceLanguage`, locates `cge/locale/{lang}/btt-writer.po` (exe-dir, exe-dir/.., or DATA PATH), calls `Translations.TranslateResourceStrings`. `ListAvailableLanguages` scans locale dir. Wired into `bttwriter2.lpr` after `InitializeAppSettings`, before splash | COMPLETE |
-| 6 | `SettingsForm` Interface Language combo: populate from `.po` files present on disk. On change → save setting → recreate forms (or prompt restart) | PENDING |
+| 6 | `LocaleManager.PopulateLanguageCombo` populates SettingsForm combo from `.po` files present on disk + current setting fallback. Save path: writes `SetInterfaceLanguage(NewLang)`, prompts restart-required modal when changed | COMPLETE |
 | 7 | Build clean (`lazbuild bttwriter2.lpi`). Smoke test each lang switch. Verify hardcoded strings are gone visually | PENDING |
 
 ## Key Design Decisions

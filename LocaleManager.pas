@@ -22,16 +22,20 @@ unit LocaleManager;
 
 interface
 
+uses
+  Classes, StdCtrls;
+
 type
   TLangArray = array of string;
 
 function ApplyInterfaceLanguage: string;
 function ListAvailableLanguages: TLangArray;
+procedure PopulateLanguageCombo(Combo: TComboBox);
 
 implementation
 
 uses
-  SysUtils, Classes, Translations, AppSettings, DataPaths, AppLog;
+  SysUtils, Translations, AppSettings, DataPaths, AppLog;
 
 function CandidatePaths(const Lang: string): TLangArray;
 var
@@ -130,6 +134,41 @@ begin
       Result[I] := Found[I];
   finally
     Found.Free;
+  end;
+end;
+
+procedure PopulateLanguageCombo(Combo: TComboBox);
+var
+  Langs: TLangArray;
+  Lang, Current: string;
+  I, Selected: Integer;
+begin
+  if Combo = nil then Exit;
+  Langs := ListAvailableLanguages;
+  Current := GetInterfaceLanguage;
+  if Current = '' then Current := 'en';
+
+  Combo.Items.BeginUpdate;
+  try
+    Combo.Items.Clear;
+    Selected := -1;
+    for I := 0 to High(Langs) do
+    begin
+      Lang := Langs[I];
+      Combo.Items.Add(Lang);
+      if Lang = Current then
+        Selected := I;
+    end;
+    if Selected < 0 then
+    begin
+      { Current language has no .po on disk — show it anyway so the user can
+        see what is configured. }
+      Combo.Items.Add(Current);
+      Selected := Combo.Items.Count - 1;
+    end;
+    Combo.ItemIndex := Selected;
+  finally
+    Combo.Items.EndUpdate;
   end;
 end;
 
