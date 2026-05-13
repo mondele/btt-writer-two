@@ -20,6 +20,7 @@ resourcestring
   rsFaithBtn = 'Statement of Faith';
   rsAgreeBtn = 'Agree';
   rsDeclineBtn = 'Decline';
+  rsBtnOK = 'OK';
 
 type
   { Simple text viewer dialog }
@@ -72,7 +73,7 @@ begin
   BtnOK.Parent := Self;
   BtnOK.Align := alBottom;
   BtnOK.Height := 36;
-  BtnOK.Caption := 'OK';
+  BtnOK.Caption := rsBtnOK;
   BtnOK.ModalResult := mrOK;
   BtnOK.Default := True;
 end;

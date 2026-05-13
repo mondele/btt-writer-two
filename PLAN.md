@@ -25,8 +25,8 @@ Goal: language switching works end-to-end, with five non-English translations pr
 
 | # | What | Status |
 |---|------|--------|
-| 1 | `.gitignore` whitelist `cge/locale/`; copy `btt-writer-cge.pot` from `castle-engine` into master at same path | PENDING |
-| 2 | Strip remaining 39 hardcoded `Caption := 'literal'` → `resourcestring` references (ProjectEditForm 26, MainForm 7, others 6) | PENDING |
+| 1 | `.gitignore` whitelist `cge/locale/`; copy `btt-writer-cge.pot` from `castle-engine` into master at same path | COMPLETE |
+| 2 | Strip remaining 39 hardcoded `Caption := 'literal'` → `resourcestring` references (ProjectEditForm 26, MainForm 7, others 6) | COMPLETE |
 | 3 | Wire `bttwriter2.lpi` `<i18n>` block to emit `cge/locale/btt-writer.pot` on build (rsj→pot via lazbuild) | PENDING |
 | 4 | Mining script: build `en_text → {lang_text}` map from v1 JSON. Walk new .pot. Emit pre-filled `cge/locale/{lang}/btt-writer.po` — matched msgids carry msgstr, unmatched empty. Six langs: en, es-419, fa, fr, pt-br, ru | PENDING |
 | 5 | Runtime wiring: in `bttwriter2.lpr` hook LCL `DefaultTranslator`. Read `AppSettings.InterfaceLang`. Load corresponding `cge/locale/{lang}/btt-writer.po` via `TranslateUnitResourceStrings` per unit | PENDING |

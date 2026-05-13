@@ -91,6 +91,10 @@ resourcestring
   rsProjectDeletedPrefix = 'Project deleted: ';
   rsChange = 'Change';
   rsChangeResTypeTitle = 'Change Resource Type';
+  rsBtnOK = 'OK';
+  rsBtnCancel = 'Cancel';
+  rsBtnImport = 'Import';
+  rsBtnCancelCaps = 'CANCEL';
 
 type
   TMainWindow = class(TForm)
@@ -638,7 +642,7 @@ begin
     BtnOK.Left := 100;
     BtnOK.Top := 185;
     BtnOK.Width := 80;
-    BtnOK.Caption := 'OK';
+    BtnOK.Caption := rsBtnOK;
     BtnOK.ModalResult := mrOK;
     BtnOK.Default := True;
 
@@ -647,7 +651,7 @@ begin
     BtnCancel.Left := 190;
     BtnCancel.Top := 185;
     BtnCancel.Width := 80;
-    BtnCancel.Caption := 'Cancel';
+    BtnCancel.Caption := rsBtnCancel;
     BtnCancel.ModalResult := mrCancel;
     BtnCancel.Cancel := True;
 
@@ -2360,14 +2364,14 @@ begin
     F.FBtnImport := TButton.Create(F);
     F.FBtnImport.Parent := BtnPanel;
     F.FBtnImport.SetBounds(280, 8, 90, 30);
-    F.FBtnImport.Caption := 'Import';
+    F.FBtnImport.Caption := rsBtnImport;
     F.FBtnImport.Font.Height := -13;
     F.FBtnImport.OnClick := @F.ImportBtnClick;
 
     F.FBtnCancel := TButton.Create(F);
     F.FBtnCancel.Parent := BtnPanel;
     F.FBtnCancel.SetBounds(380, 8, 90, 30);
-    F.FBtnCancel.Caption := 'CANCEL';
+    F.FBtnCancel.Caption := rsBtnCancelCaps;
     F.FBtnCancel.Font.Height := -13;
     F.FBtnCancel.ModalResult := mrCancel;
 

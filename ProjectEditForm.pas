@@ -49,6 +49,19 @@ resourcestring
   rsTStudioExtEdit = 'tstudio';
   rsExportFailedEdit = 'Export failed: ';
   rsExportedEdit = 'Exported: ';
+  rsNoSource = 'No source';
+  rsTranslationClickToView = 'Translation (click to view)';
+  rsSourceClickToView = 'Source (click to view)';
+  rsClickCardToTranslate = 'Click the card to translate';
+  rsClickToViewSource = 'Click here to view source';
+  rsChunkVersesFmt = 'Verses %s';
+  rsSelectSourceText = 'Select Source Text';
+  rsBtnOK = 'OK';
+  rsBtnCancel = 'Cancel';
+  rsTabNotes = 'Notes';
+  rsTabWords = 'Words';
+  rsTabQuestions = 'Questions';
+  rsCloseBtn = 'X CLOSE';
 
 type
   TResourceTab = (rtNotes, rtWords, rtQuestions);
@@ -1134,7 +1147,7 @@ begin
     FReadSourceLabel.Caption := FSourceRC.LanguageCode + ' ' +
       UpperCase(FSourceRC.ResourceType) + '  ✕'
   else
-    FReadSourceLabel.Caption := 'No source';
+    FReadSourceLabel.Caption := rsNoSource;
 
   TopOffset := 32;
   CardMargin := 40;
@@ -1152,9 +1165,9 @@ begin
     CardMargin + 10, TopOffset + 10, CardW - 10, CardH - 10);
   FReadBackTab.SendToBack;
   if FReadShowingSource then
-    FReadBackTabLabel.Caption := '  Translation (click to view)'
+    FReadBackTabLabel.Caption := '  ' + rsTranslationClickToView
   else
-    FReadBackTabLabel.Caption := '  Source (click to view)';
+    FReadBackTabLabel.Caption := '  ' + rsSourceClickToView;
   FReadBackTabLabel.SetBounds(0, CardH - 40 - 10, CardW - 10, 30);
   FReadBackTabLabel.Alignment := taLeftJustify;
   FReadCard.BringToFront;
@@ -1217,9 +1230,9 @@ begin
 
   { Update back tab label }
   if FReadShowingSource then
-    FReadBackTabLabel.Caption := 'Translation (click to view)'
+    FReadBackTabLabel.Caption := rsTranslationClickToView
   else
-    FReadBackTabLabel.Caption := 'Source (click to view)';
+    FReadBackTabLabel.Caption := rsSourceClickToView;
 end;
 
 procedure TProjectEditWindow.ReadBackTabClick(Sender: TObject);
@@ -1367,7 +1380,7 @@ begin
   FBlindFlipLabel.AutoSize := False;
   FBlindFlipLabel.Font.Height := -12;
   FBlindFlipLabel.Font.Color := $00808080;
-  FBlindFlipLabel.Caption := 'Click the card to translate';
+  FBlindFlipLabel.Caption := rsClickCardToTranslate;
   FBlindFlipLabel.Cursor := crHandPoint;
   FBlindFlipLabel.OnClick := @BlindCardClick;
 end;
@@ -1455,9 +1468,9 @@ begin
 
   { Update nav label }
   if ChunkName = 'title' then
-    FBlindChunkLabel.Caption := 'Title'
+    FBlindChunkLabel.Caption := rsChunkTitle
   else
-    FBlindChunkLabel.Caption := 'Verses ' + ChunkName;
+    FBlindChunkLabel.Caption := Format(rsChunkVersesFmt, [ChunkName]);
   FBlindPrevBtn.Enabled := FBlindChunkIndex > 0;
   FBlindNextBtn.Enabled := FBlindChunkIndex < FBlindChunkCount - 1;
 
@@ -1499,7 +1512,7 @@ begin
   FBlindShowingSource := True;
   FBlindSourceCard.Visible := True;
   FBlindTransCard.Visible := False;
-  FBlindFlipLabel.Caption := 'Click the card to translate';
+  FBlindFlipLabel.Caption := rsClickCardToTranslate;
 end;
 
 procedure TProjectEditWindow.SaveBlindEditChunk;
@@ -1715,7 +1728,7 @@ begin
     FBlindShowingSource := False;
     FBlindSourceCard.Visible := False;
     FBlindTransCard.Visible := True;
-    FBlindFlipLabel.Caption := 'Click here to view source';
+    FBlindFlipLabel.Caption := rsClickToViewSource;
     FBlindTransMemo.SetFocus;
   end
   else
@@ -1725,7 +1738,7 @@ begin
     FBlindShowingSource := True;
     FBlindSourceCard.Visible := True;
     FBlindTransCard.Visible := False;
-    FBlindFlipLabel.Caption := 'Click the card to translate';
+    FBlindFlipLabel.Caption := rsClickCardToTranslate;
   end;
 end;
 
@@ -2414,7 +2427,7 @@ begin
     { Build dialog }
     Dlg := TForm.CreateNew(nil);
     try
-      Dlg.Caption := 'Select Source Text';
+      Dlg.Caption := rsSelectSourceText;
       Dlg.Width := 600;
       Dlg.Height := 450;
       Dlg.Position := poScreenCenter;
@@ -2428,7 +2441,7 @@ begin
 
       BtnOK := TButton.Create(Dlg);
       BtnOK.Parent := BtnPanel;
-      BtnOK.Caption := 'OK';
+      BtnOK.Caption := rsBtnOK;
       BtnOK.ModalResult := mrOK;
       BtnOK.Default := True;
       BtnOK.Width := 80;
@@ -2437,7 +2450,7 @@ begin
 
       BtnCancel := TButton.Create(Dlg);
       BtnCancel.Parent := BtnPanel;
-      BtnCancel.Caption := 'Cancel';
+      BtnCancel.Caption := rsBtnCancel;
       BtnCancel.ModalResult := mrCancel;
       BtnCancel.Width := 80;
       BtnCancel.Left := 600 - 80 - 12;
@@ -3761,21 +3774,21 @@ begin
   FBtnTabNotes := TButton.Create(FResTabBar);
   FBtnTabNotes.Parent := FResTabBar;
   FBtnTabNotes.SetBounds(4, 2, 70, TabBarHeight - 4);
-  FBtnTabNotes.Caption := 'Notes';
+  FBtnTabNotes.Caption := rsTabNotes;
   FBtnTabNotes.Font.Height := -12;
   FBtnTabNotes.OnClick := @OnResTabClick;
 
   FBtnTabWords := TButton.Create(FResTabBar);
   FBtnTabWords.Parent := FResTabBar;
   FBtnTabWords.SetBounds(78, 2, 70, TabBarHeight - 4);
-  FBtnTabWords.Caption := 'Words';
+  FBtnTabWords.Caption := rsTabWords;
   FBtnTabWords.Font.Height := -12;
   FBtnTabWords.OnClick := @OnResTabClick;
 
   FBtnTabQuestions := TButton.Create(FResTabBar);
   FBtnTabQuestions.Parent := FResTabBar;
   FBtnTabQuestions.SetBounds(152, 2, 84, TabBarHeight - 4);
-  FBtnTabQuestions.Caption := 'Questions';
+  FBtnTabQuestions.Caption := rsTabQuestions;
   FBtnTabQuestions.Font.Height := -12;
   FBtnTabQuestions.OnClick := @OnResTabClick;
 
@@ -4095,7 +4108,7 @@ begin
     CloseBtn.Parent := F;
     CloseBtn.Align := alTop;
     CloseBtn.Height := 30;
-    CloseBtn.Caption := 'X CLOSE';
+    CloseBtn.Caption := rsCloseBtn;
     CloseBtn.Font.Height := -14;
     CloseBtn.ModalResult := mrClose;
 
