@@ -75,7 +75,7 @@ begin
     F.Caption := rsProfileTitle;
     F.Font.Name := 'Noto Sans';
     F.Width := 520;
-    F.Height := 400;
+    F.Height := 460;
     F.Color := Pal.PanelBG;
 
     lblPrompt := TLabel.Create(F);
@@ -99,8 +99,9 @@ begin
 
     lblServerDesc := TLabel.Create(F);
     lblServerDesc.Parent := F;
-    lblServerDesc.Left := 60;
-    lblServerDesc.Top := 110;
+    lblServerDesc.AutoSize := False;
+    lblServerDesc.SetBounds(60, 110, 420, 36);
+    lblServerDesc.WordWrap := True;
     lblServerDesc.Font.Height := -15;
     lblServerDesc.Font.Color := Pal.TextSecondary;
     lblServerDesc.Caption := rsLoginToServerDesc;
@@ -108,7 +109,7 @@ begin
     { Option 2: Create Account }
     btnCreate := TButton.Create(F);
     btnCreate.Parent := F;
-    btnCreate.SetBounds(40, 150, 440, 36);
+    btnCreate.SetBounds(40, 160, 440, 36);
     btnCreate.Caption := rsCreateAccount;
     btnCreate.Font.Height := -15;
     btnCreate.Font.Style := [fsBold];
@@ -116,8 +117,9 @@ begin
 
     lblCreateDesc := TLabel.Create(F);
     lblCreateDesc.Parent := F;
-    lblCreateDesc.Left := 60;
-    lblCreateDesc.Top := 190;
+    lblCreateDesc.AutoSize := False;
+    lblCreateDesc.SetBounds(60, 200, 420, 36);
+    lblCreateDesc.WordWrap := True;
     lblCreateDesc.Font.Height := -15;
     lblCreateDesc.Font.Color := Pal.TextSecondary;
     lblCreateDesc.Caption := rsCreateAccountDesc;
@@ -125,7 +127,7 @@ begin
     { Option 3: Local Profile }
     btnLocal := TButton.Create(F);
     btnLocal.Parent := F;
-    btnLocal.SetBounds(40, 230, 440, 36);
+    btnLocal.SetBounds(40, 250, 440, 36);
     btnLocal.Caption := rsLocalProfile;
     btnLocal.Font.Height := -15;
     btnLocal.Font.Style := [fsBold];
@@ -133,15 +135,16 @@ begin
 
     lblLocalDesc := TLabel.Create(F);
     lblLocalDesc.Parent := F;
-    lblLocalDesc.Left := 60;
-    lblLocalDesc.Top := 270;
+    lblLocalDesc.AutoSize := False;
+    lblLocalDesc.SetBounds(60, 290, 420, 36);
+    lblLocalDesc.WordWrap := True;
     lblLocalDesc.Font.Height := -15;
     lblLocalDesc.Font.Color := Pal.TextSecondary;
     lblLocalDesc.Caption := rsLocalProfileDesc;
 
     btnQuit := TButton.Create(F);
     btnQuit.Parent := F;
-    btnQuit.SetBounds(40, 320, 440, 30);
+    btnQuit.SetBounds(40, 360, 440, 30);
     btnQuit.Caption := rsQuit;
     btnQuit.ModalResult := mrClose;
 
