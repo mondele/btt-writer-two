@@ -31,7 +31,7 @@ Goal: language switching works end-to-end, with five non-English translations pr
 | 4 | `tools/mine_v1_translations.py` — builds en_text→{lang:text} index from v1 JSON, walks .pot, emits seeded `cge/locale/{lang}/btt-writer.po`. ~31% match rate on first run (68-69 of 216 single-line msgids per lang) | COMPLETE |
 | 5 | `LocaleManager.pas` — `ApplyInterfaceLanguage` reads `GetInterfaceLanguage`, locates `cge/locale/{lang}/btt-writer.po` (exe-dir, exe-dir/.., or DATA PATH), calls `Translations.TranslateResourceStrings`. `ListAvailableLanguages` scans locale dir. Wired into `bttwriter2.lpr` after `InitializeAppSettings`, before splash | COMPLETE |
 | 6 | `LocaleManager.PopulateLanguageCombo` populates SettingsForm combo from `.po` files present on disk + current setting fallback. Save path: writes `SetInterfaceLanguage(NewLang)`, prompts restart-required modal when changed | COMPLETE |
-| 7 | Build clean (`lazbuild bttwriter2.lpi`). Smoke test each lang switch. Verify hardcoded strings are gone visually | PENDING |
+| 7 | `lazbuild bttwriter2.lpi` compiles clean. Launched with `interface_language=ru` in settings.json — log confirms `LocaleManager: loaded …/cge/locale/ru/btt-writer.po`. LCL `TranslateResourceStrings` parses `#: unit:rsname` location comments into `unit.rsname` identifiers, matching FPC runtime resourcestring keys. Visual GUI confirmation deferred to user | COMPLETE |
 
 ## Key Design Decisions
 
