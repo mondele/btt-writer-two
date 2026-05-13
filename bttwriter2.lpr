@@ -12,7 +12,7 @@ uses
   MainForm, ProjectEditForm, SplashScreen, AppSettings, AppLog,
   UserProfile, GiteaClient, LoginForm, IndexDatabase, SourceExtractor,
   LegalTexts, GitUtils, USFMExporter, ImportForm, ConflictResolver,
-  DevToolsForm;
+  DevToolsForm, LocaleManager;
 
 resourcestring
   rsSplashInitializing = 'Initializing interface...';
@@ -97,6 +97,7 @@ begin
     if Verbose then
       LogInfo('Debug/verbose mode enabled');
     InitializeAppSettings;
+    ApplyInterfaceLanguage;
     ShowStartupSplash;
     UpdateStartupSplash(rsSplashInitializing);
     Application.CreateForm(TMainWindow, MainWindow);
