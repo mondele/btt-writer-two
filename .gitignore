@@ -9,6 +9,20 @@
 *.rst
 *.rsj
 lib/
+link*.res
+castle-engine-output/
+
+# Castle Engine spike (lives on castle-engine branch)
+cge/
+cge-spike/
+
+# Local scratch
+os
+
+# Local tooling / agent workspaces
+.codex
+.mcp.json
+docs/
 
 # Lazarus backup and session files
 backup/
