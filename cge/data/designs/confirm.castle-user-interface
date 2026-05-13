@@ -1,0 +1,56 @@
+{
+  "$$ClassName" : "TCastleUserInterface",
+  "Name" : "Root",
+  "FullSize" : true,
+  "$Children" : [
+    {
+      "$$ClassName" : "TCastleLabel",
+      "Name" : "MsgLbl",
+      "FontSize" : 1.6000000000000000E+001,
+      "Alignment" : "hpMiddle",
+      "HorizontalAnchorParent" : "hpMiddle",
+      "HorizontalAnchorSelf" : "hpMiddle",
+      "VerticalAnchorParent" : "vpTop",
+      "VerticalAnchorSelf" : "vpTop",
+      "TranslationPersistent" : {
+        "$$ClassName" : "TCastleVector2Persistent",
+        "Y" : -3.6000000000000000E+001
+      },
+      "Text" : [ "" ]
+    },
+    {
+      "$$ClassName" : "TCastleButton",
+      "Name" : "BtnNo",
+      "Caption" : "No",
+      "FontSize" : 1.4000000000000000E+001,
+      "Width" : 1.0000000000000000E+002,
+      "Height" : 3.6000000000000000E+001,
+      "HorizontalAnchorParent" : "hpMiddle",
+      "HorizontalAnchorSelf" : "hpMiddle",
+      "VerticalAnchorParent" : "vpBottom",
+      "VerticalAnchorSelf" : "vpBottom",
+      "TranslationPersistent" : {
+        "$$ClassName" : "TCastleVector2Persistent",
+        "X" : -6.0000000000000000E+001,
+        "Y" : 2.0000000000000000E+001
+      }
+    },
+    {
+      "$$ClassName" : "TCastleButton",
+      "Name" : "BtnYes",
+      "Caption" : "Yes",
+      "FontSize" : 1.4000000000000000E+001,
+      "Width" : 1.0000000000000000E+002,
+      "Height" : 3.6000000000000000E+001,
+      "HorizontalAnchorParent" : "hpMiddle",
+      "HorizontalAnchorSelf" : "hpMiddle",
+      "VerticalAnchorParent" : "vpBottom",
+      "VerticalAnchorSelf" : "vpBottom",
+      "TranslationPersistent" : {
+        "$$ClassName" : "TCastleVector2Persistent",
+        "X" : 6.0000000000000000E+001,
+        "Y" : 2.0000000000000000E+001
+      }
+    }
+  ]
+}
