@@ -3,18 +3,13 @@ unit GameViewTerms;
 
 { Terms of Use screen.
 
-  Shown after login when terms have not yet been accepted.
-  Presents three documents the user must review:
-    1. License Agreement (CC BY-SA 4.0)
-    2. Translation Guidelines
-    3. Statement of Faith
+  Card layout loaded from castle-data:/designs/terms.castle-user-interface.
+  Chrome (header, breadcrumb, status bar) still built in code; Resize wires
+  card geometry, button widths, and detail-scroll size.
 
-  Each document has a green "Read" indicator that the user ticks by
-  pressing the button.  The "Agree" button is enabled only after all
-  three have been read.  Decline navigates back to Login.
-
-  On Agree: SetTermsAccepted(True) → Container.View := ViewHome.
-}
+  Shown after login when terms have not yet been accepted. Three documents
+  (License, Guidelines, Statement of Faith). Agree enables once all three
+  are opened. }
 
 interface
 
@@ -29,19 +24,16 @@ type
     FHeader      : TBTTHeader;
     FCrumb       : TBTTBreadcrumb;
     FStatusBar   : TBTTStatusBar;
+
     FCard        : TCastleRectangleControl;
     FDescLbl     : TCastleLabel;
 
-    { One row per document }
-    FDocRow      : array[0..2] of TCastleRectangleControl;
-    FDocLabel    : array[0..2] of TCastleLabel;
     FDocBtn      : array[0..2] of TCastleButton;
     FDocRead     : array[0..2] of Boolean;
 
     FAgreeBtn    : TCastleButton;
     FDeclineBtn  : TCastleButton;
 
-    { Detail panel — shows full text of a document }
     FDetailPanel : TCastleRectangleControl;
     FDetailTitle : TCastleLabel;
     FDetailScroll: TCastleScrollView;
@@ -50,6 +42,9 @@ type
     FDetailDocIdx: Integer;
 
     procedure BuildChrome;
+    procedure LoadCard;
+    procedure ApplyPalette;
+    procedure StyleLink(Btn: TCastleButton; EmphasisEnabled: Boolean);
     procedure ShowList;
     procedure ShowDetail(DocIdx: Integer);
     procedure UpdateAgreeButton;
@@ -72,17 +67,14 @@ var
 implementation
 
 uses
-  SysUtils, CastleVectors,
+  SysUtils, CastleVectors, CastleComponentSerialize,
   AppSettings, AppLog, BTTTheme,
   LegalTexts, CGEStrings,
   GameViewHome, GameViewLogin;
 
 const
-  Pad      = 32;
-  RowH     = 52;
-  RowGap   = 14;
+  Pad = 32;
 
-{ Document titles — resolved at call time so language changes take effect. }
 function DocTitle(Idx: Integer): string;
 begin
   case Idx of
@@ -114,15 +106,14 @@ begin
   FDocRead[1]   := False;
   FDocRead[2]   := False;
   BuildChrome;
+  LoadCard;
+  ApplyPalette;
   ShowList;
 end;
 
 procedure TViewTerms.BuildChrome;
 var
-  Pal  : TBTTPalette;
-  I    : Integer;
-  Btn  : TCastleButton;
-  YPos : Single;
+  Pal: TBTTPalette;
 begin
   Pal := P;
 
@@ -136,119 +127,83 @@ begin
 
   FStatusBar := TBTTStatusBar.Create(FreeAtStop, Pal);
   InsertFront(FStatusBar);
+end;
 
-  { ── Full-bleed white panel below the chrome ── }
-  FCard        := TCastleRectangleControl.Create(FreeAtStop);
-  FCard.Color  := Pal.PanelBg;
-  { Size and position set in Resize to fill content area. }
+procedure TViewTerms.LoadCard;
+var
+  I: Integer;
+begin
+  FCard := ComponentLoad(
+    'castle-data:/designs/terms.castle-user-interface',
+    FreeAtStop) as TCastleRectangleControl;
   InsertFront(FCard);
 
-  { Description paragraph at top }
-  FDescLbl          := TCastleLabel.Create(FreeAtStop);
-  FDescLbl.Caption  := rsTermsIntro;
-  FDescLbl.Color     := Pal.TextPrimary;
-  FDescLbl.FontSize  := 14;
-  FDescLbl.Alignment := hpMiddle;
-  FDescLbl.Anchor(hpMiddle, hpMiddle);
-  FDescLbl.Anchor(vpTop, vpTop, -Pad);
-  FCard.InsertFront(FDescLbl);
+  FDescLbl      := FreeAtStop.FindRequiredComponent('DescLbl')      as TCastleLabel;
+  FDocBtn[0]    := FreeAtStop.FindRequiredComponent('DocBtn0')      as TCastleButton;
+  FDocBtn[1]    := FreeAtStop.FindRequiredComponent('DocBtn1')      as TCastleButton;
+  FDocBtn[2]    := FreeAtStop.FindRequiredComponent('DocBtn2')      as TCastleButton;
+  FDeclineBtn   := FreeAtStop.FindRequiredComponent('DeclineBtn')   as TCastleButton;
+  FAgreeBtn     := FreeAtStop.FindRequiredComponent('AgreeBtn')     as TCastleButton;
+  FDetailPanel  := FreeAtStop.FindRequiredComponent('DetailPanel')  as TCastleRectangleControl;
+  FDetailTitle  := FreeAtStop.FindRequiredComponent('DetailTitle')  as TCastleLabel;
+  FDetailClose  := FreeAtStop.FindRequiredComponent('DetailClose')  as TCastleButton;
+  FDetailScroll := FreeAtStop.FindRequiredComponent('DetailScroll') as TCastleScrollView;
+  FDetailText   := FreeAtStop.FindRequiredComponent('DetailText')   as TCastleLabel;
 
-  { Three full-width solid-green document buttons, stacked. Width set in Resize. }
+  FDescLbl.Caption := rsTermsIntro;
+  for I := 0 to 2 do
+    FDocBtn[I].Caption := UpperCase(DocTitle(I));
+  FDeclineBtn.Caption  := rsTermsNoThanks;
+  FAgreeBtn.Caption    := rsTermsAgree;
+  FDetailClose.Caption := rsCommonBack;
+
+  FDocBtn[0].OnClick   := @ClickDoc0;
+  FDocBtn[1].OnClick   := @ClickDoc1;
+  FDocBtn[2].OnClick   := @ClickDoc2;
+  FDeclineBtn.OnClick  := @ClickDecline;
+  FAgreeBtn.OnClick    := @ClickAgree;
+  FDetailClose.OnClick := @ClickClose;
+
+  FDetailText.Translation := Vector2(Pad, 0);
+end;
+
+procedure TViewTerms.ApplyPalette;
+var
+  Pal: TBTTPalette;
+  I: Integer;
+begin
+  Pal := P;
+  FCard.Color         := Pal.PanelBg;
+  FDescLbl.Color      := Pal.TextPrimary;
+  FDetailPanel.Color  := Pal.PanelBg;
+  FDetailTitle.Color  := Pal.TextPrimary;
+  FDetailText.Color   := Pal.TextPrimary;
+
   for I := 0 to 2 do
   begin
-    YPos := -(Pad + 80 + I * (RowH + RowGap));  { offset below description }
-
-    Btn              := TCastleButton.Create(FreeAtStop);
-    Btn.Caption      := UpperCase(DocTitle(I));
-    Btn.FontSize     := 15;
-    Btn.AutoSize     := False;
-    Btn.Height       := RowH;
-    Btn.CustomBackground    := True;
-    Btn.CustomColorNormal   := Pal.Accent;
-    Btn.CustomColorFocused  := Pal.Accent;
-    Btn.CustomColorPressed  := Pal.Accent;
-    Btn.CustomTextColorUse  := True;
-    Btn.CustomTextColor     := Pal.TextInverse;
-    Btn.Anchor(hpLeft, hpLeft, Pad);
-    Btn.Anchor(vpTop,  vpTop,  YPos);
-    FCard.InsertFront(Btn);
-    FDocBtn[I]   := Btn;
-    FDocLabel[I] := nil;
-    FDocRow[I]   := nil;
+    FDocBtn[I].CustomColorNormal  := Pal.Accent;
+    FDocBtn[I].CustomColorFocused := Pal.Accent;
+    FDocBtn[I].CustomColorPressed := Pal.Accent;
+    FDocBtn[I].CustomTextColor    := Pal.TextInverse;
   end;
-  FDocBtn[0].OnClick := @ClickDoc0;
-  FDocBtn[1].OnClick := @ClickDoc1;
-  FDocBtn[2].OnClick := @ClickDoc2;
 
-  { Bottom row — NO THANKS (left-ish) / I AGREE (right-ish), as text-link buttons }
-  FDeclineBtn          := TCastleButton.Create(FreeAtStop);
-  FDeclineBtn.Caption  := rsTermsNoThanks;
-  FDeclineBtn.FontSize := 14;
-  FDeclineBtn.OnClick  := @ClickDecline;
-  FDeclineBtn.CustomBackground   := True;
-  FDeclineBtn.CustomColorNormal  := Vector4(0, 0, 0, 0);
-  FDeclineBtn.CustomColorFocused := Vector4(0, 0, 0, 0.05);
-  FDeclineBtn.CustomColorPressed := Vector4(0, 0, 0, 0.10);
-  FDeclineBtn.CustomTextColorUse := True;
-  FDeclineBtn.CustomTextColor    := Pal.TextSecondary;
-  FDeclineBtn.Anchor(hpLeft,  hpLeft,  Pad * 3);
-  FDeclineBtn.Anchor(vpBottom, vpBottom, Pad);
-  FCard.InsertFront(FDeclineBtn);
+  StyleLink(FDeclineBtn, True);
+  StyleLink(FAgreeBtn,   FAgreeBtn.Enabled);
+end;
 
-  FAgreeBtn          := TCastleButton.Create(FreeAtStop);
-  FAgreeBtn.Caption  := rsTermsAgree;
-  FAgreeBtn.FontSize := 14;
-  FAgreeBtn.Enabled  := False;
-  FAgreeBtn.OnClick  := @ClickAgree;
-  FAgreeBtn.CustomBackground    := True;
-  FAgreeBtn.CustomColorNormal   := Vector4(0, 0, 0, 0);
-  FAgreeBtn.CustomColorFocused  := Vector4(0, 0, 0, 0.05);
-  FAgreeBtn.CustomColorPressed  := Vector4(0, 0, 0, 0.10);
-  FAgreeBtn.CustomColorDisabled := Vector4(0, 0, 0, 0);
-  FAgreeBtn.CustomTextColorUse  := True;
-  FAgreeBtn.CustomTextColor     := Pal.TextMuted;
-  FAgreeBtn.Anchor(hpRight, hpRight, -(Pad * 3));
-  FAgreeBtn.Anchor(vpBottom, vpBottom, Pad);
-  FCard.InsertFront(FAgreeBtn);
-
-  { ── Detail overlay ── }
-  FDetailPanel        := TCastleRectangleControl.Create(FreeAtStop);
-  FDetailPanel.Color  := Pal.PanelBg;
-  FDetailPanel.FullSize := True;
-  FDetailPanel.Exists   := False;
-  FCard.InsertFront(FDetailPanel);
-
-  FDetailTitle          := TCastleLabel.Create(FreeAtStop);
-  FDetailTitle.Caption  := '';
-  FDetailTitle.Color    := Pal.TextPrimary;
-  FDetailTitle.FontSize := 16;
-  FDetailTitle.Anchor(hpLeft, hpLeft, Pad);
-  FDetailTitle.Anchor(vpTop,  vpTop,  -Pad);
-  FDetailPanel.InsertFront(FDetailTitle);
-
-  FDetailClose          := TCastleButton.Create(FreeAtStop);
-  FDetailClose.Caption  := rsCommonBack;
-  FDetailClose.FontSize := 13;
-  FDetailClose.Width    := 80;
-  FDetailClose.OnClick  := @ClickClose;
-  FDetailClose.Anchor(hpRight,  hpRight,  -Pad);
-  FDetailClose.Anchor(vpTop,    vpTop,    -Pad);
-  FDetailPanel.InsertFront(FDetailClose);
-
-  FDetailScroll := TCastleScrollView.Create(FreeAtStop);
-  { Size set in Resize — opposite-edge anchors don't stretch in CGE. }
-  FDetailScroll.Anchor(hpLeft, hpLeft, 0);
-  FDetailScroll.Anchor(vpBottom, vpBottom, 0);
-  FDetailPanel.InsertFront(FDetailScroll);
-
-  FDetailText          := TCastleLabel.Create(FreeAtStop);
-  FDetailText.Caption  := '';
-  FDetailText.Color    := Pal.TextPrimary;
-  FDetailText.FontSize := 12;
-  FDetailText.Alignment := hpLeft;
-  FDetailText.MaxWidth  := 800;
-  FDetailText.Translation := Vector2(Pad, 0);
-  FDetailScroll.ScrollArea.InsertFront(FDetailText);
+procedure TViewTerms.StyleLink(Btn: TCastleButton; EmphasisEnabled: Boolean);
+var
+  Pal: TBTTPalette;
+begin
+  Pal := P;
+  Btn.CustomColorNormal   := Vector4(0, 0, 0, 0);
+  Btn.CustomColorFocused  := Vector4(0, 0, 0, 0.05);
+  Btn.CustomColorPressed  := Vector4(0, 0, 0, 0.10);
+  Btn.CustomColorDisabled := Vector4(0, 0, 0, 0);
+  if EmphasisEnabled then
+    Btn.CustomTextColor := Pal.Accent
+  else
+    Btn.CustomTextColor := Pal.TextSecondary;
 end;
 
 procedure TViewTerms.ShowList;
@@ -258,17 +213,16 @@ end;
 
 procedure TViewTerms.ShowDetail(DocIdx: Integer);
 var
-  TxtH, AreaW : Single;
+  TxtH, AreaW: Single;
 begin
-  FDetailDocIdx       := DocIdx;
+  FDetailDocIdx        := DocIdx;
   FDetailTitle.Caption := DocTitle(DocIdx);
   FDetailText.Caption  := DocBody(DocIdx);
 
   AreaW := FDetailScroll.EffectiveWidthForChildren - FDetailScroll.EffectiveScrollBarWidth;
-  if AreaW < 100 then AreaW := FDetailScroll.Width - 24;  { fallback if Resize has not fired }
+  if AreaW < 100 then AreaW := FDetailScroll.Width - 24;
   FDetailText.MaxWidth := AreaW - Pad * 2;
 
-  { Size scroll area to the label height }
   TxtH := FDetailText.EffectiveHeight;
   if TxtH < FDetailScroll.Height then TxtH := FDetailScroll.Height;
   FDetailScroll.ScrollArea.Width  := AreaW;
@@ -277,7 +231,6 @@ begin
 
   FDetailPanel.Exists := True;
 
-  { Mark as read — no visual change to the button itself (v1 doesn't show a "read" tick). }
   FDocRead[DocIdx] := True;
   UpdateAgreeButton;
 end;
@@ -296,12 +249,9 @@ begin
     FAgreeBtn.CustomTextColor := Pal.TextMuted;
 end;
 
-procedure TViewTerms.ClickDoc0(Sender: TObject);
-begin ShowDetail(0); end;
-procedure TViewTerms.ClickDoc1(Sender: TObject);
-begin ShowDetail(1); end;
-procedure TViewTerms.ClickDoc2(Sender: TObject);
-begin ShowDetail(2); end;
+procedure TViewTerms.ClickDoc0(Sender: TObject); begin ShowDetail(0); end;
+procedure TViewTerms.ClickDoc1(Sender: TObject); begin ShowDetail(1); end;
+procedure TViewTerms.ClickDoc2(Sender: TObject); begin ShowDetail(2); end;
 
 procedure TViewTerms.ClickClose(Sender: TObject);
 begin
@@ -343,18 +293,15 @@ begin
   FStatusBar.Width       := W;
   FStatusBar.Height      := BTT_STATUS_H;
 
-  { Full-bleed card fills the area between breadcrumb and status bar. }
   CardH := H - BTT_HEADER_H - BTT_BREADCRUMB_H - BTT_STATUS_H;
   FCard.Translation := Vector2(0, BTT_STATUS_H);
   FCard.Width       := W;
   FCard.Height      := CardH;
 
-  { Doc buttons: full-width within the card. }
   for I := 0 to 2 do
     if FDocBtn[I] <> nil then
       FDocBtn[I].Width := W - Pad * 2;
 
-  { Detail overlay: scroll view fills below the 60px title/back-button strip. }
   if FDetailScroll <> nil then
   begin
     FDetailScroll.Width  := W;
@@ -364,6 +311,8 @@ end;
 
 procedure TViewTerms.OnThemeChange;
 begin
+  if FCard <> nil then
+    ApplyPalette;
   if Container <> nil then
     Container.View := Self;
 end;

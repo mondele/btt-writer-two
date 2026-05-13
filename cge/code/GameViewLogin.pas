@@ -75,6 +75,7 @@ type
     procedure ShowMain;
     procedure ShowLocal;
     procedure ShowServer;
+    procedure LayoutExternalButtons;
 
     procedure StyleLinkButton(Btn: TCastleButton; const Pal: TBTTPalette);
     procedure StylePrimaryButton(Btn: TCastleButton; const Pal: TBTTPalette);
@@ -448,6 +449,7 @@ begin
     FCrumb.OnBack := @ClickBack;
     FCrumb.SetCrumbs([rsLoginCrumb, rsLoginLocalCrumb]);
   end;
+  LayoutExternalButtons;
 end;
 
 procedure TViewLogin.ShowServer;
@@ -468,6 +470,7 @@ begin
     FCrumb.OnBack := @ClickServerBack;
     FCrumb.SetCrumbs([rsLoginCrumb, rsLoginServerCrumb]);
   end;
+  LayoutExternalButtons;
 end;
 
 procedure TViewLogin.ClickLocal(Sender: TObject);
@@ -609,7 +612,7 @@ end;
 
 procedure TViewLogin.Resize;
 var
-  W, H, CardX, CardY, EditW: Single;
+  W, H, EditW: Single;
 begin
   inherited;
   if FHeader = nil then Exit;
@@ -628,11 +631,6 @@ begin
   FStatusBar.Width       := W;
   FStatusBar.Height      := BTT_STATUS_H;
 
-  { Card is centred by its anchors. Compute its screen-space origin so
-    we can place the external buttons (OK / LOGIN / text links) just
-    beneath its bottom-right edge. }
-  CardX := (W - CardW) / 2;
-  CardY := (H - CardH) / 2;
   EditW := CardW - Pad * 2;
 
   { Size chooser option rows (opposite-anchor bug — set width explicitly). }
@@ -656,18 +654,29 @@ begin
   if FSrvPassEdit <> nil then
     FSrvPassEdit.Width := EditW;
 
-  { External buttons — positioned ~20px below the card's bottom-right. }
+  LayoutExternalButtons;
+end;
+
+procedure TViewLogin.LayoutExternalButtons;
+var
+  W, H, CardX, CardY: Single;
+begin
+  if FSubmitBtn = nil then Exit;
+  W := EffectiveWidth;
+  H := EffectiveHeight;
+  if (W <= 0) or (H <= 0) then Exit;
+  CardX := (W - CardW) / 2;
+  CardY := (H - CardH) / 2;
+
   if FSubmitBtn.Exists then
   begin
-    FSubmitBtn.Translation   := Vector2(CardX + CardW - FSubmitBtn.Width, CardY - 56);
-    FLocalToSrvBtn.Translation :=
-      Vector2(CardX + CardW - FSubmitBtn.Width - 220, CardY - 48);
+    FSubmitBtn.Translation     := Vector2(CardX + CardW - FSubmitBtn.Width, CardY - 56);
+    FLocalToSrvBtn.Translation := Vector2(CardX + CardW - FSubmitBtn.Width - 220, CardY - 48);
   end;
   if FSrvLoginBtn.Exists then
   begin
-    FSrvLoginBtn.Translation := Vector2(CardX + CardW - FSrvLoginBtn.Width, CardY - 56);
-    FSrvCreateBtn.Translation :=
-      Vector2(CardX + CardW - FSrvLoginBtn.Width - 210, CardY - 48);
+    FSrvLoginBtn.Translation  := Vector2(CardX + CardW - FSrvLoginBtn.Width, CardY - 56);
+    FSrvCreateBtn.Translation := Vector2(CardX + CardW - FSrvLoginBtn.Width - 210, CardY - 48);
   end;
 end;
 

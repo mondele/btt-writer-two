@@ -3,6 +3,10 @@ unit GameViewConfirm;
 
 { Yes/No confirmation modal dialog.
 
+  Layout loaded from castle-data:/designs/confirm.castle-user-interface.
+  ContentPanel is created by TCGEModalBase.Start; design root is inserted
+  into it.
+
   Usage:
     FConfirm := TViewConfirm.Create(Self, 'Are you sure?');
     Container.PushView(FConfirm);
@@ -39,62 +43,42 @@ type
 implementation
 
 uses
+  CastleComponentSerialize,
   BTTTheme;
-
-const
-  BtnW  = 100;
-  BtnH  = 36;
-  Pad   = 20;
 
 constructor TViewConfirm.Create(AOwner: TComponent; const AMsg: string);
 begin
   inherited Create(AOwner);
-  FMsg       := AMsg;
-  FAnswer    := False;
-  PanelWidth := 420;
+  FMsg        := AMsg;
+  FAnswer     := False;
+  PanelWidth  := 420;
   PanelHeight := 180;
 end;
 
 procedure TViewConfirm.Start;
 var
-  Pal : TBTTPalette;
-  Lbl : TCastleLabel;
-  BtnYes, BtnNo: TCastleButton;
+  Pal    : TBTTPalette;
+  Root   : TCastleUserInterface;
+  MsgLbl : TCastleLabel;
+  BtnYes,
+  BtnNo  : TCastleButton;
 begin
   inherited;  { creates ContentPanel }
   Pal := P;
 
-  { Message label }
-  Lbl           := TCastleLabel.Create(FreeAtStop);
-  Lbl.Caption   := FMsg;
-  Lbl.Color     := Pal.TextPrimary;
-  Lbl.FontSize  := 16;
-  Lbl.Alignment := hpMiddle;
-  Lbl.Anchor(hpMiddle, hpMiddle);
-  Lbl.Anchor(vpTop, vpTop, -(Pad + 16));
-  ContentPanel.InsertFront(Lbl);
+  Root := ComponentLoad(
+    'castle-data:/designs/confirm.castle-user-interface',
+    FreeAtStop) as TCastleUserInterface;
+  ContentPanel.InsertFront(Root);
 
-  { Yes button — right of centre }
-  BtnYes          := TCastleButton.Create(FreeAtStop);
-  BtnYes.Caption  := 'Yes';
-  BtnYes.FontSize := 14;
-  BtnYes.Width    := BtnW;
-  BtnYes.Height   := BtnH;
-  BtnYes.OnClick  := @ClickYes;
-  BtnYes.Anchor(hpMiddle, hpMiddle, 60);
-  BtnYes.Anchor(vpBottom, vpBottom, Pad);
-  ContentPanel.InsertFront(BtnYes);
+  MsgLbl := FreeAtStop.FindRequiredComponent('MsgLbl') as TCastleLabel;
+  BtnYes := FreeAtStop.FindRequiredComponent('BtnYes') as TCastleButton;
+  BtnNo  := FreeAtStop.FindRequiredComponent('BtnNo')  as TCastleButton;
 
-  { No button — left of centre }
-  BtnNo          := TCastleButton.Create(FreeAtStop);
-  BtnNo.Caption  := 'No';
-  BtnNo.FontSize := 14;
-  BtnNo.Width    := BtnW;
-  BtnNo.Height   := BtnH;
+  MsgLbl.Caption := FMsg;
+  MsgLbl.Color   := Pal.TextPrimary;
+  BtnYes.OnClick := @ClickYes;
   BtnNo.OnClick  := @ClickNo;
-  BtnNo.Anchor(hpMiddle, hpMiddle, -60);
-  BtnNo.Anchor(vpBottom, vpBottom, Pad);
-  ContentPanel.InsertFront(BtnNo);
 end;
 
 procedure TViewConfirm.ClickYes(Sender: TObject);
