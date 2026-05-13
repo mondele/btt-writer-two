@@ -9,7 +9,8 @@ uses
 
 { Shows the full settings dialog. Returns True if user clicked OK. }
 function ShowSettingsDialog(out OldTheme, NewTheme: TAppTheme;
-  out OldSuite, NewSuite: string): Boolean;
+  out OldSuite, NewSuite: string;
+  out OldLang, NewLang: string): Boolean;
 
 implementation
 
@@ -22,8 +23,6 @@ resourcestring
   rsSettingsCaption = 'Settings';
   rsOK = 'OK';
   rsCancel = 'Cancel';
-  rsLangRestartTitle = 'Restart Required';
-  rsLangRestartMsg = 'The interface language change will take effect the next time BTT-Writer is started.';
 
   { General tab }
   rsTabGeneral = 'General';
@@ -246,7 +245,8 @@ begin
 end;
 
 function ShowSettingsDialog(out OldTheme, NewTheme: TAppTheme;
-  out OldSuite, NewSuite: string): Boolean;
+  out OldSuite, NewSuite: string;
+  out OldLang, NewLang: string): Boolean;
 var
   F: TForm;
   Pages: TPageControl;
@@ -281,14 +281,13 @@ var
   lblSuite: TLabel;
   chkDevTools: TCheckBox;
   DummyLabel: TLabel;
-
-  OldLang, NewLang: string;
 begin
   Result := False;
   Pal := GetThemePalette(GetEffectiveTheme);
   OldTheme := GetAppTheme;
   OldSuite := GetServerSuite;
   OldLang := GetInterfaceLanguage;
+  NewLang := OldLang;
 
   Helper := TSettingsHelper.Create;
   try
@@ -638,11 +637,10 @@ begin
         else
           NewLang := OldLang;
 
-        { Persist everything }
+        { Persist everything. Caller compares OldLang/NewLang and triggers
+          the hot-swap (recreate forms after this returns). }
         SetAppTheme(NewTheme, True);
         SetInterfaceLanguage(NewLang);
-        if NewLang <> OldLang then
-          MessageDlg(rsLangRestartTitle, rsLangRestartMsg, mtInformation, [mbOK], 0);
         SetGatewayLanguageMode(chkGateway.Checked);
         SetBlindEditMode(chkBlindEdit.Checked);
         SetDeveloperTools(chkDevTools.Checked);

@@ -40,6 +40,16 @@ for rsj in "${RSJ_FILES[@]}"; do
   msguniq --use-first "$TMPD/raw/$unit.po" -o "$TMPD/merged/$unit.po"
 done
 
+# Extract LFM-baked captions into their own .po fragment. These are keyed
+# by component identifier path (e.g. tmainwindow.lblappname.caption),
+# which is what LCL's TPOTranslator looks up at form-load time.
+LFM_RAW="$TMPD/raw/_lfm.po"
+{
+  printf 'msgid ""\nmsgstr ""\n"MIME-Version: 1.0\\n"\n"Content-Type: text/plain; charset=utf-8\\n"\n"Content-Transfer-Encoding: 8bit\\n"\n'
+  python3 "$(dirname "$0")/extract-lfm-strings.py"
+} > "$LFM_RAW"
+msguniq --use-first "$LFM_RAW" -o "$TMPD/merged/_lfm.po"
+
 # Merge: --use-first keeps the first occurrence (alphabetical unit order).
 # Stamp the result as a .pot template by clearing the Language header.
 msgcat --use-first "$TMPD/merged"/*.po \

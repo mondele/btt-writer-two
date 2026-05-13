@@ -329,6 +329,112 @@ msgid ""
 "https://fonts.google.com/"
 msgstr ""
 
+#: tmainwindow.caption
+msgid "BTT-Writer"
+msgstr ""
+
+#: tmainwindow.headerpanel.lblappname.caption
+msgid "BTT Writer"
+msgstr "BTT Writer"
+
+#: tmainwindow.headerpanel.lblcurrentuser.caption
+msgid "Current User: Raphael"
+msgstr ""
+
+#: tmainwindow.headerpanel.btnlogout.caption
+msgid "(Logout)"
+msgstr ""
+
+#: tmainwindow.leftrail.btnmenu.caption
+msgid "⋮"
+msgstr ""
+
+#: tmainwindow.contentpanel.lblprojectsheading.caption
+msgid "Your Translation Projects"
+msgstr "پروژه‌های ترجمه شما"
+
+#: tmainwindow.contentpanel.lblsortby.caption
+msgid "Columns to Sort By"
+msgstr "ستون‌ها برای مرتب کردن"
+
+#: tmainwindow.contentpanel.lblsortcolumnby.caption
+msgid "Sort Project Column By"
+msgstr "مرتب کردن ستون پروژه با"
+
+#: tmainwindow.contentpanel.cmbsortby.text
+msgid "Language then Project"
+msgstr "زبان بعد پروژه"
+
+#: tmainwindow.contentpanel.cmbsortcolumnby.text
+msgid "Bible Order"
+msgstr "ترتیب انجیل"
+
+#: tmainwindow.contentpanel.btnaddproject.caption
+msgid "+"
+msgstr ""
+
+#: tmainwindow.contentpanel.lblprojectcolumn.caption
+msgid "Project"
+msgstr "پروژه"
+
+#: tmainwindow.contentpanel.lbltypecolumn.caption
+msgid "Type"
+msgstr "نوع"
+
+#: tmainwindow.contentpanel.lbllanguagecolumn.caption
+msgid "Language"
+msgstr "زبان"
+
+#: tmainwindow.contentpanel.lblprogresscolumn.caption
+msgid "Progress"
+msgstr "پیشرفت"
+
+#: tmainwindow.contentpanel.welcomepanel.lblwelcome.caption
+msgid "Welcome!"
+msgstr "خوش آمدید!"
+
+#: tmainwindow.contentpanel.welcomepanel.lblwelcomemsg.caption
+msgid ""
+"You don't have any projects yet. Click below to start a new translation "
+"project."
+msgstr ""
+
+#: tmainwindow.contentpanel.welcomepanel.btnstartproject.caption
+msgid "START A NEW PROJECT"
+msgstr ""
+
+#: tmainwindow.statusbar.text
+msgid "Status: Idle"
+msgstr ""
+
+#: tprojecteditwindow.caption
+msgid "Project Editor"
+msgstr ""
+
+#: tprojecteditwindow.statuspanel.lblstatus.caption
+msgid "Ready"
+msgstr ""
+
+#: tprojecteditwindow.splitpanel.paneheaderbar.lblsourceheader.caption
+msgid "Source Text"
+msgstr ""
+
+#: tprojecteditwindow.splitpanel.paneheaderbar.sourcelangheader.caption
+msgid "English ULB"
+msgstr ""
+
+#: tprojecteditwindow.splitpanel.paneheaderbar.btnchangesource.caption
+msgid "Change"
+msgstr "تغییر"
+
+#: tprojecteditwindow.splitpanel.paneheaderbar.lbltransheader.caption
+msgid "Translation"
+msgstr ""
+
+#: tprojecteditwindow.splitpanel.paneheaderbar.lblresourceheader.caption
+msgid "Resources"
+msgstr ""
+
 #: loginform:rsprofiletitle
 msgid "User Profile"
 msgstr "پروفایل کاربر"
@@ -487,10 +593,6 @@ msgstr ""
 
 #: mainform:rscurrentuserprefix
 msgid "Current User: "
-msgstr ""
-
-#: mainform:rslogout
-msgid "(Logout)"
 msgstr ""
 
 #: mainform:rsnouser
@@ -695,10 +797,6 @@ msgstr ""
 msgid "Project deleted: "
 msgstr ""
 
-#: mainform:rschange
-msgid "Change"
-msgstr "تغییر"
-
 #: mainform:rschangerestypetitle
 msgid "Change Resource Type"
 msgstr ""
@@ -819,10 +917,6 @@ msgstr ""
 msgid "."
 msgstr ""
 
-#: projecteditform:rssourcetextheader
-msgid "Source Text"
-msgstr ""
-
 #: projecteditform:rstranslationheaderprefix
 msgid "Translation ("
 msgstr ""
@@ -937,6 +1031,16 @@ msgstr "پرسش‌ها"
 
 #: projecteditform:rsclosebtn
 msgid "X CLOSE"
+msgstr ""
+
+#: settingsform:rslangrestarttitle
+msgid "Restart Required"
+msgstr ""
+
+#: settingsform:rslangrestartmsg
+msgid ""
+"The interface language change will take effect the next time BTT-Writer is "
+"started."
 msgstr ""
 
 #: settingsform:rstabgeneral

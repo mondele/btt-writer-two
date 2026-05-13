@@ -29,13 +29,15 @@ type
   TLangArray = array of string;
 
 function ApplyInterfaceLanguage: string;
+procedure HotReloadInterfaceLanguage;
 function ListAvailableLanguages: TLangArray;
 procedure PopulateLanguageCombo(Combo: TComboBox);
 
 implementation
 
 uses
-  SysUtils, Translations, AppSettings, DataPaths, AppLog;
+  SysUtils, Forms, LResources, Translations, LCLTranslator,
+  AppSettings, DataPaths, AppLog;
 
 function CandidatePaths(const Lang: string): TLangArray;
 var
@@ -88,6 +90,14 @@ begin
 
   try
     Translations.TranslateResourceStrings(POPath);
+
+    { Also install LRSTranslator so .lfm-baked captions (Caption=, Text=,
+      Hint=, Title= properties stored in form streams) get translated at
+      form-construction time. Replace any previous translator. }
+    if Assigned(LRSTranslator) then
+      LRSTranslator.Free;
+    LRSTranslator := TPOTranslator.Create(POPath);
+
     LogInfo('LocaleManager: loaded ' + POPath);
     Result := POPath;
   except
@@ -134,6 +144,40 @@ begin
       Result[I] := Found[I];
   finally
     Found.Free;
+  end;
+end;
+
+procedure HotReloadInterfaceLanguage;
+var
+  POPath: string;
+  I: Integer;
+  F: TCustomForm;
+begin
+  POPath := ApplyInterfaceLanguage;
+  if (POPath = '') and (GetInterfaceLanguage <> 'en') then
+  begin
+    LogWarn('HotReloadInterfaceLanguage: no .po loaded, skipping form walk');
+    Exit;
+  end;
+
+  { Walk every visible form and re-apply the new translator. LFM-backed
+    properties (Caption, Text, Hint) are looked up by component identifier
+    path and update cleanly in both directions. Code-assigned Captions
+    set from resourcestrings stay at their assigned-time value until the
+    form is recreated — accepted limitation. }
+  if (LRSTranslator <> nil) and (LRSTranslator is TUpdateTranslator) then
+  begin
+    for I := 0 to Screen.FormCount - 1 do
+    begin
+      F := Screen.Forms[I];
+      try
+        TUpdateTranslator(LRSTranslator).UpdateTranslation(F);
+      except
+        on E: Exception do
+          LogWarn('HotReload: form ' + F.ClassName + ' — ' + E.Message);
+      end;
+    end;
+    LogInfo('HotReload: walked ' + IntToStr(Screen.FormCount) + ' forms');
   end;
 end;
 

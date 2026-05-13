@@ -329,6 +329,112 @@ msgid ""
 "https://fonts.google.com/"
 msgstr ""
 
+#: tmainwindow.caption
+msgid "BTT-Writer"
+msgstr ""
+
+#: tmainwindow.headerpanel.lblappname.caption
+msgid "BTT Writer"
+msgstr ""
+
+#: tmainwindow.headerpanel.lblcurrentuser.caption
+msgid "Current User: Raphael"
+msgstr ""
+
+#: tmainwindow.headerpanel.btnlogout.caption
+msgid "(Logout)"
+msgstr ""
+
+#: tmainwindow.leftrail.btnmenu.caption
+msgid "⋮"
+msgstr ""
+
+#: tmainwindow.contentpanel.lblprojectsheading.caption
+msgid "Your Translation Projects"
+msgstr ""
+
+#: tmainwindow.contentpanel.lblsortby.caption
+msgid "Columns to Sort By"
+msgstr ""
+
+#: tmainwindow.contentpanel.lblsortcolumnby.caption
+msgid "Sort Project Column By"
+msgstr ""
+
+#: tmainwindow.contentpanel.cmbsortby.text
+msgid "Language then Project"
+msgstr ""
+
+#: tmainwindow.contentpanel.cmbsortcolumnby.text
+msgid "Bible Order"
+msgstr ""
+
+#: tmainwindow.contentpanel.btnaddproject.caption
+msgid "+"
+msgstr ""
+
+#: tmainwindow.contentpanel.lblprojectcolumn.caption
+msgid "Project"
+msgstr ""
+
+#: tmainwindow.contentpanel.lbltypecolumn.caption
+msgid "Type"
+msgstr ""
+
+#: tmainwindow.contentpanel.lbllanguagecolumn.caption
+msgid "Language"
+msgstr ""
+
+#: tmainwindow.contentpanel.lblprogresscolumn.caption
+msgid "Progress"
+msgstr ""
+
+#: tmainwindow.contentpanel.welcomepanel.lblwelcome.caption
+msgid "Welcome!"
+msgstr ""
+
+#: tmainwindow.contentpanel.welcomepanel.lblwelcomemsg.caption
+msgid ""
+"You don't have any projects yet. Click below to start a new translation "
+"project."
+msgstr ""
+
+#: tmainwindow.contentpanel.welcomepanel.btnstartproject.caption
+msgid "START A NEW PROJECT"
+msgstr ""
+
+#: tmainwindow.statusbar.text
+msgid "Status: Idle"
+msgstr ""
+
+#: tprojecteditwindow.caption
+msgid "Project Editor"
+msgstr ""
+
+#: tprojecteditwindow.statuspanel.lblstatus.caption
+msgid "Ready"
+msgstr ""
+
+#: tprojecteditwindow.splitpanel.paneheaderbar.lblsourceheader.caption
+msgid "Source Text"
+msgstr ""
+
+#: tprojecteditwindow.splitpanel.paneheaderbar.sourcelangheader.caption
+msgid "English ULB"
+msgstr ""
+
+#: tprojecteditwindow.splitpanel.paneheaderbar.btnchangesource.caption
+msgid "Change"
+msgstr ""
+
+#: tprojecteditwindow.splitpanel.paneheaderbar.lbltransheader.caption
+msgid "Translation"
+msgstr ""
+
+#: tprojecteditwindow.splitpanel.paneheaderbar.lblresourceheader.caption
+msgid "Resources"
+msgstr ""
+
 #: loginform:rsprofiletitle
 msgid "User Profile"
 msgstr ""
@@ -487,10 +593,6 @@ msgstr ""
 
 #: mainform:rscurrentuserprefix
 msgid "Current User: "
-msgstr ""
-
-#: mainform:rslogout
-msgid "(Logout)"
 msgstr ""
 
 #: mainform:rsnouser
@@ -695,10 +797,6 @@ msgstr ""
 msgid "Project deleted: "
 msgstr ""
 
-#: mainform:rschange
-msgid "Change"
-msgstr ""
-
 #: mainform:rschangerestypetitle
 msgid "Change Resource Type"
 msgstr ""
@@ -819,10 +917,6 @@ msgstr ""
 msgid "."
 msgstr ""
 
-#: projecteditform:rssourcetextheader
-msgid "Source Text"
-msgstr ""
-
 #: projecteditform:rstranslationheaderprefix
 msgid "Translation ("
 msgstr ""
@@ -937,6 +1031,16 @@ msgstr ""
 
 #: projecteditform:rsclosebtn
 msgid "X CLOSE"
+msgstr ""
+
+#: settingsform:rslangrestarttitle
+msgid "Restart Required"
+msgstr ""
+
+#: settingsform:rslangrestartmsg
+msgid ""
+"The interface language change will take effect the next time BTT-Writer is "
+"started."
 msgstr ""
 
 #: settingsform:rstabgeneral

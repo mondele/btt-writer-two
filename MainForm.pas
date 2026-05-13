@@ -11,7 +11,7 @@ uses
   Globals, ProjectScanner, ProjectEditForm, ProjectCreator, ProjectManager,
   TStudioPackage, SplashScreen, AppSettings, SettingsForm, ThemePalette, UIFonts,
   AppLog, UserProfile, LoginForm, GiteaClient, ImportForm, USFMExporter, GitUtils,
-  DataPaths, USFMUtils, BibleBook, BibleChapter, DevToolsForm;
+  DataPaths, USFMUtils, BibleBook, BibleChapter, DevToolsForm, LocaleManager;
 
 resourcestring
   rsProjectDetailsTitle = 'Project Details';
@@ -1631,8 +1631,10 @@ procedure TMainWindow.MenuSettingsClick(Sender: TObject);
 var
   OldTheme, NewTheme: TAppTheme;
   OldSuite, NewSuite: string;
+  OldLang, NewLang: string;
 begin
-  if ShowSettingsDialog(OldTheme, NewTheme, OldSuite, NewSuite) then
+  if ShowSettingsDialog(OldTheme, NewTheme, OldSuite, NewSuite,
+                        OldLang, NewLang) then
   begin
     if NewTheme <> OldTheme then
       ApplyTheme;
@@ -1642,6 +1644,11 @@ begin
         '. You will be logged out.');
       DoLogout;
       EnsureUserProfile;
+    end;
+    if NewLang <> OldLang then
+    begin
+      LogInfo('Interface language changed: ' + OldLang + ' -> ' + NewLang);
+      HotReloadInterfaceLanguage;
     end;
   end;
   { Always update dev tools menu item after settings dialog }

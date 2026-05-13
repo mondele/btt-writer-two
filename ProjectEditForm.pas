@@ -11,7 +11,7 @@ uses
   ProjectManager, ResourceContainer, ProjectScanner,
   BibleBook, BibleChapter, BibleChunk, USFMUtils, DataPaths, ProjectCreator,
   AppSettings, SettingsForm, ThemePalette, UIFonts, AppLog,
-  IndexDatabase, SourceExtractor;
+  IndexDatabase, SourceExtractor, LocaleManager;
 
 resourcestring
   rsErrorOpeningChapterPrefix = 'Error opening chapter: ';
@@ -2029,11 +2029,15 @@ procedure TProjectEditWindow.OnMenuSettings(Sender: TObject);
 var
   OldTheme, NewTheme: TAppTheme;
   OldSuite, NewSuite: string;
+  OldLang, NewLang: string;
 begin
-  if ShowSettingsDialog(OldTheme, NewTheme, OldSuite, NewSuite) then
+  if ShowSettingsDialog(OldTheme, NewTheme, OldSuite, NewSuite,
+                        OldLang, NewLang) then
   begin
     if NewTheme <> OldTheme then
       ApplyTheme;
+    if NewLang <> OldLang then
+      HotReloadInterfaceLanguage;
   end;
 end;
 
