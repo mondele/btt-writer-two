@@ -13,8 +13,11 @@ link*.res
 castle-engine-output/
 
 # Castle Engine spike (lives on castle-engine branch)
-cge/
+# Note: cge/* not cge/ so children can be re-included below.
+cge/*
 cge-spike/
+# Locale dir shared with castle-engine branch — track on master too
+!cge/locale/
 
 # Local scratch
 os

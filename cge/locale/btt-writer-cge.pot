@@ -1,0 +1,599 @@
+# BTT-Writer CGE translation template.
+# Copyright (C) 2026 Wycliffe Associates.
+# This file is distributed under the same license as the BTT-Writer package.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: btt-writer-cge\n"
+"POT-Creation-Date: 2026-04-24T10:35-0400\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: \n"
+
+#: cgestrings:rsappname
+msgid "BTT-Writer"
+msgstr ""
+
+#: cgestrings:rsappsubtitle
+msgid "Bible Translation Tool"
+msgstr ""
+
+#: cgestrings:rscommonok
+msgid "OK"
+msgstr ""
+
+#: cgestrings:rscommoncancel
+msgid "CANCEL"
+msgstr ""
+
+#: cgestrings:rscommonback
+msgid "Back"
+msgstr ""
+
+#: cgestrings:rscommonsave
+msgid "Save"
+msgstr ""
+
+#: cgestrings:rscommonclose
+msgid "Close"
+msgstr ""
+
+#: cgestrings:rscommoncontinue
+msgid "Continue"
+msgstr ""
+
+#: cgestrings:rscommonsend
+msgid "SEND"
+msgstr ""
+
+#: cgestrings:rscommonyes
+msgid "Yes"
+msgstr ""
+
+#: cgestrings:rscommonno
+msgid "No"
+msgstr ""
+
+#: cgestrings:rscommonsearch
+msgid "Search"
+msgstr ""
+
+#: cgestrings:rscommonuser
+msgid "Current User: %s  (Logout)"
+msgstr ""
+
+#: cgestrings:rsstatusidle
+msgid "Idle"
+msgstr ""
+
+#: cgestrings:rsstatusloading
+msgid "Loading\342\200\246"
+msgstr ""
+
+#: cgestrings:rsstatusloggingin
+msgid "Logging in\342\200\246"
+msgstr ""
+
+#: cgestrings:rsstatussearching
+msgid "Searching\342\200\246"
+msgstr ""
+
+#: cgestrings:rsstatusimporting
+msgid "Importing\342\200\246"
+msgstr ""
+
+#: cgestrings:rsstatusexporting
+msgid "Exporting\342\200\246"
+msgstr ""
+
+#: cgestrings:rsstatusuploading
+msgid "Uploading\342\200\246"
+msgstr ""
+
+#: cgestrings:rshomecrumb
+msgid "Your Translation Projects"
+msgstr ""
+
+#: cgestrings:rshomewelcometitle
+msgid "Welcome!"
+msgstr ""
+
+#: cgestrings:rshomewelcomebody
+#: cgestrings:rshomestartproject
+msgid "START A NEW PROJECT"
+msgstr ""
+
+#: cgestrings:rshomenewproject
+msgid "+ New Project"
+msgstr ""
+
+#: cgestrings:rshomeopen
+msgid "Open"
+msgstr ""
+
+#: cgestrings:rshomelogoutconfirm
+msgid "Log out of BTT-Writer?"
+msgstr ""
+
+#: cgestrings:rsmenuupdate
+msgid "Update"
+msgstr ""
+
+#: cgestrings:rsmenuimport
+msgid "Import \342\200\246"
+msgstr ""
+
+#: cgestrings:rsmenuacademy
+msgid "translationAcademy"
+msgstr ""
+
+#: cgestrings:rsmenufeedback
+msgid "Feedback"
+msgstr ""
+
+#: cgestrings:rsmenulogout
+msgid "Logout"
+msgstr ""
+
+#: cgestrings:rsmenusettings
+msgid "Settings"
+msgstr ""
+
+#: cgestrings:rslogincrumb
+msgid "User Profile"
+msgstr ""
+
+#: cgestrings:rsloginlocalcrumb
+msgid "Local Profile"
+msgstr ""
+
+#: cgestrings:rsloginservercrumb
+msgid "Server Login"
+msgstr ""
+
+#: cgestrings:rsloginchoosertitle
+msgid "Setup your User Profile with one of the options below."
+msgstr ""
+
+#: cgestrings:rsloginoptservertitle
+msgid "Login to your Server Account"
+msgstr ""
+
+#: cgestrings:rsloginoptserverdesc
+msgid "Use this option to be able to upload projects to your existing account"
+msgstr ""
+
+#: cgestrings:rsloginoptcreateservertitle
+msgid "Create a Server Account"
+msgstr ""
+
+#: cgestrings:rsloginoptcreateserverdesc
+msgid "Use this option if you do not have an account but want to upload"
+msgstr ""
+
+#: cgestrings:rsloginoptlocaltitle
+msgid "Create Local User Profile"
+msgstr ""
+
+#: cgestrings:rsloginoptlocaldesc
+msgid "Use this option if you do not have an account and do not want to upload"
+msgstr ""
+
+#: cgestrings:rsloginlocalheading
+msgid "Local User Profile"
+msgstr ""
+
+#: cgestrings:rsloginlocaldesc
+#: cgestrings:rsloginlocalplaceholder
+msgid "Full Name or Pseudonym"
+msgstr ""
+
+#: cgestrings:rsloginlocalerror
+msgid "Please enter a name."
+msgstr ""
+
+#: cgestrings:rsloginlocalsubmit
+msgid "OK"
+msgstr ""
+
+#: cgestrings:rsloginlocaltoserver
+msgid "LOGIN WITH SERVER ACCOUNT"
+msgstr ""
+
+#: cgestrings:rsloginserverheading
+msgid "Server Login"
+msgstr ""
+
+#: cgestrings:rsloginservernetwarning
+msgid "This will use your internet connection"
+msgstr ""
+
+#: cgestrings:rsloginserverurl
+msgid "Server URL"
+msgstr ""
+
+#: cgestrings:rsloginserveruser
+msgid "Username"
+msgstr ""
+
+#: cgestrings:rsloginserverpass
+msgid "Password"
+msgstr ""
+
+#: cgestrings:rsloginserversubmit
+msgid "LOGIN"
+msgstr ""
+
+#: cgestrings:rsloginservercreate
+msgid "CREATE A NEW ACCOUNT"
+msgstr ""
+
+#: cgestrings:rsloginserverneedurl
+msgid "Please enter a server URL."
+msgstr ""
+
+#: cgestrings:rsloginserverneeduser
+msgid "Please enter a username."
+msgstr ""
+
+#: cgestrings:rsloginserverfailed
+msgid "Login failed: %s"
+msgstr ""
+
+#: cgestrings:rstermscrumb
+msgid "Terms of Use"
+msgstr ""
+
+#: cgestrings:rstermsintro
+#: cgestrings:rstermslicenseagreement
+msgid "License Agreement"
+msgstr ""
+
+#: cgestrings:rstermstranslationguide
+msgid "Translation Guidelines"
+msgstr ""
+
+#: cgestrings:rstermsstatementoffaith
+msgid "Statement of Faith"
+msgstr ""
+
+#: cgestrings:rstermsnothanks
+msgid "NO THANKS"
+msgstr ""
+
+#: cgestrings:rstermsagree
+msgid "I AGREE"
+msgstr ""
+
+#: cgestrings:rssettingscrumb
+msgid "Settings"
+msgstr ""
+
+#: cgestrings:rssettingssectiongeneral
+msgid "General"
+msgstr ""
+
+#: cgestrings:rssettingssectionabout
+msgid "About"
+msgstr ""
+
+#: cgestrings:rssettingssectionlegal
+msgid "Legal"
+msgstr ""
+
+#: cgestrings:rssettingssectionadvanced
+msgid "Advanced"
+msgstr ""
+
+#: cgestrings:rssettingstheme
+msgid "Theme"
+msgstr ""
+
+#: cgestrings:rssettingsthemelight
+msgid "Light"
+msgstr ""
+
+#: cgestrings:rssettingsthemedark
+msgid "Dark"
+msgstr ""
+
+#: cgestrings:rssettingsthemesystem
+msgid "System"
+msgstr ""
+
+#: cgestrings:rssettingsthemecurrent
+msgid "Current: %s"
+msgstr ""
+
+#: cgestrings:rssettingsversion
+msgid "Version: %s"
+msgstr ""
+
+#: cgestrings:rssettingsdatapath
+msgid "Data: %s"
+msgstr ""
+
+#: cgestrings:rsnewprojcrumbhome
+msgid "Home"
+msgstr ""
+
+#: cgestrings:rsnewprojcrumbsourcetexts
+msgid "Source Texts"
+msgstr ""
+
+#: cgestrings:rsnewprojcrumbbylanguage
+msgid "By Language"
+msgstr ""
+
+#: cgestrings:rsnewprojchooselanguage
+msgid "Choose a language"
+msgstr ""
+
+#: cgestrings:rsnewprojchoosecategory
+msgid "Choose a category"
+msgstr ""
+
+#: cgestrings:rsnewprojchoosesources
+msgid "Choose Source(s)"
+msgstr ""
+
+#: cgestrings:rsnewprojoldtestament
+msgid "Old Testament"
+msgstr ""
+
+#: cgestrings:rsnewprojnewtestament
+msgid "New Testament"
+msgstr ""
+
+#: cgestrings:rsnewprojother
+msgid "Other"
+msgstr ""
+
+#: cgestrings:rsnewprojselectall
+msgid "Select All"
+msgstr ""
+
+#: cgestrings:rsnewprojunselectall
+msgid "Unselect All"
+msgstr ""
+
+#: cgestrings:rsnewprojdownload
+msgid "DOWNLOAD"
+msgstr ""
+
+#: cgestrings:rsimportcrumb
+msgid "Import"
+msgstr ""
+
+#: cgestrings:rsimportoptions
+msgid "Import Options"
+msgstr ""
+
+#: cgestrings:rsimportfromserver
+msgid "Import from Server"
+msgstr ""
+
+#: cgestrings:rsimportprojectfile
+msgid "Import Project File"
+msgstr ""
+
+#: cgestrings:rsimportusfmfile
+msgid "Import USFM File"
+msgstr ""
+
+#: cgestrings:rsimportsourcetext
+msgid "Import Source Text"
+msgstr ""
+
+#: cgestrings:rsimportpathprompt
+msgid "Enter the full path to the .tstudio file:"
+msgstr ""
+
+#: cgestrings:rsimportpathplaceholder
+msgid "/path/to/file.tstudio"
+msgstr ""
+
+#: cgestrings:rsimportusfmpathprompt
+msgid "Enter the full path to the .usfm file:"
+msgstr ""
+
+#: cgestrings:rsimportusfmpathplaceholder
+msgid "/path/to/file.usfm"
+msgstr ""
+
+#: cgestrings:rsimportusfmlangprompt
+msgid "Target language code (e.g. fr, ru, id):"
+msgstr ""
+
+#: cgestrings:rsimportlangplaceholder
+msgid "Language code"
+msgstr ""
+
+#: cgestrings:rsimportbutton
+msgid "Import"
+msgstr ""
+
+#: cgestrings:rsimportneedfilepath
+msgid "Please enter the path to the .tstudio file."
+msgstr ""
+
+#: cgestrings:rsimportneedusfmpath
+msgid "Please enter the path to the .usfm file."
+msgstr ""
+
+#: cgestrings:rsimportneedlangcode
+msgid "Please enter a target language code."
+msgstr ""
+
+#: cgestrings:rsimportfilenotfound
+msgid "File not found: %s"
+msgstr ""
+
+#: cgestrings:rsimportimported
+msgid "Imported: %s"
+msgstr ""
+
+#: cgestrings:rsimportmergedconflicts
+msgid "Merged with conflicts: %s. Open the project to resolve."
+msgstr ""
+
+#: cgestrings:rsimportsearchuser
+msgid "Username"
+msgstr ""
+
+#: cgestrings:rsimportsearchbook
+msgid "Book or Language"
+msgstr ""
+
+#: cgestrings:rsimportsearchneed
+msgid "Enter a username or book/language code."
+msgstr ""
+
+#: cgestrings:rsimportsearchnoresults
+msgid "No repositories found."
+msgstr ""
+
+#: cgestrings:rsimportsearchresultsfmt
+msgid "%d result(s)"
+msgstr ""
+
+#: cgestrings:rsimportdupprompt
+#: cgestrings:rsimportdupmerge
+msgid "Merge"
+msgstr ""
+
+#: cgestrings:rsimportdupoverwrite
+msgid "Overwrite"
+msgstr ""
+
+#: cgestrings:rsimportsourcestub
+#: cgestrings:rseditorreadmode
+msgid "Read"
+msgstr ""
+
+#: cgestrings:rseditorblindedit
+msgid "Blind Edit"
+msgstr ""
+
+#: cgestrings:rseditorshowsource
+msgid "Show Source"
+msgstr ""
+
+#: cgestrings:rseditorhidesource
+msgid "Hide Source"
+msgstr ""
+
+#: cgestrings:rseditormarkchunkdone
+msgid "Mark chunk as done"
+msgstr ""
+
+#: cgestrings:rseditoredit
+msgid "Edit"
+msgstr ""
+
+#: cgestrings:rseditorchapteroffmt
+msgid "Chapter %s of %d"
+msgstr ""
+
+#: cgestrings:rsmenumarkchapterdone
+msgid "Mark Chapter Done"
+msgstr ""
+
+#: cgestrings:rsmenuuploadtoserver
+msgid "Upload to Server"
+msgstr ""
+
+#: cgestrings:rsmenuexporttstudio
+msgid "Export .tstudio"
+msgstr ""
+
+#: cgestrings:rsmenuexportusfm
+msgid "Export USFM"
+msgstr ""
+
+#: cgestrings:rseditorreadnotranslation
+msgid "No translation yet for this chapter."
+msgstr ""
+
+#: cgestrings:rseditorreadnosource
+msgid "Source text not available."
+msgstr ""
+
+#: cgestrings:rseditorshowtranslation
+msgid "Show Translation"
+msgstr ""
+
+#: cgestrings:rsexportuploaddone
+msgid "Uploaded: %s"
+msgstr ""
+
+#: cgestrings:rsexportuploadnoserver
+msgid "Upload requires a server account. Please log in with a server profile."
+msgstr ""
+
+#: cgestrings:rsexportuploadcommitfail
+msgid "Commit failed: %s"
+msgstr ""
+
+#: cgestrings:rsexportuploadrepofail
+msgid "Could not create repo: %s"
+msgstr ""
+
+#: cgestrings:rsexportuploadremotefail
+msgid "Could not set remote: %s"
+msgstr ""
+
+#: cgestrings:rsexportuploadpushfail
+msgid "Push failed: %s"
+msgstr ""
+
+#: cgestrings:rsexporttstudiosaved
+msgid "Saved: %s"
+msgstr ""
+
+#: cgestrings:rsexportusfmsaved
+msgid "Saved: %s"
+msgstr ""
+
+#: cgestrings:rsexportfailed
+msgid "Export failed: %s"
+msgstr ""
+
+#: cgestrings:rsfeedbackcrumb
+msgid "Feedback"
+msgstr ""
+
+#: cgestrings:rsfeedbackheading
+msgid "Feedback"
+msgstr ""
+
+#: cgestrings:rsfeedbacknetwarning
+msgid "This will use your internet connection"
+msgstr ""
+
+#: cgestrings:rsfeedbackprompt
+msgid "Describe the problem you are experiencing:"
+msgstr ""
+
+#: cgestrings:rsfeedbackplaceholder
+msgid "Enter your feedback here\342\200\246"
+msgstr ""
+
+#: cgestrings:rsfeedbacksend
+msgid "SEND"
+msgstr ""
+
+#: cgestrings:rsfeedbackcancel
+msgid "CANCEL"
+msgstr ""
+
+#: cgestrings:rsfeedbackempty
+msgid "Please enter a message before sending."
+msgstr ""
+
+#: cgestrings:rsfeedbacksent
+msgid "Thank you! Your feedback has been recorded."
+msgstr ""
+
+
