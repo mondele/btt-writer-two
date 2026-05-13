@@ -1,0 +1,1075 @@
+msgid ""
+msgstr ""
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: bttwriter2:rssplashinitializing
+msgid "Initializing interface..."
+msgstr ""
+
+#: bttwriter2:rsfatalstartuperror
+msgid "Fatal startup error: "
+msgstr ""
+
+#: conflictresolver:rsconflicttitle
+msgid "Resolve Merge Conflicts"
+msgstr ""
+
+#: conflictresolver:rsconflictheader
+msgid "Conflict %d of %d — %s"
+msgstr ""
+
+#: conflictresolver:rsconflictlocal
+msgid "Local Version (yours)"
+msgstr ""
+
+#: conflictresolver:rsconflictimported
+msgid "Imported Version (theirs)"
+msgstr ""
+
+#: conflictresolver:rsconflictconfirm
+msgid "CONFIRM"
+msgstr ""
+
+#: conflictresolver:rsconflictcancel
+msgid "CANCEL"
+msgstr ""
+
+#: conflictresolver:rsconflictnext
+msgid "Next →"
+msgstr ""
+
+#: conflictresolver:rsconflictprev
+msgid "← Previous"
+msgstr ""
+
+#: conflictresolver:rsselectversion
+msgid "Click on the version you want to keep."
+msgstr ""
+
+#: conflictresolver:rsallresolved
+msgid "All conflicts resolved."
+msgstr ""
+
+#: conflictresolver:rsconflictfileprefix
+msgid "File: "
+msgstr ""
+
+#: devtoolsform:rsdevtoolstitle
+msgid "Developer Tools"
+msgstr "Herramientas para Desarrolladores"
+
+#: devtoolsform:rstablog
+msgid "Log Viewer"
+msgstr ""
+
+#: devtoolsform:rstabchunkcompare
+msgid "Chunk Comparison"
+msgstr ""
+
+#: devtoolsform:rsrefreshlog
+msgid "Refresh"
+msgstr ""
+
+#: devtoolsform:rsclearlog
+msgid "Clear"
+msgstr "Clara"
+
+#: devtoolsform:rsruncomparison
+msgid "Run Comparison"
+msgstr ""
+
+#: devtoolsform:rscomparing
+msgid "Comparing..."
+msgstr ""
+
+#: devtoolsform:rsnoenglishulb
+msgid "No English ULB source texts found in library."
+msgstr ""
+
+#: devtoolsform:rscompareintro
+msgid ""
+"Compares installed source text chunk boundaries against English ULB baseline."
+msgstr ""
+
+#: giteaclient:rsgiteaconnectionerror
+msgid "Could not connect to the server. Check your internet connection."
+msgstr ""
+
+#: giteaclient:rsgiteabadcredentials
+msgid "Invalid username or password."
+msgstr ""
+
+#: giteaclient:rsgiteausernotfound
+msgid "User not found on the server."
+msgstr ""
+
+#: giteaclient:rsgiteatokencreatefailed
+msgid "Failed to create access token."
+msgstr ""
+
+#: giteaclient:rsgiteaunexpectederror
+msgid "Server error: "
+msgstr ""
+
+#: importform:rsimporttitle
+msgid "Import"
+msgstr "Importar"
+
+#: importform:rsimportfromserver
+msgid "Import from Server"
+msgstr "Importar del Servidor"
+
+#: importform:rsimportprojectfile
+msgid "Import Project File (.tstudio)"
+msgstr ""
+
+#: importform:rsimportusfmfile
+msgid "Import USFM File"
+msgstr "Importar Archivo USFM"
+
+#: importform:rsimportsourcetext
+msgid "Import Source Text"
+msgstr "Importar Texto Fuente"
+
+#: importform:rsexporttitle
+msgid "Export"
+msgstr ""
+
+#: importform:rsuploadtoserver
+msgid "Upload to Server"
+msgstr "Subir al Servidor"
+
+#: importform:rsexporttstudio
+msgid "Export to Project File (.tstudio)"
+msgstr ""
+
+#: importform:rsexportusfm
+msgid "Export to USFM File (.usfm)"
+msgstr ""
+
+#: importform:rscancelbtn
+msgid "Cancel"
+msgstr "Cancelar"
+
+#: importform:rsduplicatetitle
+msgid "Project Already Exists"
+msgstr ""
+
+#: importform:rsduplicatemsg
+msgid "A project with this name already exists. What would you like to do?"
+msgstr ""
+
+#: importform:rsdupmerge
+msgid "Merge (combine changes)"
+msgstr ""
+
+#: importform:rsdupoverwrite
+msgid "Overwrite (replace existing)"
+msgstr ""
+
+#: legaltexts:rslicensetitle
+msgid "Creative Commons Attribution-ShareAlike 4.0 International"
+msgstr "Creative Commons Attribution-ShareAlike 4.0 International"
+
+#: legaltexts:rslicenseagreement
+msgid ""
+"Creative Commons Attribution-ShareAlike 4.0 International\n"
+"Human-Readable Summary\n"
+"\n"
+"The Creative Commons Attribution-Share Alike 4.0 International License is "
+"available at\n"
+"https://creativecommons.org/licenses/by-sa/4.0/\n"
+"\n"
+"This is a human-readable summary of (and not a substitute for) the License\n"
+"\n"
+"You are free to:\n"
+"\n"
+"  * Share — copy and redistribute the material in any medium or format\n"
+"  * Adapt — remix, transform, and build upon the material for any purpose, "
+"even commercially.\n"
+"\n"
+"The licensor cannot revoke these freedoms as long as you follow the license "
+"terms.\n"
+"\n"
+"Under the following terms:\n"
+"\n"
+"  * Attribution — You must give appropriate credit, provide a link to the "
+"license, and indicate if changes were made. You may do so in any reasonable "
+"manner, but not in any way that suggests the licensor endorses you or your "
+"use.\n"
+"  * ShareAlike — If you remix, transform, or build upon the material, you "
+"must distribute your contributions under the same license as the original.\n"
+"  * No additional restrictions — You may not apply legal terms or "
+"technological measures that legally restrict others from doing anything the "
+"license permits.\n"
+"\n"
+"Notices:\n"
+"\n"
+"  * You do not have to comply with the license for elements of the material "
+"in the public domain or where your use is permitted by an applicable "
+"exception or limitation.\n"
+"  * No warranties are given. The license may not give you all of the "
+"permissions necessary for your intended use. For example, other rights such "
+"as publicity, privacy, or moral rights may limit how you use the material."
+msgstr ""
+
+#: legaltexts:rsguidelinestitle
+msgid "Translation Guidelines"
+msgstr "Guía de Traducción"
+
+#: legaltexts:rstranslationguidelines
+msgid ""
+"Translation Guidelines\n"
+"\n"
+"Accurate\n"
+"\n"
+"Accurate translations effectively communicate the intended meaning of the "
+"original, divinely inspired text. An accurate translation expresses the "
+"meaning the author intended for the original audience in the original "
+"context.\n"
+"\n"
+"  1. To the extent that is possible, nothing is added, misconstrued, or "
+"deleted from the original message.\n"
+"  2. It does not recast the meaning of the original text to make it more "
+"relevant to the contemporary audience.\n"
+"  3. An accurate translation does not distort the meaning in order to favor "
+"a specific interpretive perspective. It should be free from theological, "
+"cultural, or personal biases.\n"
+"  4. An accurate translation communicates historical events and facts "
+"accurately.\n"
+"\n"
+"Clear\n"
+"\n"
+"Clear translations will use whatever language structures are needed to help "
+"readers easily read and understand it.\n"
+"\n"
+"  1. A clear translation may use as many or as few terms as necessary to "
+"communicate the original meaning as clearly as possible.\n"
+"  2. Making a clear translation does not mean that the translator clarifies "
+"something that is ambiguous in the source text.\n"
+"  3. Making a clear translation does not mean that the translator gives the "
+"reader a specific interpretation for every passage where meaning is "
+"genuinely debated.\n"
+"\n"
+"Natural\n"
+"\n"
+"Natural translations use language forms that reflect the way the target "
+"language is used in corresponding contexts.\n"
+"\n"
+"  1. Natural Bible translations sound like they were produced by an adult "
+"native speaker who speaks and/or writes well.\n"
+"  2. A natural Bible translation does not use expressions that are "
+"particular to their own culture in order to make the translation appear "
+"natural.\n"
+"  3. It is more important for a portion of Scripture to be translated "
+"accurately than for it to sound perfectly natural to everyone who reads it.\n"
+"\n"
+"We believe that a translation has the highest likelihood of being good "
+"quality when after applying the guidelines above, the following are "
+"completed:\n"
+"\n"
+"  1. It is tested and approved by believers of the language community and "
+"their church leaders.\n"
+"  2. Ongoing revisions and improvements are made."
+msgstr ""
+
+#: legaltexts:rsstatementtitle
+msgid "Statement of Faith"
+msgstr "Declaración de Fe"
+
+#: legaltexts:rsstatementoffaith
+msgid ""
+"Statement of Faith\n"
+"Essential Beliefs\n"
+"\n"
+"We consider Essential beliefs to be those that define us as believers in "
+"Jesus Christ. These cannot be disregarded or compromised.\n"
+"\n"
+"We believe:\n"
+"\n"
+"  * The Bible is divinely inspired by God and has final authority.\n"
+"  * God is one and exists in three persons: God the Father, God the Son and "
+"God the Holy Spirit.\n"
+"  * Because of the fall of man, all humans are sinful, and in need of "
+"salvation.\n"
+"  * The death of Christ is a substitute for sinners and provides for the "
+"cleansing of those who believe.\n"
+"  * By God's grace, through faith, man receives salvation as a free gift "
+"because of Jesus' death and resurrection.\n"
+"  * The resurrection of all — the saved to eternal life and the lost to "
+"eternal punishment."
+msgstr ""
+
+#: legaltexts:rssoftwaretitle
+msgid "Software Licenses"
+msgstr "Licencia del Software"
+
+#: legaltexts:rssoftwarelicenses
+msgid ""
+"Software Licenses\n"
+"\n"
+"The following licenses apply to code packages and libraries used in this "
+"app.\n"
+"\n"
+"Free Pascal Compiler (FPC) — LGPL with linking exception\n"
+"https://www.freepascal.org/\n"
+"\n"
+"Lazarus IDE / LCL — LGPL with linking exception\n"
+"https://www.lazarus-ide.org/\n"
+"\n"
+"OpenSSL — Apache-2.0\n"
+"https://www.openssl.org/\n"
+"\n"
+"SQLite — Public Domain\n"
+"https://www.sqlite.org/\n"
+"\n"
+"Noto Sans / Roboto Fonts — Apache-2.0\n"
+"https://fonts.google.com/"
+msgstr ""
+
+#: loginform:rsprofiletitle
+msgid "User Profile"
+msgstr "Perfil de Usuario"
+
+#: loginform:rsprofileprompt
+msgid "Setup your User Profile with one of the options below."
+msgstr "Configure su Perfil de Usuario con una de las siguientes opciones."
+
+#: loginform:rslogintoserver
+msgid "Login to your Server Account"
+msgstr "Iniciar sesión con la Cuenta del Servidor"
+
+#: loginform:rslogintoserverdesc
+msgid "Use this option to be able to upload projects to your existing account."
+msgstr ""
+
+#: loginform:rscreateaccount
+msgid "Create a Server Account"
+msgstr "Crear una Cuenta de Servidor"
+
+#: loginform:rscreateaccountdesc
+msgid "Use this option if you do not have an account but want to upload."
+msgstr ""
+
+#: loginform:rslocalprofile
+msgid "Create Local User Profile"
+msgstr "Crear Perfil de Usuario Local"
+
+#: loginform:rslocalprofiledesc
+msgid ""
+"Use this option if you do not have an account and do not want to upload."
+msgstr ""
+
+#: loginform:rsserverlogintitle
+msgid "Server Login"
+msgstr "Acceso al Servidor"
+
+#: loginform:rsserverloginwarning
+msgid "This will use your internet connection."
+msgstr ""
+
+#: loginform:rsusername
+msgid "Username"
+msgstr "Usuario"
+
+#: loginform:rspassword
+msgid "Password"
+msgstr "Contraseña"
+
+#: loginform:rslogin
+msgid "Login"
+msgstr "Entrar"
+
+#: loginform:rscreatenewaccount
+msgid "CREATE A NEW ACCOUNT"
+msgstr ""
+
+#: loginform:rsloginwithserver
+msgid "LOGIN WITH SERVER ACCOUNT"
+msgstr ""
+
+#: loginform:rslocaltitle
+msgid "Local User Profile"
+msgstr "Perfil de Usuario Local"
+
+#: loginform:rslocalexplanation
+msgid ""
+"Enter your full name or pseudonym. This name will be added to the "
+"contributor list of all projects you work on. This name will be visible to "
+"others."
+msgstr ""
+
+#: loginform:rsfullnamehint
+msgid "Full Name or Pseudonym"
+msgstr "Nombre Completo o Apodo"
+
+#: loginform:rsok
+msgid "OK"
+msgstr "OK"
+
+#: loginform:rsquit
+msgid "Quit"
+msgstr "Salir"
+
+#: loginform:rsloggingin
+msgid "Logging in..."
+msgstr ""
+
+#: loginform:rsloginfailed
+msgid "Login failed: "
+msgstr ""
+
+#: loginform:rsnamerequired
+msgid "Please enter a name."
+msgstr ""
+
+#: mainform:rsprojectdetailstitle
+msgid "Project Details"
+msgstr "Detalles del Proyecto"
+
+#: mainform:rsprojectlabel
+msgid "Project: "
+msgstr ""
+
+#: mainform:rstargetlanguagelabel
+msgid "Target Language: "
+msgstr ""
+
+#: mainform:rsresourcetypelabel
+msgid "Resource type: "
+msgstr ""
+
+#: mainform:rsprogresslabel
+msgid "Progress: "
+msgstr ""
+
+#: mainform:rsissueslabel
+msgid "Issues: "
+msgstr ""
+
+#: mainform:rsissuesnone
+msgid "none"
+msgstr ""
+
+#: mainform:rstranslatorslabel
+msgid "Translators:"
+msgstr ""
+
+#: mainform:rsdismiss
+msgid "Dismiss"
+msgstr "Descartar"
+
+#: mainform:rsexportup
+msgid "↑ Export"
+msgstr ""
+
+#: mainform:rsnone
+msgid "(none)"
+msgstr ""
+
+#: mainform:rsexportfilter
+msgid "Translation Studio Package (*.tstudio)|*.tstudio|All files|*.*"
+msgstr ""
+
+#: mainform:rststudioext
+msgid "tstudio"
+msgstr ""
+
+#: mainform:rsexportfailedprefix
+msgid "Export failed: "
+msgstr ""
+
+#: mainform:rsexportedprefix
+msgid "Exported: "
+msgstr ""
+
+#: mainform:rscurrentuserprefix
+msgid "Current User: "
+msgstr ""
+
+#: mainform:rslogout
+msgid "(Logout)"
+msgstr ""
+
+#: mainform:rsnouser
+msgid "Not logged in"
+msgstr ""
+
+#: mainform:rslogoutconfirm
+msgid "Are you sure you want to log out?"
+msgstr ""
+
+#: mainform:rssplashbuildinghome
+msgid "Building home screen..."
+msgstr ""
+
+#: mainform:rssplashloadingprojects
+msgid "Loading projects..."
+msgstr ""
+
+#: mainform:rssplashcheckingsources
+msgid "Checking required source texts..."
+msgstr ""
+
+#: mainform:rssplashscanningfolders
+msgid "Scanning project folders..."
+msgstr ""
+
+#: mainform:rssplashpreparingresources
+msgid "Preparing project resources..."
+msgstr ""
+
+#: mainform:rssplashrenderinglist
+msgid "Rendering project list..."
+msgstr ""
+
+#: mainform:rssomesourcescouldnotbepreparedfmt
+msgid "Some project sources could not be prepared (%d). First error: %s"
+msgstr ""
+
+#: mainform:rsnoprojectsfound
+msgid "No projects found"
+msgstr ""
+
+#: mainform:rsprojectsfoundwithissuesfmt
+msgid "%d project(s) found (%d with issues)"
+msgstr ""
+
+#: mainform:rsprojectsfoundfmt
+msgid "%d project(s) found"
+msgstr ""
+
+#: mainform:rsprojectcannotopenuntilissuesfixedprefix
+msgid "Project cannot be opened until issues are fixed: "
+msgstr ""
+
+#: mainform:rsprojectopensafelyabortedprefix
+msgid "Project could not be opened and was safely aborted: "
+msgstr ""
+
+#: mainform:rshintdetails
+msgid "details"
+msgstr "detalles"
+
+#: mainform:rsprojectcreatedprefix
+msgid "Project created: "
+msgstr ""
+
+#: mainform:rstypetextprefix
+msgid "Text "
+msgstr ""
+
+#: mainform:rstypeunknown
+msgid "Unknown"
+msgstr ""
+
+#: mainform:rsmenuupdate
+msgid "Update"
+msgstr "Actualizar"
+
+#: mainform:rsmenufeedback
+msgid "Feedback"
+msgstr "Comentarios"
+
+#: mainform:rsmenulogout
+msgid "Logout"
+msgstr "Cerrar Sesión"
+
+#: mainform:rsmenusettings
+msgid "Settings"
+msgstr "Ajustes"
+
+#: mainform:rsfeedbackhint
+msgid "Describe the problem you are experiencing"
+msgstr "Describe el problema que estás experimentando"
+
+#: mainform:rsfeedbacksend
+msgid "Send"
+msgstr "Enviar"
+
+#: mainform:rsfeedbacksent
+msgid "Feedback sent. Thank you!"
+msgstr ""
+
+#: mainform:rsfeedbackfailed
+msgid "Could not send feedback: "
+msgstr ""
+
+#: mainform:rsfeedbackempty
+msgid "Please describe the problem before sending."
+msgstr ""
+
+#: mainform:rsupdatenotimplemented
+msgid "Update check is not yet implemented."
+msgstr ""
+
+#: mainform:rsusfmexportfilter
+msgid "USFM Files (*.usfm)|*.usfm|All files|*.*"
+msgstr ""
+
+#: mainform:rsusfmext
+msgid "usfm"
+msgstr ""
+
+#: mainform:rsusfmexportedprefix
+msgid "USFM exported: "
+msgstr ""
+
+#: mainform:rsusfmexportfailedprefix
+msgid "USFM export failed: "
+msgstr ""
+
+#: mainform:rsimportsuccessprefix
+msgid "Project imported: "
+msgstr ""
+
+#: mainform:rsimportfailedprefix
+msgid "Import failed: "
+msgstr ""
+
+#: mainform:rsimportoverwriteconfirm
+msgid "A project with this name already exists. Overwrite?"
+msgstr ""
+
+#: mainform:rsimportmergedwithconflicts
+msgid ""
+"Project merged. There are conflicts that need to be resolved. Open the "
+"project to resolve them."
+msgstr ""
+
+#: mainform:rsuploadsuccessprefix
+msgid "Uploaded to server: "
+msgstr ""
+
+#: mainform:rsuploadfailedprefix
+msgid "Upload failed: "
+msgstr ""
+
+#: mainform:rsuploadrequiresserver
+msgid "You must be logged in with a server account to upload."
+msgstr ""
+
+#: mainform:rsserversearchlabel
+msgid "Search (username or lang_book):"
+msgstr ""
+
+#: mainform:rsserversearchbtn
+msgid "Search"
+msgstr "Buscar"
+
+#: mainform:rsservernoresults
+msgid "No repositories found."
+msgstr ""
+
+#: mainform:rsusfmimportfilter
+msgid "USFM Files (*.usfm;*.txt)|*.usfm;*.txt|All files|*.*"
+msgstr ""
+
+#: mainform:rssourceimportsuccess
+msgid "Source text imported: "
+msgstr ""
+
+#: mainform:rssourceimportfailed
+msgid "Source text import failed: "
+msgstr ""
+
+#: mainform:rssourceimportinvaliddir
+msgid ""
+"Selected directory does not contain a valid resource container (missing "
+"package.json or content/toc.yml)."
+msgstr ""
+
+#: mainform:rsdeleteproject
+msgid "Delete"
+msgstr "Borrar"
+
+#: mainform:rsconfirmdeleteproject
+msgid ""
+"Are you sure you want to permanently delete this project? This cannot be "
+"undone."
+msgstr ""
+
+#: mainform:rsprojectdeletedprefix
+msgid "Project deleted: "
+msgstr ""
+
+#: mainform:rschange
+msgid "Change"
+msgstr "Cambiar"
+
+#: mainform:rschangerestypetitle
+msgid "Change Resource Type"
+msgstr ""
+
+#: projectcreator:rssourcenotinstalledandnobundle
+msgid ""
+"Source text is not installed and bundled resource archive was not found."
+msgstr ""
+
+#: projectcreator:rsselecttargetlanguage
+msgid "Select Target Language"
+msgstr ""
+
+#: projectcreator:rslanguagecode
+msgid "Language code"
+msgstr ""
+
+#: projectcreator:rslanguagename
+msgid "Language name"
+msgstr ""
+
+#: projectcreator:rsselectvalidlanguagecode
+msgid "Please select a valid language code from the list."
+msgstr ""
+
+#: projectcreator:rsnotargetlanguages
+msgid "No target languages found in index.sqlite."
+msgstr ""
+
+#: projectcreator:rsselectbook
+msgid "Select Book"
+msgstr ""
+
+#: projectcreator:rsoldtestament
+msgid "Old Testament"
+msgstr "Antiguo Testamento"
+
+#: projectcreator:rsnewtestament
+msgid "New Testament"
+msgstr "Nuevo Testamento"
+
+#: projectcreator:rspleaseselectbook
+msgid "Please select a book."
+msgstr ""
+
+#: projectcreator:rsnosourcebooks
+msgid "No source books found in index.sqlite."
+msgstr ""
+
+#: projectcreator:rsselectsourcetext
+msgid "Select Source Text"
+msgstr ""
+
+#: projectcreator:rspleaseselectsourcetext
+msgid "Please select a source text."
+msgstr ""
+
+#: projectcreator:rsnosourcetextsforbookfmt
+msgid ""
+"No source texts found for book \"%s\" in index.sqlite. (Excluded: tn, tq)"
+msgstr ""
+
+#: projectcreator:rsselectprojecttype
+msgid "Select Project Type"
+msgstr ""
+
+#: projectcreator:rstypetext
+msgid "Text"
+msgstr "Texto"
+
+#: projectcreator:rstypenotes
+msgid "Notes (translationNotes)"
+msgstr ""
+
+#: projectcreator:rstypequestions
+msgid "Questions (translationQuestions)"
+msgstr ""
+
+#: projectcreator:rsnotesrequiretext
+msgid ""
+"A text translation project must exist for %s in %s before creating a Notes "
+"or Questions project."
+msgstr ""
+
+#: projectcreator:rspleaseselectprojecttype
+msgid "Please select a project type."
+msgstr ""
+
+#: projecteditform:rserroropeningchapterprefix
+msgid "Error opening chapter: "
+msgstr ""
+
+#: projecteditform:rsreturninghomescreen
+msgid "Returning to home screen."
+msgstr ""
+
+#: projecteditform:rsautosavedatprefix
+msgid "Auto-saved at "
+msgstr ""
+
+#: projecteditform:rsautosavefailedprefix
+msgid "Auto-save failed: "
+msgstr ""
+
+#: projecteditform:rscannotpreparesourcetextprefix
+msgid "Cannot prepare source text for "
+msgstr ""
+
+#: projecteditform:rscannotpreparesourcetextmid
+msgid ": "
+msgstr ""
+
+#: projecteditform:rscannotfindsourcetextcontentprefix
+msgid "Cannot find source text content for "
+msgstr ""
+
+#: projecteditform:rscannotfindsourcetextcontentsuffix
+msgid "."
+msgstr ""
+
+#: projecteditform:rssourcetextheader
+msgid "Source Text"
+msgstr ""
+
+#: projecteditform:rstranslationheaderprefix
+msgid "Translation ("
+msgstr ""
+
+#: projecteditform:rsunabletoopenprojectprefix
+msgid "Unable to open project \""
+msgstr ""
+
+#: projecteditform:rsunabletoopenprojectmid
+msgid "\" due to invalid or oversized chunk content: "
+msgstr ""
+
+#: projecteditform:rschunktitle
+msgid "Title"
+msgstr ""
+
+#: projecteditform:rschunkverseprefix
+msgid "v"
+msgstr ""
+
+#: projecteditform:rschunkverserangejoin
+msgid "-"
+msgstr ""
+
+#: projecteditform:rserrorrenderingchapterprefix
+msgid "Error rendering chapter content: "
+msgstr ""
+
+#: projecteditform:rsupdatechapterprefix
+msgid "Update chapter "
+msgstr ""
+
+#: projecteditform:rsstatuschapterfmt
+msgid "Chapter %s of %d | %d/%d chunks finished"
+msgstr ""
+
+#: projecteditform:rssavedatprefix
+msgid "Saved at "
+msgstr ""
+
+#: projecteditform:rsfinishedtogglelabel
+msgid "Mark chunk as done"
+msgstr "Marcar el fragmento como terminado"
+
+#: projecteditform:rsloadingproject
+msgid "Loading project..."
+msgstr ""
+
+#: projecteditform:rsloadingsourcetext
+msgid "Loading source text..."
+msgstr ""
+
+#: projecteditform:rsloadingtranslation
+msgid "Loading translation..."
+msgstr ""
+
+#: projecteditform:rsloadingchapter
+msgid "Loading chapter..."
+msgstr ""
+
+#: projecteditform:rsmenuuploadexport
+msgid "Upload/Export"
+msgstr "Subir/Exportar"
+
+#: projecteditform:rsmenuprint
+msgid "Print"
+msgstr "Imprimir"
+
+#: projecteditform:rsmenuprojectreview
+msgid "Project Review"
+msgstr "Revisión del Proyecto"
+
+#: projecteditform:rsmenumarkalldone
+msgid "Mark All Chunks Done"
+msgstr "Marcar todos los Fragmentos Terminados"
+
+#: projecteditform:rsnosource
+msgid "No source"
+msgstr ""
+
+#: projecteditform:rstranslationclicktoview
+msgid "Translation (click to view)"
+msgstr ""
+
+#: projecteditform:rssourceclicktoview
+msgid "Source (click to view)"
+msgstr ""
+
+#: projecteditform:rsclickcardtotranslate
+msgid "Click the card to translate"
+msgstr ""
+
+#: projecteditform:rsclicktoviewsource
+msgid "Click here to view source"
+msgstr ""
+
+#: projecteditform:rschunkversesfmt
+msgid "Verses %s"
+msgstr ""
+
+#: projecteditform:rstabnotes
+msgid "Notes"
+msgstr "Notas"
+
+#: projecteditform:rstabwords
+msgid "Words"
+msgstr "Palabras"
+
+#: projecteditform:rstabquestions
+msgid "Questions"
+msgstr "Preguntas"
+
+#: projecteditform:rsclosebtn
+msgid "X CLOSE"
+msgstr ""
+
+#: settingsform:rstabgeneral
+msgid "General"
+msgstr "General"
+
+#: settingsform:rsinterfacelanglabel
+msgid "Interface Language"
+msgstr "Idioma de la Interfaz"
+
+#: settingsform:rsgatewaylangmode
+msgid "Gateway Language Mode"
+msgstr "Modo Idioma Base"
+
+#: settingsform:rsgatewaylangdesc
+msgid ""
+"When enabled, adds resource translation options (Notes, Questions) alongside "
+"text translation."
+msgstr ""
+
+#: settingsform:rsblindeditmode
+msgid "Blind Edit Mode"
+msgstr "Modo Borrador Ciego"
+
+#: settingsform:rsblindeditdesc
+msgid ""
+"Source and translation are never visible simultaneously during drafting."
+msgstr ""
+
+#: settingsform:rscolorthemelabel
+msgid "Color Theme"
+msgstr "Color de apariencia"
+
+#: settingsform:rsthemesystem
+msgid "System"
+msgstr "Sistema"
+
+#: settingsform:rsthemelight
+msgid "Light"
+msgstr "Claro"
+
+#: settingsform:rsthemedark
+msgid "Dark"
+msgstr "Oscuro"
+
+#: settingsform:rsbackuplocationlabel
+msgid "Backup Location"
+msgstr "Ubicación de Respaldo"
+
+#: settingsform:rsbackupbrowse
+msgid "Browse..."
+msgstr ""
+
+#: settingsform:rsbackupnotset
+msgid "(not set)"
+msgstr ""
+
+#: settingsform:rstababout
+msgid "About"
+msgstr "Acerca de"
+
+#: settingsform:rsappversionlabel
+msgid "App Version:"
+msgstr ""
+
+#: settingsform:rsgitversionlabel
+msgid "Git Version:"
+msgstr ""
+
+#: settingsform:rsdatapathlabel
+msgid "Data Path:"
+msgstr ""
+
+#: settingsform:rstablegal
+msgid "Legal"
+msgstr "Legal"
+
+#: settingsform:rsbtnlicenseagreement
+msgid "License Agreement"
+msgstr "Acuerdo de Licencia"
+
+#: settingsform:rstabadvanced
+msgid "Advanced"
+msgstr "Avanzado"
+
+#: settingsform:rsserversuitelabel
+msgid "Server Suite"
+msgstr ""
+
+#: settingsform:rssuitewacs
+msgid "WACS"
+msgstr ""
+
+#: settingsform:rssuitedcs
+msgid "DCS"
+msgstr ""
+
+#: settingsform:rsdataserverlabel
+msgid "Data Server"
+msgstr "Servidor de Datos"
+
+#: settingsform:rsmediaserverlabel
+msgid "Media Server"
+msgstr "Servidor Multimedia"
+
+#: settingsform:rsreaderserverlabel
+msgid "Reader Server"
+msgstr "Servidor de Lectura"
+
+#: settingsform:rscreateaccounturllabel
+msgid "Create Account URL"
+msgstr "Crear URL de Cuenta"
+
+#: settingsform:rslanguagesurllabel
+msgid "Languages URL"
+msgstr "URL de Idiomas"
+
+#: settingsform:rsindexsqliteurllabel
+msgid "Index.sqlite URL"
+msgstr "Index.sqlite URL"
+
+#: settingsform:rstransmanualurllabel
+msgid "Translation Manual URL"
+msgstr "URL del Manual de Traducción"
+
+#: settingsform:rssuitechangewarn
+msgid "Changing server suite will update all server URLs. Continue?"
+msgstr ""
+
+#: settingsform:rsclose
+msgid "Close"
+msgstr "Cerrar"
+
+#: splashscreen:rsversionprefix
+msgid "Version "
+msgstr ""
