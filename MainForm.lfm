@@ -3,7 +3,7 @@ object MainWindow: TMainWindow
   Height = 620
   Top = 461
   Width = 980
-  Caption = 'BTT-Writer'
+  Caption = 'BTT Writer'
   ClientHeight = 620
   ClientWidth = 980
   Color = clWhite

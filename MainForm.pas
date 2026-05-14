@@ -29,7 +29,7 @@ resourcestring
   rsTStudioExt = 'tstudio';
   rsExportFailedPrefix = 'Export failed: ';
   rsExportedPrefix = 'Exported: ';
-  rsCurrentUserPrefix = 'Current User: ';
+  rsCurrentUserFmt = 'Current User: %s';
   rsLogout = '(Logout)';
   rsNoUser = 'Not logged in';
   rsLogoutConfirm = 'Are you sure you want to log out?';
@@ -1789,7 +1789,7 @@ begin
   else
     DisplayName := rsNoUser;
 
-  lblCurrentUser.Caption := rsCurrentUserPrefix + DisplayName;
+  lblCurrentUser.Caption := Format(rsCurrentUserFmt, [DisplayName]);
   btnLogout.Visible := (FCurrentUser.FullName <> '') or (FCurrentUser.Username <> '');
 end;
 

@@ -10,7 +10,7 @@ msgstr ""
 
 #: bttwriter2:rsfatalstartuperror
 msgid "Fatal startup error: "
-msgstr ""
+msgstr "Ошибка при старте"
 
 #: conflictresolver:rsconflicttitle
 msgid "Resolve Merge Conflicts"
@@ -38,15 +38,15 @@ msgstr "Отменить"
 
 #: conflictresolver:rsconflictnext
 msgid "Next →"
-msgstr ""
+msgstr "Далее →"
 
 #: conflictresolver:rsconflictprev
 msgid "← Previous"
-msgstr ""
+msgstr "← Предыдущая"
 
 #: conflictresolver:rsselectversion
 msgid "Click on the version you want to keep."
-msgstr ""
+msgstr "Разрешение конфликта: нажмите на версию, которую хотите сохранить"
 
 #: conflictresolver:rsallresolved
 msgid "All conflicts resolved."
@@ -123,7 +123,7 @@ msgstr "Импортировать с сервера"
 
 #: importform:rsimportprojectfile
 msgid "Import Project File (.tstudio)"
-msgstr ""
+msgstr "Импорт из файла проекта (.tstudio)"
 
 #: importform:rsimportusfmfile
 msgid "Import USFM File"
@@ -135,7 +135,7 @@ msgstr "Импорт исходного текста"
 
 #: importform:rsexporttitle
 msgid "Export"
-msgstr ""
+msgstr "Экспорт"
 
 #: importform:rsuploadtoserver
 msgid "Upload to Server"
@@ -143,11 +143,11 @@ msgstr "Выгрузить на сервер"
 
 #: importform:rsexporttstudio
 msgid "Export to Project File (.tstudio)"
-msgstr ""
+msgstr "Экспорт в файл проекта (.tstudio)"
 
 #: importform:rsexportusfm
 msgid "Export to USFM File (.usfm)"
-msgstr ""
+msgstr "Экспорт в USFM"
 
 #: importform:rscancelbtn
 msgid "Cancel"
@@ -155,19 +155,19 @@ msgstr "Отменить"
 
 #: importform:rsduplicatetitle
 msgid "Project Already Exists"
-msgstr ""
+msgstr "Такой проект уже есть"
 
 #: importform:rsduplicatemsg
 msgid "A project with this name already exists. What would you like to do?"
-msgstr ""
+msgstr "Этот проект уже существует локально. Как бы вы хотели продолжить?"
 
 #: importform:rsdupmerge
 msgid "Merge (combine changes)"
-msgstr ""
+msgstr "Объединить проекты"
 
 #: importform:rsdupoverwrite
 msgid "Overwrite (replace existing)"
-msgstr ""
+msgstr "Перезаписать проект"
 
 #: legaltexts:rslicensetitle
 msgid "Creative Commons Attribution-ShareAlike 4.0 International"
@@ -330,10 +330,6 @@ msgid ""
 msgstr ""
 
 #: tmainwindow.caption
-msgid "BTT-Writer"
-msgstr ""
-
-#: tmainwindow.headerpanel.lblappname.caption
 msgid "BTT Writer"
 msgstr "BTT Writer"
 
@@ -591,9 +587,9 @@ msgstr "Ошибка при экспорте"
 msgid "Exported: "
 msgstr ""
 
-#: mainform:rscurrentuserprefix
-msgid "Current User: "
-msgstr "Текущий пользователь:"
+#: mainform:rscurrentuserfmt
+msgid "Current User: %s"
+msgstr "Текущий пользователь: %s"
 
 #: mainform:rsnouser
 msgid "Not logged in"
@@ -1031,16 +1027,6 @@ msgstr "Вопросы"
 
 #: projecteditform:rsclosebtn
 msgid "X CLOSE"
-msgstr ""
-
-#: settingsform:rslangrestarttitle
-msgid "Restart Required"
-msgstr ""
-
-#: settingsform:rslangrestartmsg
-msgid ""
-"The interface language change will take effect the next time BTT-Writer is "
-"started."
 msgstr ""
 
 #: settingsform:rstabgeneral

@@ -330,10 +330,6 @@ msgid ""
 msgstr ""
 
 #: tmainwindow.caption
-msgid "BTT-Writer"
-msgstr ""
-
-#: tmainwindow.headerpanel.lblappname.caption
 msgid "BTT Writer"
 msgstr "BTT Writer"
 
@@ -591,9 +587,9 @@ msgstr "ارسال شکست خورد"
 msgid "Exported: "
 msgstr ""
 
-#: mainform:rscurrentuserprefix
-msgid "Current User: "
-msgstr "کاربر فعلی:"
+#: mainform:rscurrentuserfmt
+msgid "Current User: %s"
+msgstr ""
 
 #: mainform:rsnouser
 msgid "Not logged in"
@@ -1031,16 +1027,6 @@ msgstr "پرسش‌ها"
 
 #: projecteditform:rsclosebtn
 msgid "X CLOSE"
-msgstr ""
-
-#: settingsform:rslangrestarttitle
-msgid "Restart Required"
-msgstr ""
-
-#: settingsform:rslangrestartmsg
-msgid ""
-"The interface language change will take effect the next time BTT-Writer is "
-"started."
 msgstr ""
 
 #: settingsform:rstabgeneral
