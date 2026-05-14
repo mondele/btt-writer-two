@@ -81,21 +81,21 @@ end;
 procedure TTermsForm.LicenseBtnClick(Sender: TObject);
 begin
   FViewedLicense := True;
-  with TTextViewerForm.Create(Self, rsLicenseTitle, rsLicenseAgreement) do
+  with TTextViewerForm.Create(Self, rsLicenseTitle, LoadLegalText(LEGAL_LICENSE)) do
     ShowModal;
 end;
 
 procedure TTermsForm.GuidelinesBtnClick(Sender: TObject);
 begin
   FViewedGuidelines := True;
-  with TTextViewerForm.Create(Self, rsGuidelinesTitle, rsTranslationGuidelines) do
+  with TTextViewerForm.Create(Self, rsGuidelinesTitle, LoadLegalText(LEGAL_GUIDELINES)) do
     ShowModal;
 end;
 
 procedure TTermsForm.FaithBtnClick(Sender: TObject);
 begin
   FViewedFaith := True;
-  with TTextViewerForm.Create(Self, rsStatementTitle, rsStatementOfFaith) do
+  with TTextViewerForm.Create(Self, rsStatementTitle, LoadLegalText(LEGAL_STATEMENT)) do
     ShowModal;
 end;
 

@@ -205,22 +205,22 @@ end;
 
 procedure TSettingsHelper.LicenseClick(Sender: TObject);
 begin
-  ShowLegalTextDialog(FForm, rsLicenseTitle, rsLicenseAgreement);
+  ShowLegalTextDialog(FForm, rsLicenseTitle, LoadLegalText(LEGAL_LICENSE));
 end;
 
 procedure TSettingsHelper.GuidelinesClick(Sender: TObject);
 begin
-  ShowLegalTextDialog(FForm, rsGuidelinesTitle, rsTranslationGuidelines);
+  ShowLegalTextDialog(FForm, rsGuidelinesTitle, LoadLegalText(LEGAL_GUIDELINES));
 end;
 
 procedure TSettingsHelper.StatementClick(Sender: TObject);
 begin
-  ShowLegalTextDialog(FForm, rsStatementTitle, rsStatementOfFaith);
+  ShowLegalTextDialog(FForm, rsStatementTitle, LoadLegalText(LEGAL_STATEMENT));
 end;
 
 procedure TSettingsHelper.SoftwareClick(Sender: TObject);
 begin
-  ShowLegalTextDialog(FForm, rsSoftwareTitle, rsSoftwareLicenses);
+  ShowLegalTextDialog(FForm, rsSoftwareTitle, LoadLegalText(LEGAL_SOFTWARE));
 end;
 
 { Main dialog function }
