@@ -30,11 +30,11 @@ msgstr ""
 
 #: conflictresolver:rsconflictconfirm
 msgid "CONFIRM"
-msgstr ""
+msgstr "Подтвердить"
 
 #: conflictresolver:rsconflictcancel
 msgid "CANCEL"
-msgstr ""
+msgstr "Отменить"
 
 #: conflictresolver:rsconflictnext
 msgid "Next →"
@@ -401,7 +401,7 @@ msgstr ""
 
 #: tmainwindow.contentpanel.welcomepanel.btnstartproject.caption
 msgid "START A NEW PROJECT"
-msgstr ""
+msgstr "Начать новый проект"
 
 #: tmainwindow.statusbar.text
 msgid "Status: Idle"
@@ -449,7 +449,7 @@ msgstr "Войти в ваш аккаунт на сервере"
 
 #: loginform:rslogintoserverdesc
 msgid "Use this option to be able to upload projects to your existing account."
-msgstr ""
+msgstr "Используйте эту опцию, чтобы иметь возможность отправлять проекты в ваш существующий аккаунт"
 
 #: loginform:rscreateaccount
 msgid "Create a Server Account"
@@ -457,7 +457,7 @@ msgstr "Создать аккаунт на сервере"
 
 #: loginform:rscreateaccountdesc
 msgid "Use this option if you do not have an account but want to upload."
-msgstr ""
+msgstr "Создать аккаунт на сервере"
 
 #: loginform:rslocalprofile
 msgid "Create Local User Profile"
@@ -474,7 +474,7 @@ msgstr "Вход на сервер"
 
 #: loginform:rsserverloginwarning
 msgid "This will use your internet connection."
-msgstr ""
+msgstr "Будет использовано подключение к Интернету."
 
 #: loginform:rsusername
 msgid "Username"
@@ -490,11 +490,11 @@ msgstr "Вход"
 
 #: loginform:rscreatenewaccount
 msgid "CREATE A NEW ACCOUNT"
-msgstr ""
+msgstr "Создать новую учетную запись"
 
 #: loginform:rsloginwithserver
 msgid "LOGIN WITH SERVER ACCOUNT"
-msgstr ""
+msgstr "Войти через аккаунт сервера"
 
 #: loginform:rslocaltitle
 msgid "Local User Profile"
@@ -525,7 +525,7 @@ msgstr ""
 
 #: loginform:rsloginfailed
 msgid "Login failed: "
-msgstr ""
+msgstr "Не удалось войти"
 
 #: loginform:rsnamerequired
 msgid "Please enter a name."
@@ -537,19 +537,19 @@ msgstr "Детали проекта"
 
 #: mainform:rsprojectlabel
 msgid "Project: "
-msgstr ""
+msgstr "Проект"
 
 #: mainform:rstargetlanguagelabel
 msgid "Target Language: "
-msgstr ""
+msgstr "Целевой Язык"
 
 #: mainform:rsresourcetypelabel
 msgid "Resource type: "
-msgstr ""
+msgstr "Тип ресурса"
 
 #: mainform:rsprogresslabel
 msgid "Progress: "
-msgstr ""
+msgstr "Прогресс"
 
 #: mainform:rsissueslabel
 msgid "Issues: "
@@ -561,7 +561,7 @@ msgstr ""
 
 #: mainform:rstranslatorslabel
 msgid "Translators:"
-msgstr ""
+msgstr "Переводчики:"
 
 #: mainform:rsdismiss
 msgid "Dismiss"
@@ -585,7 +585,7 @@ msgstr ""
 
 #: mainform:rsexportfailedprefix
 msgid "Export failed: "
-msgstr ""
+msgstr "Ошибка при экспорте"
 
 #: mainform:rsexportedprefix
 msgid "Exported: "
@@ -593,7 +593,7 @@ msgstr ""
 
 #: mainform:rscurrentuserprefix
 msgid "Current User: "
-msgstr ""
+msgstr "Текущий пользователь:"
 
 #: mainform:rsnouser
 msgid "Not logged in"
@@ -661,7 +661,7 @@ msgstr ""
 
 #: mainform:rstypetextprefix
 msgid "Text "
-msgstr ""
+msgstr "Текст"
 
 #: mainform:rstypeunknown
 msgid "Unknown"
@@ -729,7 +729,7 @@ msgstr ""
 
 #: mainform:rsimportfailedprefix
 msgid "Import failed: "
-msgstr ""
+msgstr "Импорт не удался"
 
 #: mainform:rsimportoverwriteconfirm
 msgid "A project with this name already exists. Overwrite?"
@@ -747,7 +747,7 @@ msgstr ""
 
 #: mainform:rsuploadfailedprefix
 msgid "Upload failed: "
-msgstr ""
+msgstr "Загрузка не удалась"
 
 #: mainform:rsuploadrequiresserver
 msgid "You must be logged in with a server account to upload."
@@ -795,7 +795,7 @@ msgstr ""
 
 #: mainform:rsprojectdeletedprefix
 msgid "Project deleted: "
-msgstr ""
+msgstr "Проект удален"
 
 #: mainform:rschangerestypetitle
 msgid "Change Resource Type"
@@ -1104,15 +1104,15 @@ msgstr "О программе"
 
 #: settingsform:rsappversionlabel
 msgid "App Version:"
-msgstr ""
+msgstr "Версия программы:"
 
 #: settingsform:rsgitversionlabel
 msgid "Git Version:"
-msgstr ""
+msgstr "Версия Git:"
 
 #: settingsform:rsdatapathlabel
 msgid "Data Path:"
-msgstr ""
+msgstr "Путь к данным:"
 
 #: settingsform:rstablegal
 msgid "Legal"
