@@ -2130,9 +2130,12 @@ begin
   except
     on E: Exception do
     begin
-      ShowMessage(rsAutoSaveFailedPrefix + E.Message +
-        LineEnding + rsReturningHomeScreen);
-      Close;
+      { Log + status-bar message. Don't force-close — transient failures
+        (disk pressure, lock contention) would otherwise lose the user's
+        in-memory work. Next tick may succeed; FormClose still has its
+        own save attempt as a final boundary. }
+      LogFmt(llWarn, 'AutoSaveTimerFire: save failed: %s', [E.Message]);
+      lblStatus.Caption := rsAutoSaveFailedPrefix + E.Message;
     end;
   end;
 end;
@@ -3304,12 +3307,16 @@ begin
   FChapterDirty := True;
   if CB.Checked then
   begin
-    FProject.MarkFinished(CB.Hint, CB.HelpKeyword);
+    { Flush any in-progress memo to disk BEFORE marking the chunk
+      finished. Otherwise the manifest could record a "finished" key
+      pointing at unsaved text — power-loss between the manifest write
+      and a later chapter save would leave the project inconsistent. }
     for I := 0 to Length(FChunkPanels) - 1 do
       if FChunkPanels[I].FFinishedCheck = CB then
       begin
         if FChunkPanels[I].FEditing then
-          FChunkPanels[I].SetEditing(False);
+          FChunkPanels[I].SetEditing(False);  { also writes chapter to disk }
+        FProject.MarkFinished(CB.Hint, CB.HelpKeyword);
         FChunkPanels[I].FEditButton.Enabled := False;
         FChunkPanels[I].FIsFinished := True;
         FChunkPanels[I].RefreshTransHtml;
@@ -3916,6 +3923,14 @@ begin
   else
   begin
     SaveContent;
+    { Per PROJECT.md auto-save spec: chunks must be written to disk when
+      editing is disabled. SaveContent only updates the in-memory copy,
+      so flush the chapter explicitly so the chunk .txt files match. }
+    if FOwnerForm <> nil then
+    begin
+      FOwnerForm.FChapterDirty := True;
+      FOwnerForm.SaveCurrentChapter;
+    end;
     FEditButton.Caption := #9998;
   end;
 end;

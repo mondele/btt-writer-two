@@ -32,11 +32,11 @@ So the bulk of the design exists. The work is gap-fixing and verification, not g
 
 | # | What | Status |
 |---|------|--------|
-| 1 | Audit. Trace every edit-exit path (`SetEditing(False)`, finished-toggle, edit-button toggle, chapter switch, project close) and document whether it currently flushes to disk. Output: short table in this PLAN | PENDING |
-| 2 | Fix `SetEditing(False)` so it writes to disk. After in-memory `SaveContent`, set `FChapterDirty := True` on owner form and invoke `SaveCurrentChapter` directly (or queue via async call if Re-entrancy is a concern) | PENDING |
-| 3 | Fix `MarkFinished` UI path. Before flipping the finished switch, force-flush any in-progress memo for that chunk: `if FEditing then SaveContent; OwnerForm.SaveCurrentChapter; OwnerForm.FProject.MarkFinished(...)`. Order matters — finished_chunks should never reference content that didn't make it to disk | PENDING |
-| 4 | Audit `MarkUnfinished` symmetry. Toggle from finished back to unfinished should re-enable the edit button and refresh visuals. Verify no UI lag (e.g., `FFinishedCheck.OnChange` actually flips state, not just visual) | PENDING |
-| 5 | Save-failure surfacing. `AutoSaveTimerFire` currently `ShowMessage` + `Close`. That's harsh for transient failures (disk full, lock contention). Consider: log error, show status-bar message, retry on next tick. Don't force-close unless N consecutive failures | PENDING |
+| 1 | Audit. Memo OnExit ✓, LoadChapter switch ✓, AutoSaveTimer ✓, FormClose ✓ all flush. `SetEditing(False)` and `OnChunkFinishedChange` did NOT. `OnMenuMarkAllDone` is a stub | COMPLETE |
+| 2 | `TChunkPanel.SetEditing(False)` now calls `FOwnerForm.SaveCurrentChapter` after the in-memory `SaveContent`. The chunk .txt files now match the visible state at the moment the user toggles edit off | COMPLETE |
+| 3 | `OnChunkFinishedChange` reordered: flush in-progress memo via `SetEditing(False)` (which now disk-writes per Phase 2) BEFORE `MarkFinished` mutates manifest. Manifest never references unsaved text | COMPLETE |
+| 4 | `MarkUnfinished` symmetry: existing code re-enables FEditButton and refreshes visuals — verified during audit, no fix needed | COMPLETE |
+| 5 | `AutoSaveTimerFire` failure no longer force-closes the window. Logs `llWarn`, surfaces error via `lblStatus`. Transient disk pressure no longer destroys session state | COMPLETE |
 | 6 | Smoke test. Walk all five trigger paths in the running app: focus loss, edit-toggle, finished-toggle, chapter switch, 5-min tick. Verify each writes the `.txt` chunk file *and* `manifest.json` finished_chunks where applicable | PENDING |
 
 ## Files

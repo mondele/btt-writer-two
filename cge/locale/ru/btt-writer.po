@@ -318,7 +318,7 @@ msgstr "Создать локальный профиль"
 #: loginform:rslocalprofiledesc
 msgid ""
 "Use this option if you do not have an account and do not want to upload."
-msgstr ""
+msgstr "Используйте эту опцию, если у вас нет учетной записи, и вы не хотите отправлять на сервер"
 
 #: loginform:rsserverlogintitle
 msgid "Server Login"
@@ -357,7 +357,7 @@ msgid ""
 "Enter your full name or pseudonym. This name will be added to the "
 "contributor list of all projects you work on. This name will be visible to "
 "others."
-msgstr ""
+msgstr "Введите ваше полное имя или псевдоним. Это имя будет добавлено в список участников всех проектов, над которыми вы работаете. Это имя будет видно другим."
 
 #: loginform:rsfullnamehint
 msgid "Full Name or Pseudonym"
@@ -421,7 +421,7 @@ msgstr "Скрыть"
 
 #: mainform:rsexportup
 msgid "↑ Export"
-msgstr ""
+msgstr "↑ Экспорт"
 
 #: mainform:rsnone
 msgid "(none)"
@@ -441,7 +441,7 @@ msgstr "Ошибка при экспорте"
 
 #: mainform:rsexportedprefix
 msgid "Exported: "
-msgstr ""
+msgstr "экспортирован: "
 
 #: mainform:rscurrentuserfmt
 msgid "Current User: %s"
