@@ -43,7 +43,7 @@ object MainWindow: TMainWindow
       Width = 208
       Alignment = taRightJustify
       Anchors = [akTop]
-      Caption = 'Current User: Raphael'
+      Caption = ''
       Font.Color = clWhite
       Font.Height = -21
       ParentColor = False

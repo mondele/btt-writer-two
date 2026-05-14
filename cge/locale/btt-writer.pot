@@ -333,10 +333,6 @@ msgstr ""
 msgid "BTT Writer"
 msgstr ""
 
-#: tmainwindow.headerpanel.lblcurrentuser.caption
-msgid "Current User: Raphael"
-msgstr ""
-
 #: tmainwindow.headerpanel.btnlogout.caption
 msgid "(Logout)"
 msgstr ""
