@@ -1,72 +1,65 @@
-# i18n Operationalization
+# Auto-Save & Chunk Lifecycle
 
 ## Context
 
-The codebase has scaffolded i18n — 248 `resourcestring` declarations across 12 units, `.rsj` files emitted on build, an "Interface Language" Settings UI — but it is not operational. There are no `.po`/`.pot` files on `master`, no runtime translator wiring, and ~39 hardcoded `Caption := 'literal'` assignments remaining (mostly `ProjectEditForm.pas`).
+Per `PROJECT.md`: a chunk should be written to disk when editing is
+disabled, when the editor loses focus, or after five minutes — whichever
+happens first. Marking a chunk *finished* persists to
+`manifest.json` and disables further editing until un-marked.
 
-Goal: language switching works end-to-end, with five non-English translations pre-seeded from legacy v1 BTT-Writer Desktop strings.
+The current `ProjectEditForm` has most of the plumbing already wired:
 
-## Inputs
+| Spec requirement | Status |
+|------------------|--------|
+| 5-minute timer save | ✓ `AutoSaveTimer.Interval=300000` (LFM), calls `SaveCurrentChapter` |
+| Memo loses focus → save | ✓ `OnChunkMemoExit` → `SaveCurrentChapter` when `FChapterDirty` |
+| Editing disabled → save | ✗ `SetEditing(False)` only calls in-memory `SaveContent`; no chapter write |
+| Marked finished → manifest persisted | partial — `MarkFinished` writes manifest, but doesn't flush in-progress memo content first |
+| Finished disables editing | ✓ `SetEditing` early-exits when `FFinishedCheck.Checked` |
+| Unfinished re-enables editing | ✓ via `MarkUnfinished` (manifest path); UI path needs audit |
+| Auto-save status indicator | ✓ `lblStatus` updates with timestamp |
+| Disk write of finished_chunks | ✓ `SaveManifest` → `SL.SaveToFile(FManifestPath)` |
 
-- **CGE pot (existing on `castle-engine` branch):** `cge/locale/btt-writer-cge.pot`, 146 msgids, unit prefix `cgestrings:`. Drives the CGE port. Keep untouched so CGE branch continues to use it.
-- **Legacy v1 translations:** `/home/jdwood/Development/WA/mondele/BTT-Writer-Desktop/i18n/{en,es-419,fa,fr,pt-br,ru}.json`. Key-value JSON keyed by legacy IDs (`bemode_maintext`, etc.) — new keys do not match, but English text often does. Mine by English-text match.
+So the bulk of the design exists. The work is gap-fixing and verification, not greenfield.
 
-## Locale path
+## Goals
 
-`cge/locale/` is shared by both branches.
-
-- `master` currently gitignores `cge/` entirely (CGE spike). Add `!cge/locale/` exception.
-- Two `.pot` files coexist there:
-  - `btt-writer-cge.pot` — CGE port, namespace `cgestrings:*` (unchanged)
-  - `btt-writer.pot` — LCL app, namespace `mainform:*`, `settingsform:*`, etc. (new)
-- Translations: `cge/locale/{lang}/btt-writer.po` and `cge/locale/{lang}/btt-writer-cge.po`
+1. Guarantee no edited content is silently lost when a user toggles edit-off, marks finished, closes a project, or switches chapters.
+2. Manifest `finished_chunks` is always consistent with on-disk chunk files (no stale "finished" pointing at unflushed memo content).
+3. Visible feedback when a save fails; user is not stuck in a broken state.
 
 ## Phases
 
 | # | What | Status |
 |---|------|--------|
-| 1 | `.gitignore` whitelist `cge/locale/`; copy `btt-writer-cge.pot` from `castle-engine` into master at same path | COMPLETE |
-| 2 | Strip remaining 39 hardcoded `Caption := 'literal'` → `resourcestring` references (ProjectEditForm 26, MainForm 7, others 6) | COMPLETE |
-| 3 | `tools/extract-pot.sh` — rsj→po per unit via rstconv, deduped per unit with msguniq, merged across units via msgcat. Emits `cge/locale/btt-writer.pot` (232 msgids from 12 units) | COMPLETE |
-| 4 | `tools/mine_v1_translations.py` — builds en_text→{lang:text} index from v1 JSON, walks .pot, emits seeded `cge/locale/{lang}/btt-writer.po`. ~31% match rate on first run (68-69 of 216 single-line msgids per lang) | COMPLETE |
-| 5 | `LocaleManager.pas` — `ApplyInterfaceLanguage` reads `GetInterfaceLanguage`, locates `cge/locale/{lang}/btt-writer.po` (exe-dir, exe-dir/.., or DATA PATH), calls `Translations.TranslateResourceStrings`. `ListAvailableLanguages` scans locale dir. Wired into `bttwriter2.lpr` after `InitializeAppSettings`, before splash | COMPLETE |
-| 6 | `LocaleManager.PopulateLanguageCombo` populates SettingsForm combo from `.po` files present on disk + current setting fallback. Save path: writes `SetInterfaceLanguage(NewLang)`, prompts restart-required modal when changed | COMPLETE |
-| 7 | `lazbuild bttwriter2.lpi` compiles clean. Launched with `interface_language=ru` in settings.json — log confirms `LocaleManager: loaded …/cge/locale/ru/btt-writer.po`. LCL `TranslateResourceStrings` parses `#: unit:rsname` location comments into `unit.rsname` identifiers, matching FPC runtime resourcestring keys. Visual GUI confirmation deferred to user | COMPLETE |
-| 8 | `.lfm` caption extraction. `tools/extract-lfm-strings.py` walks each .lfm, tracks object nesting, emits `.po` entries keyed by `<formclass>.<comp>...<prop>` (lowercase) for Caption/Text/Hint/Title properties. `extract-pot.sh` merges into combined .pot (257 msgids now). LocaleManager assigns `LRSTranslator := TPOTranslator.Create(POPath)` so form-construction translates LFM properties via TPOTranslator | COMPLETE |
-| 9 | Hot-swap. SettingsForm exposes OldLang/NewLang out-params; restart modal removed. MainForm + ProjectEditForm call `LocaleManager.HotReloadInterfaceLanguage` on change. HotReload re-applies the translator and walks `Screen.Forms` calling `TUpdateTranslator.UpdateTranslation(F)`. LFM-baked captions update both directions; code-assigned resourcestring captions remain at assigned-time value until form is recreated (accepted limitation) | COMPLETE |
-| 10 | Layout clipping. LoginForm description labels set `AutoSize := False`, fixed `Width := 420`, `WordWrap := True`. Vertical spacing bumped to make room for 2-line wraps in longer translations (form height 400 → 460) | COMPLETE |
-
-## Key Design Decisions
-
-- **Two .pot files, one locale dir** — keeps CGE and LCL namespaces separate while sharing the directory the CGE branch already expects.
-- **Mine by English text, not key** — legacy v1 keys (`bemode_maintext`) bear no relation to new resourcestring keys (`rsBlindEditCaption`). The English text is the only stable join column.
-- **Per-language .po loaded at startup** — not hot-swap mid-session. Settings change triggers either form recreate or a restart prompt; simpler than chasing every cached caption.
-- **Runtime path lookup** — `.po` files ship under `cge/locale/` relative to binary or DATA PATH. Final path resolution in `DataPaths.pas`.
+| 1 | Audit. Trace every edit-exit path (`SetEditing(False)`, finished-toggle, edit-button toggle, chapter switch, project close) and document whether it currently flushes to disk. Output: short table in this PLAN | PENDING |
+| 2 | Fix `SetEditing(False)` so it writes to disk. After in-memory `SaveContent`, set `FChapterDirty := True` on owner form and invoke `SaveCurrentChapter` directly (or queue via async call if Re-entrancy is a concern) | PENDING |
+| 3 | Fix `MarkFinished` UI path. Before flipping the finished switch, force-flush any in-progress memo for that chunk: `if FEditing then SaveContent; OwnerForm.SaveCurrentChapter; OwnerForm.FProject.MarkFinished(...)`. Order matters — finished_chunks should never reference content that didn't make it to disk | PENDING |
+| 4 | Audit `MarkUnfinished` symmetry. Toggle from finished back to unfinished should re-enable the edit button and refresh visuals. Verify no UI lag (e.g., `FFinishedCheck.OnChange` actually flips state, not just visual) | PENDING |
+| 5 | Save-failure surfacing. `AutoSaveTimerFire` currently `ShowMessage` + `Close`. That's harsh for transient failures (disk full, lock contention). Consider: log error, show status-bar message, retry on next tick. Don't force-close unless N consecutive failures | PENDING |
+| 6 | Smoke test. Walk all five trigger paths in the running app: focus loss, edit-toggle, finished-toggle, chapter switch, 5-min tick. Verify each writes the `.txt` chunk file *and* `manifest.json` finished_chunks where applicable | PENDING |
 
 ## Files
 
-**New:**
-- `cge/locale/btt-writer-cge.pot` (copied from `castle-engine` branch)
-- `cge/locale/btt-writer.pot` (emitted by build)
-- `cge/locale/{en,es-419,fa,fr,pt-br,ru}/btt-writer.po` (pre-seeded by mining script)
-- `tools/mine_v1_translations.py` (one-shot mining script)
-- `LocaleManager.pas` or similar — runtime translator init + lang switch
+**Modified (expected):**
+- `ProjectEditForm.pas` — `SetEditing`, `OnChunkFinishedChange`, `AutoSaveTimerFire` adjustments
+- `ProjectManager.pas` — possibly small helpers; `MarkFinished` likely unchanged
+- `PLAN.md` — phase status updates
 
-**Modified:**
-- `.gitignore` — add `!cge/locale/` exception
-- `bttwriter2.lpi` — `<i18n>` config, register new unit
-- `bttwriter2.lpr` — call `LocaleManager.Init` early
-- `ProjectEditForm.pas` — strip 26 hardcoded captions
-- `MainForm.pas` — strip 7 hardcoded captions
-- `DevToolsForm.pas`, `ConflictResolver.pas`, `TermsForm.pas`, `SplashScreen.pas` — strip remaining
-- `SettingsForm.pas` — wire Interface Language combo to `LocaleManager`
-- `AppSettings.pas` — `InterfaceLang` already exists; verify default and persistence
+**No new files anticipated.**
+
+## Key Design Decisions
+
+- **Save before flip, not after.** Any state transition that marks a chunk finished or hides the edit memo must flush content first, then mutate manifest. Otherwise a power loss between flip and save leaves manifest claiming "finished" against stale text.
+- **No new abstractions.** Re-use existing `SaveCurrentChapter` / `SaveContent` / `MarkFinished`. Code shape stays close to today.
+- **Status-bar feedback, not modal popups.** Auto-save shouldn't interrupt typing with a dialog on every transient failure.
 
 ## Verification
 
-1. `lazbuild bttwriter2.lpi` — compiles clean each phase
-2. After Phase 3 — `cge/locale/btt-writer.pot` exists with ≥248 msgids
-3. After Phase 4 — `ru.po` and others contain real translations (spot-check 10 strings)
-4. After Phase 5 — launching with `InterfaceLang=ru` shows Russian UI
-5. After Phase 6 — switching language in Settings → restart → new lang loads
-6. After Phase 7 — visual scan: no English leakage when running non-English lang
+1. `lazbuild bttwriter2.lpi` clean after each phase
+2. Edit a chunk, switch chapter mid-type → reopen → text intact
+3. Edit a chunk, toggle edit-off → reload project → text intact
+4. Edit a chunk, mark finished → reload project → finished_chunks contains the key, chunk text intact, edit button disabled
+5. Unmark finished → edit button re-enabled, edit content intact
+6. Wait 5 min while idle → status shows auto-save timestamp
+7. Force a save failure (e.g., chmod project dir read-only) → status shows error, app doesn't crash
