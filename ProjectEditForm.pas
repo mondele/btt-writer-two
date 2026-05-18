@@ -3248,7 +3248,12 @@ begin
       try
         for I := 0 to SaveChunks.Count - 1 do
         begin
-          if Trim(SaveChunks[I].Content) = '' then
+          { Skip stub chunks that hold only verse/paragraph markers
+            inherited from the source template — they're not real
+            translation work yet, and writing them creates the
+            "duplicate-looking" file fanout users see right after
+            saving the first chunk in a chapter. }
+          if not ChunkHasContent(SaveChunks[I].Content) then
             Continue;
           SaveChapter.AddChunk(TChunk.Create(SaveChunks[I].Name));
           SaveChapter.Chunks[SaveChapter.Chunks.Count - 1].Content := SaveChunks[I].Content;

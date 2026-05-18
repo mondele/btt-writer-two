@@ -18,6 +18,13 @@ function ExtractVerseRange(const Text: string; FromVerse, ToVerse: Integer): str
 { Return a list of verse numbers found in the text as strings. }
 function ParseVerseNumbers(const Text: string): TStringList;
 
+{ True when Text contains real translation content past USFM markers.
+  Verse markers (\v <num>, optional range), chapter markers (\c <num>),
+  paragraph markers (\p, \m, \b), and surrounding whitespace are all
+  treated as "no content". Used at save time to avoid writing stub
+  chunk files that hold only inherited markers from the source template. }
+function ChunkHasContent(const Text: string): Boolean;
+
 { Convert USX markup to plain text with USFM verse markers.
   Replaces <verse number="N" style="v" /> with \v N
   and strips <para> tags. }
@@ -151,6 +158,51 @@ begin
     else
       Inc(P);
   end;
+end;
+
+function ChunkHasContent(const Text: string): Boolean;
+var
+  I, L: Integer;
+  C: Char;
+begin
+  L := Length(Text);
+  I := 1;
+  while I <= L do
+  begin
+    C := Text[I];
+    if C = '\' then
+    begin
+      { Marker like \v 5, \v 5-7, \c 1, \p, \m, \b, \q1, etc.
+        Skip the backslash, the marker name (letters + optional digits +
+        optional trailing *), any trailing whitespace, and any leading
+        numeric argument. Anything else after a marker that isn't another
+        marker is treated as real content by the outer loop. }
+      Inc(I);
+      while (I <= L) and (((Text[I] >= 'a') and (Text[I] <= 'z')) or
+                          ((Text[I] >= 'A') and (Text[I] <= 'Z'))) do
+        Inc(I);
+      while (I <= L) and (Text[I] >= '0') and (Text[I] <= '9') do
+        Inc(I);
+      if (I <= L) and (Text[I] = '*') then
+        Inc(I);
+      while (I <= L) and ((Text[I] = ' ') or (Text[I] = #9)) do
+        Inc(I);
+      if (I <= L) and (((Text[I] >= '0') and (Text[I] <= '9'))) then
+      begin
+        while (I <= L) and (((Text[I] >= '0') and (Text[I] <= '9')) or
+                            (Text[I] = '-')) do
+          Inc(I);
+      end;
+    end
+    else if (C = ' ') or (C = #9) or (C = #10) or (C = #13) then
+      Inc(I)
+    else
+    begin
+      Result := True;
+      Exit;
+    end;
+  end;
+  Result := False;
 end;
 
 function UsxToPlainText(const UsxText: string): string;
