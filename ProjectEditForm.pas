@@ -3061,10 +3061,24 @@ begin
     if FProject.Book <> nil then
       ProjChapter := FProject.Book.GetChapter(SourceChapter.ID);
 
-    { Merge project content into single text, then split by source chunking }
+    { Merge project content into single text, then split by source chunking.
+      With monolithic-USFM canonical storage, ProjChapter holds a single
+      chunk that is the entire chapter body — MergeAllContent returns it
+      verbatim. With legacy v1 chunked storage, MergeAllContent concatenates
+      every chunk. Either way, the downstream source-split is the same. }
     MergedText := '';
     if ProjChapter <> nil then
       MergedText := ProjChapter.MergeAllContent;
+
+    if FProject <> nil then
+    begin
+      if FProject.CanonicalMonolithic then
+        LogFmt(llInfo, 'LoadChapter(%s): source=monolithic-usfm, %d source chunks',
+          [SourceChapter.ID, SourceChapter.Chunks.Count])
+      else
+        LogFmt(llInfo, 'LoadChapter(%s): source=legacy-chunks, %d source chunks',
+          [SourceChapter.ID, SourceChapter.Chunks.Count]);
+    end;
 
     { Build chunk map from source chapter }
     ChunkMap := TStringList.Create;

@@ -6,7 +6,7 @@ interface
 
 uses
   SysUtils, Classes, fpjson, jsonparser,
-  BibleBook, BookUsfm, Globals;
+  BibleBook, BibleChapter, BibleChunk, BookUsfm, Globals;
 
 type
   TProject = class
@@ -27,6 +27,7 @@ type
     procedure SaveManifest;
     function GetFinishedChunks: TJSONArray;
     function GetProjectDisplayName: string;
+    procedure InjectFrontChapter;
   public
     constructor Create(const AProjectDir: string);
     destructor Destroy; override;
@@ -170,6 +171,43 @@ begin
     Result := Trim(Node.AsString);
 end;
 
+procedure TProject.InjectFrontChapter;
+var
+  TitlePath: string;
+  SL: TStringList;
+  FrontChap: TChapter;
+  TitleChunk: TChunk;
+begin
+  { Monolithic USFM doesn't carry the legacy front/title.txt content
+    (book title lives in \h and \mt). LoadChapter still expects a
+    'front' chapter on FBook to render the title pseudo-chunk, so we
+    materialize one from front/title.txt when present. }
+  if FBook = nil then Exit;
+  if FBook.GetChapter('front') <> nil then Exit;
+
+  TitlePath := IncludeTrailingPathDelimiter(FProjectDir) + 'front' +
+               PathDelim + 'title.txt';
+
+  FrontChap := TChapter.Create('front');
+  TitleChunk := TChunk.Create('title');
+  if FileExists(TitlePath) then
+  begin
+    SL := TStringList.Create;
+    try
+      try
+        SL.LoadFromFile(TitlePath);
+        TitleChunk.Content := SL.Text;
+      except
+        { Leave content empty on read error. }
+      end;
+    finally
+      FreeAndNil(SL);
+    end;
+  end;
+  FrontChap.AddChunk(TitleChunk);
+  FBook.AddChapter(FrontChap);
+end;
+
 procedure TProject.LoadContent(const SourceContentDir: string);
 var
   MonoPath: string;
@@ -186,6 +224,7 @@ begin
     begin
       FUSFMHeader := LoadedHeader;
       FCanonicalMonolithic := True;
+      InjectFrontChapter;
       if Verbose then
         WriteLn('Loaded monolithic USFM: ', MonoPath);
       Exit;
