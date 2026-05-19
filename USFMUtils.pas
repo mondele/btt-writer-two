@@ -42,6 +42,18 @@ function ChunkHasContent(const Text: string): Boolean;
   cleans up the resulting on-disk debris at save time. }
 function StripTrailingEmptyVerseMarkers(const Text: string): string;
 
+{ When the same verse number appears more than once in Text, drop all
+  occurrences except the LAST one. The marker and the run of text from
+  that marker up to the next marker (or end of text) are removed.
+
+  Used at save time to absorb 'paste-but-cut-didn't-take' edits — user
+  copies a verse from one display chunk and pastes into another; if the
+  original wasn't actually removed, the merged text would otherwise
+  hand both copies to the splitter, which would assign them by position
+  and produce a visible duplicate. }
+function DedupVerseMarkersKeepingLast(const Text: string;
+  out DropCount: Integer): string;
+
 { Convert USX markup to plain text with USFM verse markers.
   Replaces <verse number="N" style="v" /> with \v N
   and strips <para> tags. }
@@ -251,6 +263,85 @@ begin
     else
       Inc(P);
   end;
+end;
+
+function DedupVerseMarkersKeepingLast(const Text: string;
+  out DropCount: Integer): string;
+type
+  TMarker = record
+    Start: Integer;
+    EndPos: Integer;
+    VerseNum: Integer;
+    Keep: Boolean;
+  end;
+var
+  Markers: array of TMarker;
+  P, L, NumStart, V, MarkerIdx, I, J: Integer;
+  NumStr: string;
+  Buf: string;
+begin
+  DropCount := 0;
+  L := Length(Text);
+
+  P := 1;
+  while P + 2 <= L do
+  begin
+    if (Text[P] = '\') and (Text[P + 1] = 'v') and (Text[P + 2] = ' ') then
+    begin
+      NumStart := P + 3;
+      while (NumStart <= L) and (Text[NumStart] in ['0'..'9']) do
+        Inc(NumStart);
+      NumStr := Copy(Text, P + 3, NumStart - (P + 3));
+      if (NumStr <> '') and TryStrToInt(NumStr, V) then
+      begin
+        MarkerIdx := Length(Markers);
+        SetLength(Markers, MarkerIdx + 1);
+        Markers[MarkerIdx].Start := P;
+        Markers[MarkerIdx].VerseNum := V;
+        Markers[MarkerIdx].Keep := True;
+      end;
+      P := NumStart;
+    end
+    else
+      Inc(P);
+  end;
+
+  if Length(Markers) = 0 then
+  begin
+    Result := Text;
+    Exit;
+  end;
+
+  { Each marker spans from its Start through the next marker's Start - 1,
+    or end of text for the final marker. }
+  for I := 0 to High(Markers) do
+    if I < High(Markers) then
+      Markers[I].EndPos := Markers[I + 1].Start
+    else
+      Markers[I].EndPos := L + 1;
+
+  { For any verse number that appears multiple times, keep only the last. }
+  for I := 0 to High(Markers) - 1 do
+    for J := I + 1 to High(Markers) do
+      if Markers[I].VerseNum = Markers[J].VerseNum then
+      begin
+        Markers[I].Keep := False;
+        Inc(DropCount);
+        Break;
+      end;
+
+  if DropCount = 0 then
+  begin
+    Result := Text;
+    Exit;
+  end;
+
+  Buf := Copy(Text, 1, Markers[0].Start - 1);
+  for I := 0 to High(Markers) do
+    if Markers[I].Keep then
+      Buf := Buf + Copy(Text, Markers[I].Start,
+                        Markers[I].EndPos - Markers[I].Start);
+  Result := Buf;
 end;
 
 function StripTrailingEmptyVerseMarkers(const Text: string): string;

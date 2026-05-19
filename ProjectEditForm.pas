@@ -3200,6 +3200,7 @@ var
   GitErr: string;
   KeepNames: TStringList;
   ChunkPath: string;
+  DedupDropped: Integer;
 begin
   { Blind edit saves per-chunk independently }
   if FCurrentViewMode = vmBlindEdit then
@@ -3227,6 +3228,16 @@ begin
   MergedText := '';
   for I := 0 to Length(FChunkPanels) - 1 do
     MergedText := MergedText + FChunkPanels[I].FTransText;
+
+  { Absorb duplicate verse markers (last-wins). Happens when a user
+    pastes a verse into a new chunk but the original copy survives in
+    its source chunk — without this scrub the splitter would route both
+    copies into whichever ULB chunk owns the verse number's positional
+    range and the rendered display would show the verse twice. }
+  MergedText := DedupVerseMarkersKeepingLast(MergedText, DedupDropped);
+  if DedupDropped > 0 then
+    LogFmt(llInfo, 'SaveCurrentChapter: deduped %d stale verse marker(s)',
+      [DedupDropped]);
 
   if MergedText = '' then
   begin
