@@ -11,7 +11,7 @@ uses
   ProjectManager, ResourceContainer, ProjectScanner,
   BibleBook, BibleChapter, BibleChunk, USFMUtils, DataPaths, ProjectCreator,
   AppSettings, SettingsForm, ThemePalette, UIFonts, AppLog,
-  IndexDatabase, SourceExtractor, LocaleManager;
+  IndexDatabase, SourceExtractor, LocaleManager, BookUsfm;
 
 resourcestring
   rsErrorOpeningChapterPrefix = 'Error opening chapter: ';
@@ -141,6 +141,7 @@ type
     procedure ClearChunkPanels;
     procedure LoadChapter(AIndex: Integer);
     procedure SaveCurrentChapter;
+    procedure UpdateMonolithicChapterAndWrite(const AChapterID, AMergedText: string);
     procedure RefreshDisplayChunksFromMerge(ASourceChapter: TChapter;
       const AMergedText: string);
     procedure UpdateStatus;
@@ -3271,6 +3272,12 @@ begin
     LogFmt(llInfo, 'SaveCurrentChapter: deduped %d stale verse marker(s)',
       [DedupDropped]);
 
+  { Phase 6: integrate the merged chapter body into the in-memory book
+    and write the canonical monolithic USFM file *before* deriving the
+    backward-compat chunk files. The book is the source of truth; chunk
+    files are derivations on every save. }
+  UpdateMonolithicChapterAndWrite(SourceChapter.ID, MergedText);
+
   if MergedText = '' then
   begin
     SaveContentDir := FProject.ProjectDir;
@@ -3379,6 +3386,45 @@ begin
   FChapterDirty := False;
   CommitProjectChanges(FProject.ProjectDir,
     rsUpdateChapterPrefix + SourceChapter.ID, GitErr);
+end;
+
+procedure TProjectEditWindow.UpdateMonolithicChapterAndWrite(
+  const AChapterID, AMergedText: string);
+var
+  ProjChapter: TChapter;
+  Chunk: TChunk;
+  MonoPath: string;
+begin
+  if FProject = nil then Exit;
+  if FProject.Book = nil then Exit;
+
+  ProjChapter := FProject.Book.GetChapter(AChapterID);
+  if ProjChapter = nil then
+  begin
+    { Chapter wasn't in the in-memory book yet (e.g. monolithic file
+      didn't include it). Create it so the write below picks it up. }
+    ProjChapter := TChapter.Create(AChapterID);
+    FProject.Book.AddChapter(ProjChapter);
+  end;
+
+  { Replace the chapter body with a single chunk holding the merged
+    text. Monolithic storage doesn't care about per-chunk granularity
+    internally — the per-chunk .txt fanout happens at the derive step
+    below in SaveCurrentChapter. }
+  ProjChapter.Chunks.Clear;
+  Chunk := TChunk.Create(AChapterID);
+  Chunk.Content := AMergedText;
+  ProjChapter.AddChunk(Chunk);
+
+  MonoPath := MonolithicUSFMPath(FProject.ProjectDir, FProject.BookCode,
+                                 FProject.TargetLanguageCode);
+  if MonoPath = '' then Exit;
+  try
+    SaveMonolithicUSFM(MonoPath, FProject.Book, FProject.USFMHeader);
+  except
+    on E: Exception do
+      LogFmt(llWarn, 'SaveMonolithicUSFM failed: %s', [E.Message]);
+  end;
 end;
 
 procedure TProjectEditWindow.RefreshDisplayChunksFromMerge(
