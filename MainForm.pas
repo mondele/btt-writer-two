@@ -11,7 +11,8 @@ uses
   Globals, ProjectScanner, ProjectEditForm, ProjectCreator, ProjectManager,
   TStudioPackage, SplashScreen, AppSettings, SettingsForm, ThemePalette, UIFonts,
   AppLog, UserProfile, LoginForm, GiteaClient, ImportForm, USFMExporter, GitUtils,
-  DataPaths, USFMUtils, BibleBook, BibleChapter, DevToolsForm, LocaleManager;
+  DataPaths, USFMUtils, BibleBook, BibleChapter, DevToolsForm, LocaleManager,
+  BookCodes;
 
 resourcestring
   rsProjectDetailsTitle = 'Project Details';
@@ -239,41 +240,9 @@ begin
     Result := 0;
 end;
 
-const
-  BOOK_ORDER: array[0..65] of string = (
-    'gen','exo','lev','num','deu','jos','jdg','rut','1sa','2sa','1ki','2ki',
-    '1ch','2ch','ezr','neh','est','job','psa','pro','ecc','sng','isa','jer',
-    'lam','ezk','dan','hos','jol','amo','oba','jon','mic','nam','hab','zep',
-    'hag','zec','mal','mat','mrk','luk','jhn','act','rom','1co','2co','gal',
-    'eph','php','col','1th','2th','1ti','2ti','tit','phm','heb','jas','1pe',
-    '2pe','1jn','2jn','3jn','jud','rev'
-  );
-
-function CanonicalBookIndex(const BookCode: string): Integer;
-var
-  I: Integer;
-  C: string;
-begin
-  C := LowerCase(Trim(BookCode));
-  for I := Low(BOOK_ORDER) to High(BOOK_ORDER) do
-    if BOOK_ORDER[I] = C then
-      Exit(I);
-  Result := 9999;
-end;
-
-{ USFM book number: OT 01-39, NT 41-67 (40 is skipped). Returns 0 if unknown. }
-function USFMBookNumber(const BookCode: string): Integer;
-var
-  Idx: Integer;
-begin
-  Idx := CanonicalBookIndex(BookCode);
-  if Idx = 9999 then
-    Exit(0);
-  if Idx <= 38 then
-    Result := Idx + 1       { OT: 01-39 }
-  else
-    Result := Idx + 2;      { NT: 41-67 (skip 40) }
-end;
+{ BOOK_ORDER, CanonicalBookIndex, USFMBookNumber moved to BookCodes.pas
+  so BookUsfm and other units can share them without depending on the
+  main-window unit. }
 
 function CompareProjectKey(const A, B: TProjectSummary; ProjectSortMode: Integer): Integer;
 var
