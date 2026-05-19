@@ -141,6 +141,8 @@ type
     procedure ClearChunkPanels;
     procedure LoadChapter(AIndex: Integer);
     procedure SaveCurrentChapter;
+    procedure RefreshDisplayChunksFromMerge(ASourceChapter: TChapter;
+      const AMergedText: string);
     procedure UpdateStatus;
     procedure UpdateChapterNav;
     procedure OnChunkFinishedChange(Sender: TObject);
@@ -3324,9 +3326,51 @@ begin
     FreeAndNil(SaveChunkMap);
   end;
 
+  { Re-route the merged text into the *display* (source) chunking and
+    refresh each panel that isn't currently being edited. This is what
+    moves a just-corrected verse marker out of the wrong display chunk
+    without requiring the user to close and reopen the project. Editing
+    panels are skipped so a typing-in-progress memo isn't disturbed. }
+  RefreshDisplayChunksFromMerge(SourceChapter, MergedText);
+
   FChapterDirty := False;
   CommitProjectChanges(FProject.ProjectDir,
     rsUpdateChapterPrefix + SourceChapter.ID, GitErr);
+end;
+
+procedure TProjectEditWindow.RefreshDisplayChunksFromMerge(
+  ASourceChapter: TChapter; const AMergedText: string);
+var
+  DisplayChunks: TChunkList;
+  DisplayMap: TStringList;
+  I: Integer;
+begin
+  if FCurrentViewMode <> vmEditReview then Exit;
+  if ASourceChapter = nil then Exit;
+  if Length(FChunkPanels) = 0 then Exit;
+
+  DisplayMap := TStringList.Create;
+  try
+    for I := 0 to ASourceChapter.Chunks.Count - 1 do
+      DisplayMap.Add(ASourceChapter.Chunks[I].Name);
+
+    DisplayChunks := ASourceChapter.SplitByChunkMap(AMergedText, DisplayMap);
+    try
+      for I := 0 to Length(FChunkPanels) - 1 do
+      begin
+        if FChunkPanels[I].FEditing then Continue;
+        if I >= DisplayChunks.Count then Break;
+        if FChunkPanels[I].FTransText = DisplayChunks[I].Content then
+          Continue;
+        FChunkPanels[I].FTransText := DisplayChunks[I].Content;
+        FChunkPanels[I].RefreshTransHtml;
+      end;
+    finally
+      FreeAndNil(DisplayChunks);
+    end;
+  finally
+    FreeAndNil(DisplayMap);
+  end;
 end;
 
 procedure TProjectEditWindow.UpdateStatus;
