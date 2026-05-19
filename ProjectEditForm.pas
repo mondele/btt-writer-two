@@ -3201,6 +3201,8 @@ var
   KeepNames: TStringList;
   ChunkPath: string;
   DedupDropped: Integer;
+  ChunkText, LeftTrimmed: string;
+  InferredVerse: Integer;
 begin
   { Blind edit saves per-chunk independently }
   if FCurrentViewMode = vmBlindEdit then
@@ -3224,10 +3226,26 @@ begin
 
   SourceChapter := FSourceRC.Book.Chapters[FCurrentChapterIndex];
 
-  { Merge display chunks into single text }
+  { Merge display chunks into single text. If a chunk has translated
+    content but no '\v ' marker (e.g. user pasted plain text into the
+    memo), infer the chunk's first verse from its source-chunk name and
+    prepend '\v <N> '. Without this, the splitter has no boundary in
+    the chunk's range and the previous chunk's range gobbles forward. }
   MergedText := '';
   for I := 0 to Length(FChunkPanels) - 1 do
-    MergedText := MergedText + FChunkPanels[I].FTransText;
+  begin
+    ChunkText := FChunkPanels[I].FTransText;
+    LeftTrimmed := TrimLeft(ChunkText);
+    if (LeftTrimmed <> '') and (Pos('\v ', LeftTrimmed) = 0) and
+       TryStrToInt(FChunkPanels[I].FChunkName, InferredVerse) then
+    begin
+      ChunkText := '\v ' + IntToStr(InferredVerse) + ' ' + LeftTrimmed;
+      LogFmt(llInfo,
+        'SaveCurrentChapter: inferred \v %d for unmarked chunk %s/%s',
+        [InferredVerse, SourceChapter.ID, FChunkPanels[I].FChunkName]);
+    end;
+    MergedText := MergedText + ChunkText;
+  end;
 
   { Absorb duplicate verse markers (last-wins). Happens when a user
     pastes a verse into a new chunk but the original copy survives in
