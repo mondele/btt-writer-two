@@ -380,6 +380,30 @@ begin
   end;
 end;
 
+{ Delete only chunk files in Dir whose base name (without Ext) is not in
+  Keep. Used at save time to retire chunks that disappear under a new
+  chunking, while leaving still-current chunk files alone so per-file
+  dirty tracking can decide whether to rewrite them. }
+procedure RemoveStaleChunkFiles(const Dir, Ext: string; Keep: TStringList);
+var
+  SR: TSearchRec;
+  FullDir, BaseName: string;
+begin
+  FullDir := IncludeTrailingPathDelimiter(Dir);
+  if FindFirst(FullDir + '*' + Ext, faAnyFile, SR) = 0 then
+  begin
+    repeat
+      if (SR.Attr and faDirectory) = 0 then
+      begin
+        BaseName := ChangeFileExt(SR.Name, '');
+        if Keep.IndexOf(BaseName) < 0 then
+          DeleteFile(FullDir + SR.Name);
+      end;
+    until FindNext(SR) <> 0;
+    FindClose(SR);
+  end;
+end;
+
 { ---- USFM to HTML conversion ---- }
 
 function HtmlEscape(const S: string): string;
@@ -3172,6 +3196,8 @@ var
   EnglishBook: TBook;
   EnglishChapter: TChapter;
   GitErr: string;
+  KeepNames: TStringList;
+  ChunkPath: string;
 begin
   { Blind edit saves per-chunk independently }
   if FCurrentViewMode = vmBlindEdit then
@@ -3240,9 +3266,21 @@ begin
     try
       SaveContentDir := FProject.ProjectDir;
 
-      { Delete old chunk files before writing new ones to prevent
-        stale files when save chunking differs from load chunking }
-      CleanChapterDir(SaveContentDir + SourceChapter.ID, '.txt');
+      { Build the list of chunk names we intend to keep this save, then
+        delete only the .txt files in the chapter dir whose base name is
+        not in that list. Avoids the previous behavior of wiping every
+        chunk file and rewriting all of them — which churned mtimes and
+        produced noisy git diffs even when nothing meaningful changed. }
+      KeepNames := TStringList.Create;
+      try
+        for I := 0 to SaveChunks.Count - 1 do
+          if ChunkHasContent(SaveChunks[I].Content) then
+            KeepNames.Add(SaveChunks[I].Name);
+        RemoveStaleChunkFiles(SaveContentDir + SourceChapter.ID, '.txt',
+                              KeepNames);
+      finally
+        FreeAndNil(KeepNames);
+      end;
 
       SaveChapter := TChapter.Create(SourceChapter.ID);
       try
@@ -3256,7 +3294,17 @@ begin
           if not ChunkHasContent(SaveChunks[I].Content) then
             Continue;
           SaveChapter.AddChunk(TChunk.Create(SaveChunks[I].Name));
-          SaveChapter.Chunks[SaveChapter.Chunks.Count - 1].Content := SaveChunks[I].Content;
+          { Load any current on-disk content first so TChunk.SetContent
+            can compare and only flip FDirty when the new content really
+            differs. SaveDirtyChunks will then skip the unchanged ones. }
+          ChunkPath := IncludeTrailingPathDelimiter(
+                         SaveContentDir + SourceChapter.ID) +
+                       SaveChunks[I].Name + '.txt';
+          if FileExists(ChunkPath) then
+            SaveChapter.Chunks[SaveChapter.Chunks.Count - 1].LoadFromFile(
+              ChunkPath);
+          SaveChapter.Chunks[SaveChapter.Chunks.Count - 1].Content :=
+            SaveChunks[I].Content;
         end;
         SaveChapter.SaveDirtyChunks(SaveContentDir, '.txt');
       finally
