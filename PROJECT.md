@@ -64,3 +64,23 @@ Each chunk can be opened for editing, closed from editing, and "marked finished"
 During the editing or proofing steps of translation, an additional pane should be available to the right (or left if working with right-to-left scripts) showing the words, questions, and notes appropriate to the verses being edited.
 
 When the chunk is being edited, verse markers are displayed using their USFM text, i.e. \v 1 for verse one. When the chunk is closed to editing, but not marked finished, the verse marker is displayed as a colored "baloon" containing the number. This baloon can be moved by the user within the chunk, and the program will insert or move the verse marker to before the hilighted word.
+
+## Planned: First-class CLI Surface
+
+Most internal operations should be callable from the command line. Today's `TestCLI.lpr` is a one-off; the intent is a single dispatcher (`bttwriter2 --<verb> [args]`, or a separate `btt` binary) that exposes the same shared units the GUI uses. Candidate verbs:
+
+- `import` — invoke the existing import logic on a `.tstudio`, `.usfm`, server URL, or local resource container
+- `export` — `.tstudio`, `.usfm`, server push, listed by target format
+- `scan` — enumerate projects under DATA PATH and print summary status (book, language, progress)
+- `repair` — re-merge and re-split every chapter of a project (heals stale chunking, malformed markers, after-the-fact ULB chunk-map changes)
+- `validate` — report manifest issues, missing source containers, mismatched chunk maps
+- `chunks` — list chunks for a chapter; show which exist on disk vs which are expected by the active chunk map
+- `mark-finished` / `mark-unfinished` — toggle finished state from a script
+- `set-source` — change source language/resource for a project
+
+Design constraints:
+- Each verb lives in a single small unit that the GUI also consumes — no logic duplication.
+- Verbs are scriptable: stable exit codes, deterministic stdout, optional `--json` for machine output.
+- `import` becoming CLI-callable also satisfies the `.tstudio` double-click handler — that path can shell out to `bttwriter2 --import <file>`.
+
+Worth its own plan + initiative; large enough that bolting verbs onto `TestCLI.lpr` ad hoc would create the same one-off shape we're trying to escape.
