@@ -3286,6 +3286,13 @@ begin
       try
         for I := 0 to SaveChunks.Count - 1 do
         begin
+          { Scrub any trailing run of bare verse markers (e.g.
+            '\v 8 \v 11 \v 14') before deciding whether the chunk has
+            content. These run-on stubs come from the merge -> split
+            round-trip when neighboring source chunks are empty. }
+          SaveChunks[I].Content := StripTrailingEmptyVerseMarkers(
+            SaveChunks[I].Content);
+
           { Skip stub chunks that hold only verse/paragraph markers
             inherited from the source template — they're not real
             translation work yet, and writing them creates the

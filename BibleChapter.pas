@@ -86,9 +86,13 @@ begin
 
       ChunkText := Trim(ChunkText);
       if ChunkText <> '' then
-        ChunkText := '\v ' + IntToStr(StartVerse) + ' ' + ChunkText
-      else
-        ChunkText := '\v ' + IntToStr(StartVerse) + ' ';
+        ChunkText := '\v ' + IntToStr(StartVerse) + ' ' + ChunkText;
+      { Previously, an empty chunk here injected a bare '\v <n> ' marker
+        so a downstream splitter could anchor on it. That stub propagated
+        through merge -> split -> save and accumulated in whichever ULB
+        chunk owned the trailing verse range, surfacing as ghost verse
+        markers in chunk files the user never touched. Empty project
+        chunks now contribute nothing to the merged text. }
     end;
 
     Result := Result + ChunkText;

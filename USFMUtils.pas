@@ -25,6 +25,15 @@ function ParseVerseNumbers(const Text: string): TStringList;
   chunk files that hold only inherited markers from the source template. }
 function ChunkHasContent(const Text: string): Boolean;
 
+{ Remove a trailing run of bare verse markers (\v N, optionally ranged)
+  whose only neighbors are more markers or whitespace. A real verse with
+  content after its marker (e.g. '\v 5 In the beginning') is preserved.
+
+  Trailing-stub runs leak into chunk files when an empty project chunk's
+  verse marker gets carried through the merge -> split round-trip; this
+  cleans up the resulting on-disk debris at save time. }
+function StripTrailingEmptyVerseMarkers(const Text: string): string;
+
 { Convert USX markup to plain text with USFM verse markers.
   Replaces <verse number="N" style="v" /> with \v N
   and strips <para> tags. }
@@ -203,6 +212,31 @@ begin
     end;
   end;
   Result := False;
+end;
+
+function StripTrailingEmptyVerseMarkers(const Text: string): string;
+var
+  S: string;
+  I: Integer;
+begin
+  S := TrimRight(Text);
+  while True do
+  begin
+    I := Length(S);
+    if I = 0 then Break;
+    if not ((S[I] >= '0') and (S[I] <= '9')) then Break;
+    while (I > 0) and (((S[I] >= '0') and (S[I] <= '9')) or (S[I] = '-')) do
+      Dec(I);
+    if (I < 1) or (S[I] <> ' ') then Break;
+    while (I > 0) and (S[I] = ' ') do
+      Dec(I);
+    if (I < 1) or (S[I] <> 'v') then Break;
+    Dec(I);
+    if (I < 1) or (S[I] <> '\') then Break;
+    Dec(I);
+    S := TrimRight(Copy(S, 1, I));
+  end;
+  Result := S;
 end;
 
 function UsxToPlainText(const UsxText: string): string;
