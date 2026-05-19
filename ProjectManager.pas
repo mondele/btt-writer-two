@@ -6,7 +6,7 @@ interface
 
 uses
   SysUtils, Classes, fpjson, jsonparser,
-  BibleBook, Globals;
+  BibleBook, BookUsfm, Globals;
 
 type
   TProject = class
@@ -20,15 +20,23 @@ type
     FBookCode: string;
     FResourceType: string;
 
+    FUSFMHeader: TUSFMBookHeader;
+    FCanonicalMonolithic: Boolean;
+
     procedure LoadManifest;
     procedure SaveManifest;
     function GetFinishedChunks: TJSONArray;
+    function GetProjectDisplayName: string;
   public
     constructor Create(const AProjectDir: string);
     destructor Destroy; override;
 
     { Load project structure from a source toc.yml, then load content
-      from the project's own .txt chunk files }
+      from the project's own .txt chunk files, OR — if the canonical
+      monolithic USFM file exists — load that instead and skip the
+      per-chunk merge. Legacy v1 projects (no monolithic file) get
+      bootstrapped: chunks are read, then the monolithic file is
+      written so subsequent opens take the fast canonical path. }
     procedure LoadContent(const SourceContentDir: string);
 
     { Save any dirty chunks back to project directory }
@@ -54,6 +62,8 @@ type
     property BookCode: string read FBookCode;
     property ResourceType: string read FResourceType;
     property Book: TBook read FBook;
+    property USFMHeader: TUSFMBookHeader read FUSFMHeader write FUSFMHeader;
+    property CanonicalMonolithic: Boolean read FCanonicalMonolithic;
   end;
 
 implementation
@@ -149,16 +159,62 @@ begin
     Result := TJSONArray(Node);
 end;
 
+function TProject.GetProjectDisplayName: string;
+var
+  Node: TJSONData;
+begin
+  Result := FBookCode;
+  if FManifest = nil then Exit;
+  Node := FManifest.FindPath('project.name');
+  if (Node <> nil) and (Trim(Node.AsString) <> '') then
+    Result := Trim(Node.AsString);
+end;
+
 procedure TProject.LoadContent(const SourceContentDir: string);
+var
+  MonoPath: string;
+  LoadedHeader: TUSFMBookHeader;
 begin
   FreeAndNil(FBook);
   FBook := TBook.Create(FBookCode, FResourceType);
+  FCanonicalMonolithic := False;
 
-  { Load structure (chapters and chunk names) from source toc.yml }
+  MonoPath := MonolithicUSFMPath(FProjectDir, FBookCode, FTargetLanguageCode);
+  if (MonoPath <> '') and FileExists(MonoPath) then
+  begin
+    if LoadMonolithicUSFM(MonoPath, FBook, LoadedHeader) then
+    begin
+      FUSFMHeader := LoadedHeader;
+      FCanonicalMonolithic := True;
+      if Verbose then
+        WriteLn('Loaded monolithic USFM: ', MonoPath);
+      Exit;
+    end;
+    { Failed to parse — fall through to legacy and overwrite below. }
+    FreeAndNil(FBook);
+    FBook := TBook.Create(FBookCode, FResourceType);
+  end;
+
+  { Legacy v1 path: chunk files are canonical. }
   FBook.LoadFromToc(SourceContentDir);
-
-  { Load content from the project's own .txt files }
   FBook.LoadContent(FProjectDir, '.txt');
+
+  { Bootstrap: build and persist a monolithic file from the chunks we
+    just loaded, so the next open takes the canonical path. }
+  if MonoPath <> '' then
+  begin
+    FUSFMHeader := DefaultUSFMHeader(FBookCode, GetProjectDisplayName);
+    try
+      SaveMonolithicUSFM(MonoPath, FBook, FUSFMHeader);
+      FCanonicalMonolithic := True;
+      if Verbose then
+        WriteLn('Bootstrapped monolithic USFM from chunks: ', MonoPath);
+    except
+      on E: Exception do
+        if Verbose then
+          WriteLn('Failed to bootstrap monolithic USFM: ', E.Message);
+    end;
+  end;
 end;
 
 procedure TProject.SaveContent;
