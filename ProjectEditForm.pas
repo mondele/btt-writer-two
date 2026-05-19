@@ -144,6 +144,7 @@ type
     procedure UpdateMonolithicChapterAndWrite(const AChapterID, AMergedText: string);
     procedure RefreshDisplayChunksFromMerge(ASourceChapter: TChapter;
       const AMergedText: string);
+    procedure CloseOtherEditors(KeepOpen: TChunkPanel);
     procedure UpdateStatus;
     procedure UpdateChapterNav;
     procedure OnChunkFinishedChange(Sender: TObject);
@@ -3388,6 +3389,27 @@ begin
     rsUpdateChapterPrefix + SourceChapter.ID, GitErr);
 end;
 
+procedure TProjectEditWindow.CloseOtherEditors(KeepOpen: TChunkPanel);
+var
+  I: Integer;
+begin
+  { Single-active-edit policy: only one chunk panel may be in edit
+    mode at a time. Concurrent edits caused verse content to be lost
+    when one panel's save would route text into a still-editing
+    panel's range — the refresh skipped the editing panel, and a
+    subsequent save of that panel overwrote disk with its stale
+    pre-routing state.
+
+    Each SetEditing(False) below triggers a full save cycle (memo
+    flush, merge, monolithic write, chunk derivation, display refresh)
+    so the closed panel's state is committed before the new one
+    opens. }
+  for I := 0 to High(FChunkPanels) do
+    if (FChunkPanels[I] <> nil) and (FChunkPanels[I] <> KeepOpen) and
+       FChunkPanels[I].FEditing then
+      FChunkPanels[I].SetEditing(False);
+end;
+
 procedure TProjectEditWindow.UpdateMonolithicChapterAndWrite(
   const AChapterID, AMergedText: string);
 var
@@ -4101,6 +4123,13 @@ procedure TChunkPanel.SetEditing(AEdit: Boolean);
 begin
   if FFinishedCheck.Checked and AEdit then
     Exit;
+
+  { Enforce single-active-edit. Close (and thereby save) any other
+    chunk panel still in edit mode before we open this one — otherwise
+    a later save that routes content into another editing panel can
+    silently lose data on that panel's next save. }
+  if AEdit and (FOwnerForm <> nil) then
+    FOwnerForm.CloseOtherEditors(Self);
 
   FEditing := AEdit;
   FTransHtml.Visible := not AEdit;
