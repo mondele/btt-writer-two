@@ -18,6 +18,14 @@ function ExtractVerseRange(const Text: string; FromVerse, ToVerse: Integer): str
 { Return a list of verse numbers found in the text as strings. }
 function ParseVerseNumbers(const Text: string): TStringList;
 
+{ Find the first '\v N' marker in Text whose verse number N is at least
+  MinVerse. Returns the position of the backslash (1-based) and the
+  verse number via FoundVerse, or 0 if none qualifies. Used by chunk
+  splitters to route verses by verse-number range even when a chunk's
+  exact start marker is absent or malformed. }
+function FindFirstVerseMarkerAtOrAfter(const Text: string; MinVerse: Integer;
+  out FoundVerse: Integer): Integer;
+
 { True when Text contains real translation content past USFM markers.
   Verse markers (\v <num>, optional range), chapter markers (\c <num>),
   paragraph markers (\p, \m, \b), and surrounding whitespace are all
@@ -212,6 +220,37 @@ begin
     end;
   end;
   Result := False;
+end;
+
+function FindFirstVerseMarkerAtOrAfter(const Text: string; MinVerse: Integer;
+  out FoundVerse: Integer): Integer;
+var
+  P, L, NumStart, V: Integer;
+  NumStr: string;
+begin
+  Result := 0;
+  FoundVerse := 0;
+  L := Length(Text);
+  P := 1;
+  while P + 2 <= L do
+  begin
+    if (Text[P] = '\') and (Text[P + 1] = 'v') and (Text[P + 2] = ' ') then
+    begin
+      NumStart := P + 3;
+      while (NumStart <= L) and (Text[NumStart] in ['0'..'9']) do
+        Inc(NumStart);
+      NumStr := Copy(Text, P + 3, NumStart - (P + 3));
+      if (NumStr <> '') and TryStrToInt(NumStr, V) and (V >= MinVerse) then
+      begin
+        Result := P;
+        FoundVerse := V;
+        Exit;
+      end;
+      P := NumStart;
+    end
+    else
+      Inc(P);
+  end;
 end;
 
 function StripTrailingEmptyVerseMarkers(const Text: string): string;

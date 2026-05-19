@@ -101,12 +101,25 @@ end;
 
 function TChapter.SplitByChunkMap(const MergedText: string; ChunkMap: TStringList): TChunkList;
 var
-  I, VerseNum, StartPos, EndPos, NextVerse, FallbackPos: Integer;
+  I, VerseNum, StartPos, EndPos, FoundV, NextChunkBoundary: Integer;
   ChunkContent: string;
   Chunk: TChunk;
+
+  function ResolveNextChunkBoundary(FromIdx: Integer): Integer;
+  var
+    J, V: Integer;
+  begin
+    Result := MaxInt div 2;
+    for J := FromIdx + 1 to ChunkMap.Count - 1 do
+      if TryStrToInt(ChunkMap[J], V) then
+      begin
+        Result := V;
+        Exit;
+      end;
+  end;
+
 begin
   Result := TChunkList.Create(True);
-  FallbackPos := 1;
 
   if ChunkMap.Count = 0 then
   begin
@@ -130,21 +143,23 @@ begin
       Chunk := TChunk.Create(ChunkMap[I]);
       Chunk.Content := ChunkContent;
       Result.Add(Chunk);
-      FallbackPos := EndPos;
       Continue;
     end;
+
+    { Verses are routed by chunk-map range, not exact marker presence.
+      Chunk K with start V_K and next-chunk start V_{K+1} owns any verse
+      marker N where V_K <= N < V_{K+1}. So a missing or malformed
+      marker (e.g. '\6' instead of '\v 6') no longer causes the previous
+      chunk to gobble verses that should belong here. }
+    NextChunkBoundary := ResolveNextChunkBoundary(I);
 
     StartPos := FindVerseMarkerPos(MergedText, VerseNum);
     if StartPos = 0 then
     begin
-      { Verse marker missing: keep processing from the current fallback cursor
-        instead of dropping text for this chunk. }
-      StartPos := FallbackPos;
-      while (StartPos <= Length(MergedText)) and
-            (MergedText[StartPos] in [' ', #9, #10, #13]) do
-        Inc(StartPos);
-      if StartPos > Length(MergedText) then
+      StartPos := FindFirstVerseMarkerAtOrAfter(MergedText, VerseNum, FoundV);
+      if (StartPos = 0) or (FoundV >= NextChunkBoundary) then
       begin
+        { No verse in this chunk's range present in MergedText. }
         Chunk := TChunk.Create(ChunkMap[I]);
         Result.Add(Chunk);
         Continue;
@@ -162,16 +177,10 @@ begin
         StartPos := EndPos;
     end;
 
-    { Find end position: start of next chunk's first verse, or end of text }
-    if I < ChunkMap.Count - 1 then
-    begin
-      if TryStrToInt(ChunkMap[I + 1], NextVerse) then
-        EndPos := FindVerseMarkerPos(MergedText, NextVerse)
-      else
-        EndPos := 0;
-    end
-    else
-      EndPos := 0;
+    { End at first verse marker whose number is at or beyond the next
+      chunk's start verse, even when the exact '\v NextChunkBoundary'
+      marker is absent. Falls back to end of text. }
+    EndPos := FindFirstVerseMarkerAtOrAfter(MergedText, NextChunkBoundary, FoundV);
 
     if EndPos > 0 then
       ChunkContent := Copy(MergedText, StartPos, EndPos - StartPos)
@@ -181,11 +190,6 @@ begin
     Chunk := TChunk.Create(ChunkMap[I]);
     Chunk.Content := ChunkContent;
     Result.Add(Chunk);
-
-    if EndPos > 0 then
-      FallbackPos := EndPos
-    else
-      FallbackPos := Length(MergedText) + 1;
   end;
 end;
 
