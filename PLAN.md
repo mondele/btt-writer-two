@@ -55,12 +55,12 @@ The fixed-point of the model is now the monolithic file. Display chunks are read
 
 | # | What | Status |
 |---|------|--------|
-| 1 | New unit `BookUsfm.pas` (or similar). `LoadMonolithic(Path) -> TBook`, `SaveMonolithic(Book, Path)`. Use existing `BibleBook`/`BibleChapter` types as the parsed model — extend if needed. | PENDING |
-| 2 | Filename helper `MonolithicPath(ProjectDir, BookCode, LangCode): string` returning `<projectdir>/.usfm/<NN>-<CODE>_<lng>.usfm`. Reuses `USFMBookNumber`. | PENDING |
-| 3 | `TProject.LoadContent` change: if monolithic exists, parse it into `FBook`. Otherwise build `FBook` from chunk files (legacy v1 path), then write the monolithic file so subsequent opens are fast. | PENDING |
-| 4 | Verification pass at load: walk chunk files, build a comparison `TBook`, diff against monolithic. Mismatches → `LogWarn` + retain monolithic as truth. Optional UI affordance to view diff. | PENDING |
-| 5 | `LoadChapter` change: extract chapter slice from in-memory monolithic instead of merging chunk files. Display split by source chunking unchanged. | PENDING |
-| 6 | `SaveCurrentChapter` rework: integrate merged display text into the in-memory monolithic book (replacing that chapter's verses), then write the monolithic file, then derive `<chapter>/<chunk>.txt` files for v1 compat. The existing band-aids (dedup-last, marker inference, range routing, trailing-stub stripping) stay on the derivation path — defensive only, not load-bearing. | PENDING |
+| 1 | New unit `BookUsfm.pas` (or similar). `LoadMonolithic(Path) -> TBook`, `SaveMonolithic(Book, Path)`. Use existing `BibleBook`/`BibleChapter` types as the parsed model — extend if needed. | DONE |
+| 2 | Filename helper `MonolithicPath(ProjectDir, BookCode, LangCode): string` returning `<projectdir>/.usfm/<NN>-<CODE>_<lng>.usfm`. Reuses `USFMBookNumber`. | DONE (as `MonolithicUSFMPath`, landed with Phase 1) |
+| 3 | `TProject.LoadContent` change: if monolithic exists, parse it into `FBook`. Otherwise build `FBook` from chunk files (legacy v1 path), then write the monolithic file so subsequent opens are fast. | DONE |
+| 4 | Verification pass at load: walk chunk files, build a comparison `TBook`, diff against monolithic. Mismatches → `LogWarn` + retain monolithic as truth. Optional UI affordance to view diff. | DONE (UI affordance deferred; see policy note below) |
+| 5 | `LoadChapter` change: extract chapter slice from in-memory monolithic instead of merging chunk files. Display split by source chunking unchanged. | DONE |
+| 6 | `SaveCurrentChapter` rework: integrate merged display text into the in-memory monolithic book (replacing that chapter's verses), then write the monolithic file, then derive `<chapter>/<chunk>.txt` files for v1 compat. The existing band-aids (dedup-last, marker inference, range routing, trailing-stub stripping) stay on the derivation path — defensive only, not load-bearing. | DONE |
 | 7 | Migrate `aa_jdg_text_reg`: open once with new code → monolithic gets built from existing chunks. Verify (manually compare). Then a clean save should normalize chunk files. | PENDING |
 | 8 | Manifest flag `usfm_canonical: true` written when monolithic is present. Lets future code branches detect upgraded projects. (Not strictly required — file presence is enough — but useful for logging and future tooling.) | PENDING |
 | 9 | Wire `RepairChapters` (future CLI verb per `PROJECT.md` planned CLI surface): walks the in-memory book and rewrites all chunk files. With monolithic as canon, repair becomes a one-line derivation. | PENDING |
@@ -97,9 +97,35 @@ The fixed-point of the model is now the monolithic file. Display chunks are read
 6. Open same project in v1 BTT-Writer Desktop → chunks render normally (v1 unaware of `.usfm/`).
 7. Edit in v1, save → reopen in v2 → verification step flags divergence (since v1 only updated chunks), v2 prefers monolithic *unless* policy says "trust newer chunks". Decide policy during Phase 4.
 
+## Phase 4 Policy (decided 2026-07-14)
+
+Raw mtime cannot drive staleness detection: v2's own save order (monolithic
+first, chunk derivation after) makes chunk files newer on every normal save.
+Instead, **content decides; mtime only breaks ties**:
+
+1. Every canonical load builds a comparison book from chunk files and diffs
+   it against the monolithic (whitespace-normalized, `\c` markers stripped
+   on both sides).
+2. Clean diff → done (the common case, logged at INFO).
+3. Divergent + newest chunk file strictly newer than monolithic → chunks
+   were edited outside v2 (v1 app, external tool); adopt chunk content and
+   rewrite the monolithic from it.
+4. Divergent otherwise → monolithic retained as truth; stale chunk files
+   get rewritten on the next save. (Covers a v2 save that died between the
+   monolithic write and chunk derivation.)
+
+`\c` handling: v1 stores `\c <n>` at the head of each chapter's FIRST verse
+chunk (frame 1) in standard text projects — confirmed in v1
+`projects.js updateChunk` and in every existing project on disk. The
+monolithic file owns its own `\c` lines, so: `SaveMonolithicUSFM` strips
+embedded `\c` from chapter bodies; `LoadMonolithicUSFM` skips a repeated
+`\c` for the already-open chapter (heals files written by earlier builds);
+chunk derivation re-adds `\c <n>` to chunk `01` only (v1-identical — an
+empty first chunk gets no `\c`, matching v1).
+
 ## Risks & Open Questions
 
-- **v1 wins, v2 loses?** If a user edits in v1 between v2 sessions, v2's monolithic is stale relative to chunks. Need a rule. Suggest: if monolithic mtime < any chunk mtime, rebuild monolithic from chunks at load (and log).
+- ~~**v1 wins, v2 loses?**~~ Resolved — see Phase 4 Policy above.
 - **Title chunk** lives at `front/title.txt`. In USFM, the book title is `\h <name>` + `\toc1..3` + `\mt <name>`. Need a mapping at both ends.
 - **Conflicts** during git merge of monolithic + chunks. Resolution: monolithic is canon, regenerate chunks. May need a manifest hook so the chunk regeneration step knows the file was just resolved.
 - **Read-mode rendering**: currently reads chunk content. After this change, read mode should pull from in-memory monolithic for consistency.

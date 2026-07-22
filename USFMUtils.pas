@@ -42,6 +42,13 @@ function ChunkHasContent(const Text: string): Boolean;
   cleans up the resulting on-disk debris at save time. }
 function StripTrailingEmptyVerseMarkers(const Text: string): string;
 
+{ Remove every '\c <num>' marker token from Text. The monolithic store
+  emits exactly one '\c' line per chapter itself; embedded copies riding
+  along from v1 chunk files would split the chapter in two on reload.
+  Also used to neutralize '\c' on both sides of the load-time
+  monolithic/chunk comparison. Does not touch '\cl', '\cp', etc. }
+function StripChapterMarkers(const Text: string): string;
+
 { When the same verse number appears more than once in Text, drop all
   occurrences except the LAST one. The marker and the run of text from
   that marker up to the next marker (or end of text) are removed.
@@ -367,6 +374,41 @@ begin
     S := TrimRight(Copy(S, 1, I));
   end;
   Result := S;
+end;
+
+function StripChapterMarkers(const Text: string): string;
+var
+  I, J, L: Integer;
+begin
+  Result := '';
+  L := Length(Text);
+  I := 1;
+  while I <= L do
+  begin
+    { Match '\c' followed by whitespace and digits — exactly the chapter
+      marker. '\cl', '\cp' etc. have a letter after the 'c' and fall
+      through to plain copying. }
+    if (Text[I] = '\') and (I + 1 <= L) and (Text[I + 1] = 'c') and
+       (I + 2 <= L) and (Text[I + 2] in [' ', #9]) then
+    begin
+      J := I + 2;
+      while (J <= L) and (Text[J] in [' ', #9]) do
+        Inc(J);
+      if (J <= L) and (Text[J] in ['0'..'9']) then
+      begin
+        while (J <= L) and (Text[J] in ['0'..'9']) do
+          Inc(J);
+        { Swallow one delimiting space so 'A \c 1 B' -> 'A B'. A newline
+          after the marker is kept and collapses under later trimming. }
+        if (J <= L) and (Text[J] = ' ') then
+          Inc(J);
+        I := J;
+        Continue;
+      end;
+    end;
+    Result := Result + Text[I];
+    Inc(I);
+  end;
 end;
 
 function UsxToPlainText(const UsxText: string): string;

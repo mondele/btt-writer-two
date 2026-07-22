@@ -3219,6 +3219,7 @@ var
   DedupDropped: Integer;
   ChunkText, LeftTrimmed: string;
   InferredVerse: Integer;
+  ChunkNum, ChapNumForFile: Integer;
 begin
   { Blind edit saves per-chunk independently }
   if FCurrentViewMode = vmBlindEdit then
@@ -3353,6 +3354,20 @@ begin
             saving the first chunk in a chapter. }
           if not ChunkHasContent(SaveChunks[I].Content) then
             Continue;
+
+          { v1 prepends '\c <n>' to each chapter's first verse chunk
+            (frame 1) when writing standard text projects — see v1
+            projects.js updateChunk. Text arriving from the monolithic
+            store carries no '\c' (StripChapterMarkers owns it there),
+            so restore the marker at derivation time to keep chunk
+            files v1-identical. Only chunk 01, matching v1: an empty
+            first chunk means no '\c' anywhere in the chapter. }
+          if TryStrToInt(SaveChunks[I].Name, ChunkNum) and (ChunkNum = 1) and
+             TryStrToInt(SourceChapter.ID, ChapNumForFile) and
+             (Pos('\c ', SaveChunks[I].Content) = 0) then
+            SaveChunks[I].Content := '\c ' + IntToStr(ChapNumForFile) + ' ' +
+              TrimLeft(SaveChunks[I].Content);
+
           SaveChapter.AddChunk(TChunk.Create(SaveChunks[I].Name));
           { Load any current on-disk content first so TChunk.SetContent
             can compare and only flip FDirty when the new content really

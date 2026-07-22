@@ -6,7 +6,7 @@ interface
 
 uses
   SysUtils, Classes, fpjson, jsonparser,
-  BibleBook, BibleChapter, BibleChunk, BookUsfm, Globals;
+  BibleBook, BibleChapter, BibleChunk, BookUsfm, Globals, AppLog;
 
 type
   TProject = class
@@ -28,6 +28,9 @@ type
     function GetFinishedChunks: TJSONArray;
     function GetProjectDisplayName: string;
     procedure InjectFrontChapter;
+    function NewestChunkFileAge: LongInt;
+    procedure VerifyMonolithicAgainstChunkFiles(const SourceContentDir,
+      MonoPath: string);
   public
     constructor Create(const AProjectDir: string);
     destructor Destroy; override;
@@ -208,6 +211,111 @@ begin
   FBook.AddChapter(FrontChap);
 end;
 
+function TProject.NewestChunkFileAge: LongInt;
+var
+  DirSR, FileSR: TSearchRec;
+  ChapterDir: string;
+  N: Integer;
+begin
+  Result := -1;
+  if FindFirst(FProjectDir + '*', faDirectory, DirSR) = 0 then
+  try
+    repeat
+      if (DirSR.Name = '.') or (DirSR.Name = '..') then Continue;
+      if (DirSR.Attr and faDirectory) = 0 then Continue;
+      if not (TryStrToInt(DirSR.Name, N) or (DirSR.Name = 'front')) then
+        Continue;
+      ChapterDir := FProjectDir + DirSR.Name + PathDelim;
+      if FindFirst(ChapterDir + '*.txt',
+                   faAnyFile and not faDirectory, FileSR) = 0 then
+      try
+        repeat
+          if FileSR.Time > Result then
+            Result := FileSR.Time;
+        until FindNext(FileSR) <> 0;
+      finally
+        FindClose(FileSR);
+      end;
+    until FindNext(DirSR) <> 0;
+  finally
+    FindClose(DirSR);
+  end;
+end;
+
+procedure TProject.VerifyMonolithicAgainstChunkFiles(const SourceContentDir,
+  MonoPath: string);
+const
+  MaxLoggedDiffs = 5;
+var
+  ChunkBook: TBook;
+  Diffs: TStringList;
+  I: Integer;
+  MonoAge, ChunkAge: LongInt;
+begin
+  { Phase 4: every canonical load rebuilds a comparison book from the
+    per-chunk .txt files and diffs it against the monolithic content.
+    Clean diff -> nothing to do. Divergence means someone wrote chunk
+    files without going through v2's save path (v1 app, external tool,
+    hand edit) OR a v2 save died between writing the monolithic and
+    deriving chunks. mtime breaks the tie: strictly newer chunk files
+    win (their edits would otherwise be silently lost); otherwise the
+    monolithic remains truth and stale chunks get rewritten on the next
+    save. mtime alone can't drive this — v2's save order (monolithic
+    first, chunks after) makes chunks newer on every normal save. }
+  ChunkBook := TBook.Create(FBookCode, FResourceType);
+  Diffs := nil;
+  try
+    ChunkBook.LoadFromToc(SourceContentDir);
+    if ChunkBook.Chapters.Count = 0 then
+    begin
+      LogWarn('Monolithic verification skipped: no chapter structure at ' +
+              SourceContentDir);
+      Exit;
+    end;
+    ChunkBook.LoadContent(FProjectDir, '.txt');
+
+    Diffs := DiffMonolithicAgainstChunks(FBook, ChunkBook);
+    if Diffs.Count = 0 then
+    begin
+      LogInfo('Monolithic verification clean: ' + MonoPath);
+      Exit;
+    end;
+
+    for I := 0 to Diffs.Count - 1 do
+      if I < MaxLoggedDiffs then
+        LogWarn('Monolithic/chunk divergence: ' + Diffs[I])
+      else
+      begin
+        LogWarn(Format('Monolithic/chunk divergence: %d more chapter(s) differ',
+          [Diffs.Count - MaxLoggedDiffs]));
+        Break;
+      end;
+
+    MonoAge := FileAge(MonoPath);
+    ChunkAge := NewestChunkFileAge;
+    if ChunkAge > MonoAge then
+    begin
+      LogWarn('Chunk files newer than monolithic; adopting chunk content ' +
+              'and rewriting monolithic: ' + MonoPath);
+      FreeAndNil(FBook);
+      FBook := ChunkBook;
+      ChunkBook := nil;
+      try
+        SaveMonolithicUSFM(MonoPath, FBook, FUSFMHeader);
+      except
+        on E: Exception do
+          LogError('Failed to rewrite monolithic USFM: ' + E.Message);
+      end;
+    end
+    else
+      LogWarn('Monolithic retained as canonical; divergent chunk files ' +
+              'will be rewritten on next save.');
+  finally
+    FreeAndNil(Diffs);
+    FreeAndNil(ChunkBook);
+  end;
+end;
+
 procedure TProject.LoadContent(const SourceContentDir: string);
 var
   MonoPath: string;
@@ -224,12 +332,15 @@ begin
     begin
       FUSFMHeader := LoadedHeader;
       FCanonicalMonolithic := True;
+      VerifyMonolithicAgainstChunkFiles(SourceContentDir, MonoPath);
       InjectFrontChapter;
       if Verbose then
         WriteLn('Loaded monolithic USFM: ', MonoPath);
       Exit;
     end;
     { Failed to parse — fall through to legacy and overwrite below. }
+    LogWarn('Monolithic USFM unreadable; rebuilding from chunk files: ' +
+            MonoPath);
     FreeAndNil(FBook);
     FBook := TBook.Create(FBookCode, FResourceType);
   end;

@@ -70,6 +70,18 @@ procedure SaveMonolithicUSFM(const APath: string; ABook: TBook;
   can override individual fields before save. }
 function DefaultUSFMHeader(const BookCode, DisplayName: string): TUSFMBookHeader;
 
+{ Collapse whitespace runs (space, tab, CR, LF) to single spaces and trim.
+  Lets monolithic and chunk-derived chapter text compare equal despite
+  line-ending and layout differences. }
+function NormalizeUSFMWhitespace(const S: string): string;
+
+{ Phase 4 verification: compare a monolithic-loaded book against a book
+  built from per-chunk files. Only chapters with numeric IDs participate
+  (front matter is not stored in the monolithic body); a chapter missing
+  on one side compares as empty text. Returns one line per diverging
+  chapter; empty list means the books agree. Caller frees the result. }
+function DiffMonolithicAgainstChunks(MonoBook, ChunkBook: TBook): TStringList;
+
 implementation
 
 uses
@@ -113,6 +125,106 @@ begin
   Result.TocShort  := DisplayName;
   Result.TocAbbrev := DisplayName;
   Result.MainTitle := DisplayName;
+end;
+
+{ ---- Verification ---- }
+
+function NormalizeUSFMWhitespace(const S: string): string;
+var
+  SrcI, DstI: Integer;
+  PendingSpace: Boolean;
+begin
+  SetLength(Result, Length(S));
+  DstI := 0;
+  PendingSpace := False;
+  for SrcI := 1 to Length(S) do
+    case S[SrcI] of
+      ' ', #9, #10, #13:
+        PendingSpace := True;
+      else
+      begin
+        if PendingSpace and (DstI > 0) then
+        begin
+          Inc(DstI);
+          Result[DstI] := ' ';
+        end;
+        PendingSpace := False;
+        Inc(DstI);
+        Result[DstI] := S[SrcI];
+      end;
+    end;
+  SetLength(Result, DstI);
+end;
+
+function DiffMonolithicAgainstChunks(MonoBook, ChunkBook: TBook): TStringList;
+var
+  Diffs: TStringList;
+  Seen: TStringList;
+
+  function NormalizedChapter(Book: TBook; const ID: string): string;
+  var
+    C: TChapter;
+  begin
+    Result := '';
+    if Book = nil then Exit;
+    C := Book.GetChapter(ID);
+    { '\c' markers are owned by the monolithic file and embedded in v1
+      chunk files — strip them on both sides so the comparison sees only
+      the actual text. }
+    if C <> nil then
+      Result := NormalizeUSFMWhitespace(StripChapterMarkers(C.MergeAllContent));
+  end;
+
+  function FirstDivergence(const A, B: string): Integer;
+  var
+    I, L: Integer;
+  begin
+    L := Length(A);
+    if Length(B) < L then L := Length(B);
+    for I := 1 to L do
+      if A[I] <> B[I] then Exit(I);
+    Result := L + 1;
+  end;
+
+  procedure CompareChapterID(const ID: string);
+  var
+    MonoText, ChunkText: string;
+    DivPos: Integer;
+  begin
+    if Seen.IndexOf(ID) >= 0 then Exit;
+    Seen.Add(ID);
+    MonoText := NormalizedChapter(MonoBook, ID);
+    ChunkText := NormalizedChapter(ChunkBook, ID);
+    if MonoText = ChunkText then Exit;
+    DivPos := FirstDivergence(MonoText, ChunkText);
+    Diffs.Add(Format(
+      'chapter %s diverges at offset %d: monolithic %d chars "%s", ' +
+      'chunks %d chars "%s"',
+      [ID, DivPos,
+       Length(MonoText), Copy(MonoText, DivPos, 24),
+       Length(ChunkText), Copy(ChunkText, DivPos, 24)]));
+  end;
+
+  procedure CompareBookChapters(Book: TBook);
+  var
+    I, N: Integer;
+  begin
+    if Book = nil then Exit;
+    for I := 0 to Book.Chapters.Count - 1 do
+      if TryStrToInt(Book.Chapters[I].ID, N) then
+        CompareChapterID(Book.Chapters[I].ID);
+  end;
+
+begin
+  Diffs := TStringList.Create;
+  Seen := TStringList.Create;
+  try
+    CompareBookChapters(MonoBook);
+    CompareBookChapters(ChunkBook);
+  finally
+    FreeAndNil(Seen);
+  end;
+  Result := Diffs;
 end;
 
 { ---- Loading ---- }
@@ -204,12 +316,18 @@ begin
         AHeader.MainTitle := MarkerValue(Line, 'mt')
       else if StartsWithMarker(Line, 'c') then
       begin
-        FlushChapter;
         CurChapterID := MarkerValue(Line, 'c');
         if CurChapterID = '' then Continue;
         { Pad to 2-digit chapter ID to match the chunk-dir naming. }
         if (Length(CurChapterID) = 1) and (CurChapterID[1] in ['0'..'9']) then
           CurChapterID := '0' + CurChapterID;
+        { A repeated '\c' for the chapter that is already open is an
+          embedded marker from a v1 chunk body (written by builds that
+          predate StripChapterMarkers) — ignore it and keep accumulating
+          instead of splitting the chapter in two. }
+        if (PendingChapter <> nil) and (PendingChapter.ID = CurChapterID) then
+          Continue;
+        FlushChapter;
         PendingChapter := TChapter.Create(CurChapterID);
       end
       else if PendingChapter <> nil then
@@ -265,7 +383,11 @@ begin
 
       Out_.Add('\c ' + IntToStr(ChapNum));
 
-      ChapterBody := Chapter.MergeAllContent;
+      { v1 chunk files embed '\c <n>' inside the first verse chunk (and
+        the chapter label rides as plain text in title chunks). The
+        monolithic file owns chapter markers — strip embedded copies or
+        reload would split this chapter at the stray marker. }
+      ChapterBody := StripChapterMarkers(Chapter.MergeAllContent);
       ChapterBody := Trim(ChapterBody);
       if ChapterBody <> '' then
         Out_.Add(ChapterBody);
